@@ -1,0 +1,41 @@
+name: Build installers
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt 'pyinstaller>=6.12,<7'
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        run: choco install innosetup --no-progress -y
+      - run: python tools/build_installer.py
+      - name: Check packaged app on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $result = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $process = Start-Process -FilePath dist/native/CantiereLink/CantiereLink.exe -ArgumentList '--smoke-test', $result -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged app failed: $($process.ExitCode)" }
+          Get-Content $result
+      - name: Check packaged app on macOS
+        if: runner.os == 'macOS'
+        run: |
+          dist/native/CantiereLink.app/Contents/MacOS/CantiereLink --smoke-test "$RUNNER_TEMP/smoke.json"
+          cat "$RUNNER_TEMP/smoke.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CantiereLink-${{ matrix.os }}
+          path: |
+            dist/CantiereLink-Setup-*.exe
+            dist/CantiereLink-*-macos-*.dmg
+            dist/*.sha256

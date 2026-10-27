@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m traccia *)",
+      "Write(./lavori/*/risposte/**)",
+      "Write(./lavori/*/chat/**)",
+      "Read(./lavori/**)",
+      "Read(./archivio/**)",
+      "Read(./istruzioni/**)",
+      "Read(./conoscenza/**)"
+    ],
+    "deny": [
+      "Read(./.env*)",
+      "Edit(./traccia/**)",
+      "Edit(./istruzioni/**)",
+      "Edit(./web/**)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
+  "env": {
+    "PYTHONIOENCODING": "utf-8"
+  }
+}

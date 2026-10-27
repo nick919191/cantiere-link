@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CantiereLink</title>
+
+<style>
+:root{
+  --bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--muted:#6e6e73;--soft:#86868b;--line:#e5e5ea;--fill:#f2f2f4;
+  --accent:#0071e3;--accent-bg:#e8f1fc;--green:#248a3d;--green-bg:#e7f6ea;--orange:#b25000;--orange-bg:#fff4e5;
+  --red:#d70015;--red-bg:#fdecee;--violet:#6e3ad6;--violet-bg:#f1ebfd;--teal:#0a7c86;--teal-bg:#e3f5f6;--hl:#ff9f0a;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--muted:#a1a1a6;--soft:#8e8e93;--line:#38383a;--fill:#2c2c2e;
+  --accent:#2997ff;--accent-bg:#0a2540;--green:#30d158;--green-bg:#0f2e17;--orange:#ff9f0a;--orange-bg:#33240a;
+  --red:#ff453a;--red-bg:#3a1210;--violet:#bf9cff;--violet-bg:#261a3d;--teal:#5ad8e6;--teal-bg:#0c2a2e}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,"Segoe UI",sans-serif}
+.app{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700;cursor:pointer}
+.brand{font-weight:600;cursor:pointer}.crumb{color:var(--muted);font-size:14px}.crumb b{color:var(--ink);font-weight:500}.sp{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+h1{font-size:28px;letter-spacing:-.02em;margin:0 0 6px}h2{font-size:19px;margin:0 0 12px;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:0 0 20px;font-size:15px;line-height:1.45}
+.btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 18px;border-radius:999px;background:var(--accent);color:#fff;border:0;font:500 14px Inter,sans-serif;cursor:pointer;text-decoration:none}
+.btn.s{background:var(--fill);color:var(--ink)}.btn:disabled{opacity:.45;cursor:default}
+.ic{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.pill{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;white-space:nowrap;display:inline-block}
+.g{background:var(--green-bg);color:var(--green)}.b{background:var(--accent-bg);color:var(--accent)}
+.o{background:var(--orange-bg);color:var(--orange)}.r{background:var(--red-bg);color:var(--red)}.n{background:var(--fill);color:var(--muted)}
+.hidden{display:none!important}
+input.nome{height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 14px;font:15px Inter,sans-serif;width:min(420px,100%);margin-bottom:14px}
+input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-bg)}
+.drop{padding:52px 24px;text-align:center;border:2px dashed var(--line);border-radius:20px;background:var(--card);transition:.25s;cursor:pointer}
+.drop.on{border-color:var(--accent);background:var(--accent-bg)}
+.drop .big{width:64px;height:64px;border-radius:18px;background:var(--accent-bg);color:var(--accent);display:grid;place-items:center;margin:0 auto 18px}
+.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:16px 0}
+.file{display:flex;align-items:center;gap:10px;padding:12px 14px;animation:in .35s}.file small{color:var(--muted);display:block;font-size:12px}
+.send{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.upbar{flex:1;min-width:200px;height:8px;border-radius:4px;background:var(--fill);overflow:hidden}.upbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.lavori{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:10px}
+.lav{padding:16px;cursor:pointer;transition:.2s}.lav:hover{border-color:var(--accent)}
+.lav .t{font-weight:600;margin-bottom:4px}.lav .m{color:var(--muted);font-size:13px}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.prog{padding:16px 18px;margin-bottom:16px;display:flex;align-items:center;gap:18px}
+.ring{width:64px;height:64px;flex:none}.bar{flex:1}
+.bar .t{height:8px;border-radius:4px;background:var(--fill);overflow:hidden;margin:8px 0 6px}
+.bar .t i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#5e5ce6);border-radius:4px;transition:width .6s}
+.bar .meta{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;gap:10px}
+.phase{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}.phase span{font-size:11px;padding:4px 9px;border-radius:999px;background:var(--fill);color:var(--soft)}
+.phase span.on{background:var(--accent-bg);color:var(--accent);font-weight:600}.phase span.ok{background:var(--green-bg);color:var(--green)}
+.idle{margin-top:10px;font-size:12px;color:var(--orange)}
+.flow{display:grid;grid-template-columns:360px 1fr;gap:16px}
+.look{padding:16px;align-self:start;position:sticky;top:12px}.look h3{margin:0 0 2px;font-size:15px}
+.who{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px;margin-bottom:12px;min-height:16px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.2s infinite;flex:none}@keyframes pulse{50%{opacity:.25}}
+.page{position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#fff;min-height:120px}
+.page img{display:block;width:100%}
+.page .scan{position:absolute;left:0;right:0;height:16%;background:linear-gradient(transparent,rgba(0,113,227,.14),transparent);animation:scan 2.4s linear infinite;pointer-events:none}
+@keyframes scan{from{top:-16%}to{top:100%}}
+.box{position:absolute;border:2px solid var(--hl);background:rgba(255,159,10,.14);border-radius:4px;box-shadow:0 0 0 3px rgba(255,159,10,.18);animation:in .4s}
+.thought{margin-top:12px;font-size:13px;line-height:1.45;padding:10px 12px;border-radius:10px;background:var(--fill);min-height:42px}
+.thought b{color:var(--accent);font-weight:600}
+.crops{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.crops img{height:64px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;animation:in .4s}
+.bins{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.bin{padding:14px;cursor:pointer;transition:.2s;min-height:140px}.bin:hover{border-color:var(--accent)}
+.bin .h{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px}
+.bin .n{font-size:26px;font-weight:700;letter-spacing:-.03em}.bin .lab{font-size:12px;color:var(--muted);line-height:1.3}
+.stack{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.stack img{width:100%;aspect-ratio:.72;object-fit:cover;object-position:top;border-radius:3px;border:1px solid var(--line);background:#fff;animation:pop .4s}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.bin.flash{animation:flash .7s}@keyframes flash{30%{box-shadow:0 0 0 4px var(--accent-bg)}}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px}
+.feed{padding:14px 16px;margin-top:16px}.feed h4{margin:0 0 8px;font-size:13px}
+.ev{display:flex;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line);animation:in .35s;align-items:flex-start}
+.ev time{color:var(--soft);font-size:12px;width:58px;flex:none}
+.flyer{position:fixed;z-index:9;width:28px;pointer-events:none;border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+
+.res{margin-top:22px}
+.ready{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px}
+.hero{padding:24px}.acts{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.stati{padding:20px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.stato{border-radius:12px;padding:14px}.stato .v{font-size:28px;font-weight:700}.stato .l{font-size:12px}
+.note{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;margin-top:14px;line-height:1.45}
+.chain{padding:18px;overflow-x:auto;margin-bottom:16px}
+.cols,.vrow{display:grid;grid-template-columns:1.3fr 1.1fr 1.2fr .8fr 1.1fr;gap:10px;min-width:900px}
+.cols{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.vrow{align-items:center;margin-bottom:10px;animation:in .45s both}
+.node{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12.5px;background:var(--card);position:relative;transition:.2s}
+.node.click{cursor:pointer}.node.click:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.node small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.node.miss{border-style:dashed;border-color:var(--red);color:var(--red);background:var(--red-bg)}.node.warn{border-color:var(--orange)}
+.why{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
+.tabwrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1900px}
+td{min-width:120px}td:first-child{min-width:40px}td.nota{min-width:380px}
+.why{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.fermo .scan{display:none}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.src{color:var(--accent);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(0,113,227,.3);text-underline-offset:3px}
+td.src:hover{background:var(--accent-bg)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal.on{display:flex}.sheet{width:min(1000px,100%);height:min(88vh,900px);display:flex;flex-direction:column;overflow:hidden}
+.sheet .bar2{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.sheet iframe{flex:1;border:0;width:100%;background:var(--bg)}.sheet .body{flex:1;overflow:auto;padding:16px}
+.grid-pg{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.pg{cursor:pointer}.pg img{width:100%;border-radius:6px;border:1px solid var(--line);background:#fff}.pg div{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+.err{color:var(--red);font-size:14px;margin-top:10px}
+.fab{position:fixed;right:20px;bottom:20px;z-index:15;box-shadow:0 8px 24px rgba(0,0,0,.18);height:48px;padding:0 20px}
+.chat{position:fixed;right:20px;bottom:80px;z-index:16;width:min(420px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.2);overflow:hidden}
+.chat .hd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.chat .hd small{display:block;color:var(--muted);font-size:12px;font-weight:400}
+.chat .msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-wrap;animation:in .3s}
+.msg.u{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg.c{align-self:flex-start;background:var(--fill);border-bottom-left-radius:4px}
+.msg .fonti{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.msg .fonte{font-size:11px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 8px;cursor:pointer;color:var(--accent)}
+.msg.attesa{color:var(--muted);font-style:italic}
+.chat form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.chat textarea{flex:1;resize:none;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 12px;font:14px Inter,sans-serif}
+.chat textarea:focus{outline:none;border-color:var(--accent)}
+@media (max-width:960px){.flow,.ready{grid-template-columns:1fr}.bins{grid-template-columns:repeat(2,1fr)}.look{position:static}}
+</style>
+<link href="/web/app.css" rel="stylesheet">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="up" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></symbol>
+<symbol id="doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+<symbol id="down" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></symbol>
+<symbol id="fold" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="ic-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></symbol>
+<symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+</defs></svg>
+
+<div class="desktop" id="desktop"><main class="workspace" id="workspace"><div class="app">
+  <div class="top">
+    <div class="logo" onclick="vai('')">T</div><div class="brand" onclick="vai('')">CantiereLink</div>
+    <div class="crumb" id="crumb"></div><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings())" aria-label="Impostazioni">⚙</button><button class="icon-button" onclick="toggleChat()" aria-label="Apri o chiudi chat"><svg class="ic"><use href="#ic-chat"/></svg></button>
+  </div>
+
+  <!-- HOME -->
+  <section id="home" class="hidden">
+    <h1>Carica i documenti del cantiere</h1>
+    <p class="sub">PDF, immagini o un archivio ZIP. Gli originali restano invariati. Dopo il caricamento premi Analizza: testo e immagini saranno inviati all’agente ChatGPT collegato.</p>
+    <input class="nome" id="nome" placeholder="Nome del cantiere (facoltativo)">
+    <div class="drop" id="drop">
+      <div class="big"><svg class="ic" style="width:28px;height:28px"><use href="#up"/></svg></div>
+      <div style="font-weight:600;font-size:17px">Trascina qui i file</div>
+      <div style="color:var(--muted);font-size:14px;margin:6px 0 16px">oppure</div>
+      <button class="btn" type="button" onclick="event.stopPropagation();sel.click()">Scegli i file</button>
+      <input type="file" id="sel" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden">
+    </div>
+    <div class="files" id="files"></div>
+    <div class="send hidden" id="send">
+      <button class="btn" id="invia">Carica e prepara le pagine</button>
+      <button class="btn s" id="annulla">Svuota</button>
+      <div class="upbar hidden" id="upbar"><i></i></div><span class="note" id="uptxt" style="margin:0"></span>
+    </div>
+    <div class="err" id="uperr"></div>
+    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><button class="btn s" onclick="safe(showTrash)">Cestino</button></div>
+    <div class="lavori" id="lavori"></div>
+  </section>
+
+  <!-- LAVORO -->
+  <section id="lavoro" class="hidden"><div class="agent-banner"><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><button id="analyze-button" class="btn" onclick="safe(analyze)">Analizza / riprendi</button></div>
+    <div class="card prog">
+      <svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--fill)" stroke-width="7"/>
+        <circle id="ringv" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="169.6" stroke-dashoffset="169.6" transform="rotate(-90 32 32)" style="transition:stroke-dashoffset .6s"/>
+        <text id="ringt" x="32" y="37" text-anchor="middle" font-size="14" font-weight="700" fill="var(--ink)">0%</text></svg>
+      <div class="bar">
+        <div style="font-weight:600" id="titolo">…</div>
+        <div class="t"><i id="barv"></i></div>
+        <div class="meta"><span id="bart"></span><span id="bare"></span></div>
+        <div class="phase" id="phase"></div>
+        <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi Analizza / riprendi.</div>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="card look">
+        <h3>Il documento in esame</h3>
+        <div class="who"><span class="dot" id="lookdot"></span><span id="lookfile">In attesa delle pagine…</span></div>
+        <div class="page" id="lookpage"><div class="scan"></div></div>
+        <div class="thought" id="thought">Le pagine compaiono qui mentre vengono lette.</div>
+        <div class="crops" id="crops"></div>
+      </div>
+      <div>
+        <div class="bins" id="bins"></div>
+        <div class="card feed"><h4>Diario del lavoro</h4><div id="feed"></div></div>
+      </div>
+    </div>
+
+    <div class="res hidden" id="res">
+      <div class="ready">
+        <div class="card hero">
+          <span class="pill g">Completato</span>
+          <h1 style="margin-top:12px">L'Excel è pronto</h1>
+          <p class="sub" style="margin:0" id="ressub"></p>
+          <div class="acts">
+            <a class="btn" id="scarica"><svg class="ic"><use href="#down"/></svg>Scarica Excel e prove</a>
+            <a class="btn s" id="riordina"><svg class="ic"><use href="#fold"/></svg>Documenti riordinati e rinominati</a>
+          </div>
+          <div class="note"><svg class="ic"><use href="#info"/></svg>Lettura e riconoscimento sono automatici e possono contenere errori. Verifica sempre l'Excel con i documenti originali.</div>
+        </div>
+        <div class="card stati" id="stati"></div>
+      </div>
+      <h2>Collegamenti a ritroso</h2>
+      <p class="sub">Tabella del costruttore → DDT del commerciante → certificato 3.1 → colata. Le caselle si aprono sul documento, con il dato evidenziato.</p>
+      <div class="card chain"><div class="cols"><div>Voce</div><div>DDT commerciante</div><div>Certificato 3.1</div><div>Colata</div><div>Esito</div></div><div id="chain"></div></div>
+      <h2>Tracciabilità</h2>
+      <div class="card tabwrap"><table id="tab"></table></div>
+    </div>
+  </section>
+</div>
+
+</main><div class="splitter" id="splitter" role="separator" aria-label="Larghezza chat" aria-orientation="vertical" aria-valuemin="310" aria-valuemax="600" aria-valuenow="390" tabindex="0"></div>
+<aside class="sidechat" id="sidechat" aria-label="Chat del cantiere">
+  <header class="chat-toolbar"><button class="conversation-title" id="conversation-title" onclick="safe(showHistory)">Chat del cantiere <span>⌄</span></button><button class="icon-button" onclick="newConversation()" aria-label="Nuova conversazione">＋</button><button class="icon-button" onclick="safe(showHistory)" aria-label="Cronologia">↶</button><button class="icon-button" onclick="toggleChat()" aria-label="Chiudi chat">×</button></header>
+  <div class="chat-scope"><span></span><span id="chat-scope-name">Nessun cantiere</span></div>
+  <div class="history-popover hidden" id="history"><div class="popover-label">CONVERSAZIONI DEL CANTIERE</div><div id="history-list"></div></div>
+  <div class="conversation" id="conversation" role="log" aria-live="polite" aria-label="Messaggi"></div>
+  <div class="composer-area">
+    <div class="suggestions"><button onclick="safe(()=>ask('Quali documenti mancano?'))">Cosa manca?</button><button onclick="safe(()=>ask('Quali voci sono da confermare?'))">Da confermare</button></div>
+    <div class="composer-card">
+      <div class="context-chips" id="context-chips"></div>
+      <label class="sr-only" for="question">Domanda sul cantiere</label><textarea id="question" placeholder="Chiedi qualcosa sul cantiere. Usa @ per una fonte…" rows="2" maxlength="2000"></textarea>
+      <div class="composer-footer"><button class="icon-button" onclick="pickContext()" aria-label="Aggiungi fonte al contesto">＋</button><div class="sp"></div><button class="send-button" id="send-question" onclick="safe(()=>ask())" aria-label="Invia domanda">↑</button></div>
+    </div>
+    <div class="agent-toolbar"><button class="agent-icon" onclick="safe(()=>openSettings('account'))" aria-label="Account e agente">◎</button><label class="sr-only" for="model">Modello</label><select id="model" onchange="updateModel(this.value)"><option value="">Automatico</option></select><label class="sr-only" for="effort">Ragionamento</label><select id="effort" onchange="updateEffort(this.value)"><option value="">Predefinito</option><option value="low">Basso</option><option value="medium">Medio</option><option value="high">Alto</option></select><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings('models'))" aria-label="Impostazioni modello">⚙</button></div>
+    <div class="demo-caption"><span id="chat-plan">ChatGPT non collegato</span> <button id="stop-agent" class="text-button hidden" onclick="safe(stopAgent)">Interrompi</button></div>
+  </div>
+</aside></div>
+<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><div class="settings-header"><h2 id="settings-title">Impostazioni</h2><div class="sp"></div><button class="icon-button" onclick="closeSettings()" aria-label="Chiudi impostazioni">×</button></div><div class="settings-layout"><nav class="settings-nav" aria-label="Sezioni impostazioni"><label class="sr-only" for="settings-search">Cerca impostazioni</label><input id="settings-search" type="search" placeholder="Cerca impostazioni…" oninput="filterSettings(this.value)"><button data-section="general" onclick="settingsSection('general')"><span>◐</span>Generali</button><button data-section="account" onclick="settingsSection('account')"><span>◎</span>Account e agente</button><button data-section="models" onclick="settingsSection('models')"><span>✧</span>Modelli</button><button data-section="storage" onclick="settingsSection('storage')"><svg class="ic"><use href="#fold"/></svg>Documenti e dati</button><button data-section="shortcuts" onclick="settingsSection('shortcuts')"><span>⌘</span>Scorciatoie</button><button data-section="diagnostics" onclick="settingsSection('diagnostics')"><span>⌁</span>Diagnostica</button><button data-section="updates" onclick="settingsSection('updates')"><span>↻</span>Aggiornamenti</button><a class="guide-nav" href="/guida/" target="_blank" rel="noopener">Guida interattiva ↗</a><button onclick="safe(closeApp)"><span>⏻</span>Chiudi applicazione</button><div class="settings-nav-foot">CantiereLink<br><span>App locale · Mac e Windows</span></div></nav><section id="settings-content" class="settings-content"></section></div><footer class="settings-foot">Credenziali nel portachiavi del sistema.<div class="sp"></div><button class="text-button" onclick="closeSettings()">Fine</button></footer></dialog>
+<aside id="update-notice" class="update-notice hidden" role="status"><span id="update-notice-text"></span><button class="btn s" onclick="safe(()=>openSettings('updates'))">Vedi novità</button><button class="text-button" onclick="safe(dismissUpdate)">Più tardi</button></aside>
+<dialog id="trash-dialog" class="trash-dialog"><h2 id="trash-title">Cestino</h2><div id="trash-body"></div><div class="acts"><button class="btn s" onclick="$('trash-dialog').close()">Chiudi</button><button class="btn hidden" id="trash-confirm" onclick="safe(moveToTrash)">Sposta nel cestino</button></div></dialog>
+<div id="toast" class="toast hidden" role="status"></div>
+<div class="modal" id="modal"><div class="card sheet">
+  <div class="bar2"><b id="mtitle" style="flex:1"></b><a class="btn s" id="mopen" target="_blank" style="height:32px;padding:0 12px"><svg class="ic"><use href="#ext"/></svg>Apri</a>
+  <button class="btn s" style="height:32px;padding:0 12px" onclick="chiudi()"><svg class="ic"><use href="#x"/></svg></button></div>
+  <iframe id="mframe" class="hidden"></iframe><div class="body hidden" id="mbody"></div>
+</div></div>
+
+<script>
+const FAM={
+ packing_costruttore:{n:"Tabella del costruttore",c:"var(--violet)"},ddt:{n:"DDT",c:"var(--accent)"},
+ certificato_31:{n:"Certificati 3.1",c:"var(--green)"},dop_costruttore:{n:"DoP del costruttore",c:"var(--teal)"},
+ dop_ce_prodotto:{n:"DoP e CE di prodotto",c:"var(--orange)"},lettera_accompagnamento:{n:"Lettere",c:"#5e5ce6"},
+ da_escludere:{n:"Non pertinenti",c:"var(--soft)"},illeggibile:{n:"Illeggibili",c:"var(--red)"}};
+const STATI={PROVATO:"g",DEDOTTO:"b","DA CONFERMARE":"o",MANCANTE:"r"};
+const COL=["PRODUTTORE","COLATA","TIPO DI ACCIAIO","CE/DoP ACCIAIERIA","CERT 3.1 ACCIAIERIA","COMMERCIANTE / CENTRO TRASF.","CE/DoP CENTRO","DDT COMMERCIANTE","COSTRUTTORE","CE/DoP COSTRUTTORE","DDT COSTRUTTORE","PARTE D'OPERA"];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api=async(p,o)=>{const r=await fetch(p,o);const d=await r.json();if(!r.ok)throw new Error(d.detail||"Operazione non riuscita");return d;};
+let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),timer=null,risultatoCaricato=false,inizio=true;
+
+function vai(id){location.hash=id?"#/"+id:"";}
+window.onhashchange=route;
+function route(){clearInterval(timer);const m=location.hash.match(/^#\/([\w-]+)$/);
+ if(m){L=m[1];$("home").classList.add("hidden");$("lavoro").classList.remove("hidden");apriLavoro()}
+ else{L=null;$("lavoro").classList.add("hidden");$("home").classList.remove("hidden");$("crumb").innerHTML="";casa()}}
+
+/* ---------- home ---------- */
+let scelti=[];
+const sel=$("sel"),drop=$("drop");
+drop.onclick=()=>sel.click();sel.onchange=()=>aggiungi([...sel.files]);
+["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("on")}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("on")}));
+drop.addEventListener("drop",ev=>aggiungi([...ev.dataTransfer.files]));
+function aggiungi(f){scelti=scelti.concat(f);mostraFile()}
+function mostraFile(){$("files").innerHTML=scelti.map(f=>`<div class="card file"><svg class="ic" style="color:var(--accent)"><use href="#doc"/></svg><div>${esc(f.name)}<small>${(f.size/1048576).toFixed(1)} MB</small></div></div>`).join("");
+ $("send").classList.toggle("hidden",!scelti.length)}
+$("annulla").onclick=()=>{scelti=[];sel.value="";mostraFile()};
+$("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.forEach(f=>fd.append("file",f));fd.append("nome",$("nome").value.trim());
+ const x=new XMLHttpRequest();x.open("POST","/api/lavori");x.setRequestHeader("X-Traccia-Token",localToken);$("upbar").classList.remove("hidden");$("invia").disabled=true;$("uperr").textContent="";
+ x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);$("upbar").firstChild.style.width=p+"%";$("uptxt").textContent=`Invio ${p}% · ${(e.loaded/1048576).toFixed(0)} di ${(e.total/1048576).toFixed(0)} MB`}};
+ x.onload=()=>{$("invia").disabled=false;if(x.status===200){const r=JSON.parse(x.responseText);scelti=[];mostraFile();vai(r.lavoro)}
+  else $("uperr").textContent="Invio non riuscito. Riprova; se il problema resta, i file potrebbero essere troppo grandi."};
+ x.onerror=()=>{$("invia").disabled=false;$("uperr").textContent="La piattaforma non risponde: controlla che l’app sia aperta."};x.send(fd)};
+const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
+function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="t">${esc(l.nome)}</div><button class="text-button trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora.</div>`}).catch(()=>{})}
+
+/* ---------- lavoro ---------- */
+function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;
+ $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
+ $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
+ aggiorna();timer=setInterval(aggiorna,1500)}
+async function aggiorna(){if(!L)return;
+ try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").textContent="Lavoro non trovato";return}
+ $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
+ const p=stato.fase==="pronto"?100:stato.percentuale;
+ $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
+ $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
+ const fatte=stato.lette+stato.non_lette.length;
+ $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
+ $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
+ const ord=["preparazione","lettura","composizione","pronto"],i=ord.indexOf(stato.fase);
+ $("phase").innerHTML=["Ricevuti","Preparazione","Lettura e smistamento","Collegamento a ritroso","Excel"].map((t,j)=>`<span class="${j<=i||stato.fase==="pronto"?"ok":""} ${j===i+1&&stato.fase!=="pronto"?"on":""}">${t}</span>`).join("");
+ $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
+ $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
+ // pagine nei contenitori
+ const nuove=stato.pagine.filter(x=>x.famiglia&&!giaVisti.has(x.pid));
+ nuove.forEach((x,k)=>{giaVisti.add(x.pid);if(inizio)metti(x);else setTimeout(()=>vola(x),k*180)});
+ Object.keys(FAM).forEach(k=>{$("bin-"+k).querySelector(".n").textContent=stato.per_famiglia[k]||0});
+ // eventi
+ const ev=await api(`/api/lavori/${L}/eventi?da=${ultimoEv}`).catch(()=>[]);
+ ultimoEv+=ev.length;ev.forEach(evento);
+ const ultimo=ev.length?ev[ev.length-1].t:null;if(ultimo)window._ultimoT=ultimo;
+ $("idle").classList.toggle("hidden",!(stato.fase==="lettura"&&window._ultimoT&&Date.now()/1000-window._ultimoT>180));
+ inizio=false;
+ if(stato.fase==="pronto"&&!risultatoCaricato){risultatoCaricato=true;risultato()}}
+function img(pid){return `/api/lavori/${L}/miniature/${pid}.png`}
+function metti(x){const st=$("bin-"+x.famiglia).querySelector(".stack");if(st.children.length<18)st.insertAdjacentHTML("beforeend",`<img src="${img(x.pid)}" alt="">`)}
+function vola(x){const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
+ const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
+ const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
+ a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
+const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["Sta guardando","b"],
+ scheda:["Letta","g"],ritaglio:["Ritaglio","o"],nota:["Agente","b"],correzione:["Correzione","o"],errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+function evento(e){
+ if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace("Claude guarda ","");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
+ if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
+ if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
+ if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" onclick="apri('/api/ritagli/${encodeURIComponent(e.ritaglio)}','Ritaglio: ${esc(e.testo)}')">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
+ const t=TIPI[e.tipo];if(!t)return;
+ let testo=e.testo||"";if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
+ if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
+ $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
+ while($("feed").children.length>8)$("feed").lastChild.remove()}
+let pagMostrata=null;
+async function mostraPagina(pid,conZone){const box=$("lookpage");
+ if(pagMostrata!==pid){pagMostrata=pid;box.innerHTML=`<img src="/api/lavori/${L}/pagine/${pid}.png" alt="pagina"><div class="scan"></div>`}
+ if(!conZone)return;
+ try{const d=await api(`/api/lavori/${L}/pagine/${pid}`);if(pagMostrata!==pid||!d.scheda)return;
+  const zone=[];const s=d.scheda;Object.values(s.testata||{}).forEach(v=>v.v&&v.zona&&v.zona.length&&zone.push(v.zona));
+  (s.timbri||[]).forEach(t=>t.zona&&t.zona.length&&zone.push(t.zona));(s.righe||[]).slice(0,6).forEach(r=>r.colata&&r.colata.zona&&r.colata.zona.length&&zone.push(r.colata.zona));
+  box.querySelectorAll(".box").forEach(b=>b.remove());
+  zone.slice(0,12).forEach(([x0,y0,x1,y1],k)=>setTimeout(()=>box.insertAdjacentHTML("beforeend",`<div class="box" style="left:${x0/10}%;top:${y0/10}%;width:${(x1-x0)/10}%;height:${(y1-y0)/10}%"></div>`),k*120))}catch(e){}}
+
+/* ---------- famiglie ---------- */
+function famiglia(k){if(!stato)return;const ps=stato.pagine.filter(x=>x.famiglia===k);
+ $("mtitle").textContent=`${FAM[k].n} · ${ps.length} pagine`;$("mopen").classList.add("hidden");
+ $("mbody").innerHTML=ps.length?`<div class="grid-pg">${ps.map(x=>`<div class="pg" onclick="pagina('${x.pid}')"><img src="${img(x.pid)}" alt=""><div>${esc(x.file)} · p${x.pagina}</div></div>`).join("")}</div>`:`<div class="note">Nessuna pagina in questa famiglia.</div>`;
+ $("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");$("modal").classList.add("on")}
+async function pagina(pid){const d=await api(`/api/lavori/${L}/pagine/${pid}`);const s=d.scheda||{};
+ $("mtitle").textContent=`${d.pagina.file} · pagina ${d.pagina.pagina}`;
+ $("mbody").innerHTML=`<p class="sub" style="margin:0 0 12px">${esc(s.motivo||"")}</p>${(s.avvisi||[]).map(a=>`<div class="pill o" style="margin:0 6px 8px 0">${esc(a)}</div>`).join("")}<img src="/api/lavori/${L}/pagine/${pid}.png" style="width:100%;border-radius:8px;border:1px solid var(--line)">`}
+function apri(url,titolo){$("mtitle").textContent=titolo;$("mopen").href=url;$("mopen").classList.remove("hidden");
+ $("mframe").src=url;$("mframe").classList.remove("hidden");$("mbody").classList.add("hidden");$("modal").classList.add("on")}
+function chiudi(){$("modal").classList.remove("on");$("mframe").src="about:blank"}
+$("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};document.onkeydown=e=>{if(e.key==="Escape")chiudi()};
+
+/* ---------- risultato ---------- */
+async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
+ $("res").classList.remove("hidden");
+ $("ressub").textContent=`${stato.pagine_totali} pagine da ${stato.file} file · ${r.voci.length} voci · ogni dato ha il collegamento alla pagina da cui viene.`;
+ $("scarica").href=`/api/lavori/${L}/scarica`;$("riordina").href=`/api/lavori/${L}/fascicolo-ordinato`;
+ $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("");
+ const prova=(v,c)=>v.colonne[c].fonti.length?`/api/lavori/${L}/uscita/prove/v${String(v.n).padStart(3,"0")}_c${String(COL.indexOf(c)+1).padStart(2,"0")}.html`:null;
+ const manca=s=>/non nel fascicolo|Non presente/i.test(s||"");
+ const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
+ $("chain").innerHTML=r.voci.map((v,i)=>{const C=v.colonne;const cert=C["CERT 3.1 ACCIAIERIA"].v,ddt=C["DDT COMMERCIANTE"].v,col=C["COLATA"].v;
+  return `<div class="vrow" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" onclick="selectVoice(${v.n})">Chiedi in chat ↗</button></div>
+  ${nodo(v,"DDT COMMERCIANTE",ddt.replace(/^DDT n\. /,"DDT "),C["COMMERCIANTE / CENTRO TRASF."].v,manca(ddt)?"miss":"")}
+  ${nodo(v,"CERT 3.1 ACCIAIERIA",cert,C["PRODUTTORE"].v,manca(cert)?"miss":(v.stato==="DA CONFERMARE"?"warn":""))}
+  ${nodo(v,"COLATA",col||(v.colate_possibili.length?v.colate_possibili.length+" colate":"—"),v.colate_possibili.join(" / "),v.stato==="MANCANTE"?"miss":(!col?"warn":""))}
+  <div><span class="pill ${STATI[v.stato]}">${v.stato}</span><div class="why">${esc(v.note.slice(0,2).join(" "))}</div></div></div>`}).join("");
+ $("tab").innerHTML=`<tr><th>N</th>${COL.map(c=>`<th>${esc(c)}</th>`).join("")}<th>STATO</th><th>NOTE</th></tr>`+r.voci.map(v=>`<tr><td>${v.n}</td>${COL.map(c=>{const u=prova(v,c);return `<td class="${u?"src":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(v.colonne[c].v)}</td>`}).join("")}<td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td class="nota" style="color:var(--muted)">${esc(v.note.join(" "))}</td></tr>`).join("")}
+</script>
+<script src="/web/app.js"></script>
+</body>
+</html>
