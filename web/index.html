@@ -289,8 +289,9 @@ function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)}
 function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
 
 /* ---------- lavoro ---------- */
-function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;
+function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
  $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
+ $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
  aggiorna();timer=setInterval(aggiorna,1500)}
 async function aggiorna(){if(!L)return;
