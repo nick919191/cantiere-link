@@ -82,6 +82,7 @@ def _apri(url: str, webview) -> None:
         if not os.environ.get("CANTIERELINK_NO_BROWSER"):
             webbrowser.open(url)
         return
+    webview.settings["ALLOW_DOWNLOADS"] = True  # Excel e fascicolo ordinato: senza, i pulsanti di scarico sono muti
     webview.create_window("CantiereLink", url, width=1380, height=860, min_size=(900, 600))
     webview.start()
 
