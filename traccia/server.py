@@ -5,9 +5,10 @@ Il servizio locale collega il browser all’agente ChatGPT e conserva originali 
 
 import io
 import json
+import os
 import re
 import secrets
-import tempfile
+import shutil
 import threading
 import time
 import uuid
@@ -299,6 +300,8 @@ def _cartella(id_lavoro: str) -> Path:
         raise HTTPException(400, "lavoro non valido") from e
     if not c.exists():
         raise HTTPException(404, "lavoro non trovato")
+    if not os.access(c, os.R_OK | os.W_OK):
+        raise HTTPException(409, "Cartella del cantiere non accessibile: controlla i permessi nella cartella dati.")
     return c
 
 
@@ -329,12 +332,19 @@ def elenco():
     radice = percorsi.lavori()
     if not radice.exists():
         return []
-    return [
-        {k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")}
-        for s in (
-            lv.stato(c) for c in sorted(radice.iterdir(), reverse=True) if c.is_dir() and (c / "info.json").exists()
-        )
-    ]
+    voci = []
+    for c in sorted(radice.iterdir(), reverse=True):
+        if c.name.startswith(".") or not c.is_dir():
+            continue
+        try:
+            if not (c / "info.json").exists():
+                continue
+            s = lv.stato(c)
+        except OSError:
+            # Una cartella non leggibile (permessi) non deve nascondere tutti gli altri cantieri.
+            continue
+        voci.append({k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")})
+    return voci
 
 
 async def _ricevi(file: list[UploadFile], ingresso: Path) -> tuple[list[str], list[str]]:
@@ -391,11 +401,16 @@ async def carica(file: list[UploadFile], nome: str = Form("")):
     id_lavoro = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     cartella = percorsi.lavoro(id_lavoro)
     percorsi.lavori().mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".caricamento-", dir=percorsi.lavori()) as temporary:
-        ingresso = Path(temporary) / "ingresso"
+    # Cartella provvisoria creata con mkdir normale: tempfile.mkdtemp su Windows (Python 3.12) applica permessi
+    # ristretti al solo proprietario e, se l'app è stata avviata come amministratore, l'utente non la legge più.
+    temporary = percorsi.lavori() / (".caricamento-" + id_lavoro)
+    try:
+        ingresso = temporary / "ingresso"
         ingresso.mkdir(parents=True)
         accettati, scartati = await _ricevi(file, ingresso)
-        Path(temporary).rename(cartella)
+        temporary.rename(cartella)
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
     (cartella / "info.json").write_text(
         json.dumps(
             {

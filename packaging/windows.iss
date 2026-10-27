@@ -32,4 +32,6 @@ Source: "..\dist\native\CantiereLink\*"; DestDir: "{app}"; Flags: ignoreversion 
 Name: "{group}\CantiereLink"; Filename: "{app}\CantiereLink.exe"
 Name: "{autodesktop}\CantiereLink"; Filename: "{app}\CantiereLink.exe"; Tasks: desktopicon
 [Run]
-Filename: "{app}\CantiereLink.exe"; Description: "Apri CantiereLink"; Flags: nowait postinstall skipifsilent
+; runasoriginaluser: anche se il Setup è stato avviato come amministratore, l'app parte con l'utente normale
+; (altrimenti i cantieri creati apparterrebbero all'amministratore e l'utente non potrebbe leggerli).
+Filename: "{app}\CantiereLink.exe"; Description: "Apri CantiereLink"; Flags: nowait postinstall skipifsilent runasoriginaluser

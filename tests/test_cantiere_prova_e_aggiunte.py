@@ -124,6 +124,25 @@ def client_consumi(client):
     return client.get("/api/consumi").json()
 
 
+def test_cartella_non_leggibile_non_blocca_gli_altri_cantieri(radice, monkeypatch):
+    client = _client()
+    buono = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))]).json()
+    _attendi_preparazione(client, buono["lavoro"])
+    rotto = radice / "lavori" / "20260101-000000-rotto"
+    rotto.mkdir()
+    (rotto / "info.json").write_text("{}", encoding="utf-8")
+    stato_vero = lv.stato
+
+    def stato_finto(cartella):
+        if cartella.name.endswith("rotto"):
+            raise PermissionError("accesso negato")
+        return stato_vero(cartella)
+
+    monkeypatch.setattr(server.lv, "stato", stato_finto)
+    assert [j["lavoro"] for j in client.get("/api/lavori").json()] == [buono["lavoro"]]
+    assert not list((radice / "lavori").glob(".caricamento-*"))  # nessuna cartella provvisoria lasciata indietro
+
+
 def test_interruzione_segnala_lo_stato(monkeypatch):
     monkeypatch.setattr(agente, "_state", {**agente._state, "busy": False, "stopping": False})
     assert "Nessuna" in agente.stop()["message"]
