@@ -16,7 +16,7 @@ from .uscita import componi
 _lock = threading.RLock()
 _cancel = threading.Event()
 _tentativi_lock = threading.Lock()
-PAGINE_IN_PARALLELO = 4  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
+PAGINE_IN_PARALLELO = 6  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
 PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
 ISTRUZIONI_LOTTO = (
     '\nRicevi più pagine nella stessa richiesta: ogni immagine è preceduta dal suo JSON con il campo "pid". '
