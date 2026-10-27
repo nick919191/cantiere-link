@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import percorsi
+from . import consumi, percorsi
 from .famiglie import FAMIGLIE
 
 MAX_TENTATIVI = 4
@@ -152,6 +152,7 @@ def stato(cartella: Path) -> dict:
         "per_famiglia": per_famiglia,
         "pagine": dettagli,
         "riepilogo": composto,
+        "consumo": consumi.cantiere(cartella),
     }
 
 

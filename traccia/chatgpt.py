@@ -406,7 +406,15 @@ def models() -> list[dict]:
     ]
 
 
-def response(instructions: str, inputs: list, model: str, reasoning: str, cancelled: threading.Event) -> str:
+def response(
+    instructions: str,
+    inputs: list,
+    model: str,
+    reasoning: str,
+    cancelled: threading.Event,
+    consumo: dict | None = None,
+) -> str:
+    """`consumo`, se passato, riceve i token dichiarati dal servizio: {"chiamata": True, "ingresso": n, "uscita": n}."""
     payload = {"model": model, "instructions": instructions, "input": inputs, "store": False, "stream": True}
     if reasoning:
         payload["reasoning"] = {"effort": reasoning}
@@ -439,6 +447,13 @@ def response(instructions: str, inputs: list, model: str, reasoning: str, cancel
                     raise AgentError("Risposta non completata. Controlla i limiti del piano e riprova.")
                 elif event.get("type") == "response.completed":
                     completed = True
+                    if consumo is not None:
+                        usage = (event.get("response") or {}).get("usage") or {}
+                        consumo.update(
+                            chiamata=True,
+                            ingresso=int(usage.get("input_tokens") or 0),
+                            uscita=int(usage.get("output_tokens") or 0),
+                        )
             if not completed:
                 raise AgentError("Risposta interrotta: nessun risultato parziale è stato applicato.")
             return "".join(parts)

@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, percorsi
+from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, percorsi
 from . import lavoro as lv
 from .preparazione import prepara
 
@@ -112,7 +112,7 @@ def _idle():
     if aggiornamenti.status()["busy"]:
         raise chatgpt.AgentError("Attendi il completamento dell’aggiornamento prima di avviare altre operazioni.")
     if agente.stato()["busy"]:
-        raise chatgpt.AgentError("Attendi la fine dell’operazione o interrompi l’agente prima di cambiare account.")
+        raise chatgpt.AgentError("L’agente sta lavorando: attendi la fine dell’operazione o premi «Interrompi».")
 
 
 @app.get("/api/account")
@@ -232,9 +232,18 @@ def trash_list():
     return cestino.elenco()
 
 
+@app.get("/api/consumi")
+def consumi_totali():
+    return consumi.totale()
+
+
 @app.delete("/api/lavori/{id_lavoro}")
 def trash_job(id_lavoro: str):
-    _idle()
+    if aggiornamenti.status()["busy"]:
+        raise chatgpt.AgentError("Attendi il completamento dell’aggiornamento prima di eliminare un cantiere.")
+    agent = agente.stato()
+    if agent["busy"] and agent.get("job") == id_lavoro:
+        raise chatgpt.AgentError("L’agente sta analizzando questo cantiere: premi «Interrompi», poi elimina.")
     if id_lavoro in _PREPARING:
         raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
     try:
@@ -321,11 +330,60 @@ def elenco():
     if not radice.exists():
         return []
     return [
-        {k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale")}
+        {k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")}
         for s in (
             lv.stato(c) for c in sorted(radice.iterdir(), reverse=True) if c.is_dir() and (c / "info.json").exists()
         )
     ]
+
+
+async def _ricevi(file: list[UploadFile], ingresso: Path) -> tuple[list[str], list[str]]:
+    """Salva i file caricati in `ingresso` con nomi sicuri. Ritorna (accettati, scartati)."""
+    accettati, scartati, totale = [], [], 0
+    for f in file:
+        nome_file = Path((f.filename or "").replace("\\", "/")).name[:180]
+        if Path(nome_file).suffix.lower() not in _ESTENSIONI:
+            scartati.append(nome_file)
+            continue
+        destinazione = ingresso / re.sub(r"[^\w.\- ]", "_", nome_file)
+        if destinazione.stem.upper() in {
+            "CON",
+            "PRN",
+            "AUX",
+            "NUL",
+            *[f"COM{i}" for i in range(10)],
+            *[f"LPT{i}" for i in range(10)],
+        }:
+            destinazione = ingresso / ("documento_" + destinazione.name)
+        if destinazione.exists():
+            destinazione = destinazione.with_name(uuid.uuid4().hex[:8] + "_" + destinazione.name)
+        with destinazione.open("xb") as output:
+            while dati := await f.read(1024 * 1024):
+                totale += len(dati)
+                if totale > _MAX_BYTE:
+                    raise HTTPException(413, "Caricamento troppo grande. Suddividi i file in fascicoli più piccoli.")
+                output.write(dati)
+        await f.close()
+        accettati.append(destinazione.name)
+    if not accettati:
+        raise HTTPException(400, "Nessun PDF o immagine supportata nel caricamento")
+    return accettati, scartati
+
+
+def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
+    _PREPARING.add(id_lavoro)
+
+    def prepare_job():
+        try:
+            prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
+        except Exception:
+            lv.evento(
+                cartella, tipo="errore", testo="Preparazione non riuscita: controlla formato e dimensioni dei file."
+            )
+        finally:
+            _PREPARING.discard(id_lavoro)
+
+    threading.Thread(target=prepare_job, daemon=True).start()
 
 
 @app.post("/api/lavori")
@@ -336,36 +394,7 @@ async def carica(file: list[UploadFile], nome: str = Form("")):
     with tempfile.TemporaryDirectory(prefix=".caricamento-", dir=percorsi.lavori()) as temporary:
         ingresso = Path(temporary) / "ingresso"
         ingresso.mkdir(parents=True)
-        accettati, scartati, totale = [], [], 0
-        for f in file:
-            nome_file = Path((f.filename or "").replace("\\", "/")).name[:180]
-            if Path(nome_file).suffix.lower() not in _ESTENSIONI:
-                scartati.append(nome_file)
-                continue
-            destinazione = ingresso / re.sub(r"[^\w.\- ]", "_", nome_file)
-            if destinazione.stem.upper() in {
-                "CON",
-                "PRN",
-                "AUX",
-                "NUL",
-                *[f"COM{i}" for i in range(10)],
-                *[f"LPT{i}" for i in range(10)],
-            }:
-                destinazione = ingresso / ("documento_" + destinazione.name)
-            if destinazione.exists():
-                destinazione = destinazione.with_name(uuid.uuid4().hex[:8] + "_" + destinazione.name)
-            with destinazione.open("xb") as output:
-                while dati := await f.read(1024 * 1024):
-                    totale += len(dati)
-                    if totale > _MAX_BYTE:
-                        raise HTTPException(
-                            413, "Caricamento troppo grande. Suddividi i file in fascicoli più piccoli."
-                        )
-                    output.write(dati)
-            await f.close()
-            accettati.append(destinazione.name)
-        if not accettati:
-            raise HTTPException(400, "Nessun PDF o immagine supportata nel caricamento")
+        accettati, scartati = await _ricevi(file, ingresso)
         Path(temporary).rename(cartella)
     (cartella / "info.json").write_text(
         json.dumps(
@@ -380,19 +409,41 @@ async def carica(file: list[UploadFile], nome: str = Form("")):
         encoding="utf-8",
     )
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file ricevuti", file=accettati, scartati=scartati)
-    _PREPARING.add(id_lavoro)
+    _prepara_in_sfondo(id_lavoro, cartella)
+    return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}
 
-    def prepare_job():
-        try:
-            prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
-        except Exception:
-            lv.evento(
-                cartella, tipo="errore", testo="Preparazione non riuscita: controlla formato e dimensioni dei file."
-            )
-        finally:
-            _PREPARING.discard(id_lavoro)
 
-    threading.Thread(target=prepare_job, daemon=True).start()
+@app.post("/api/lavori/prova")
+def crea_prova():
+    """Cantiere di prova con 30 documenti inventati, pronto da analizzare."""
+    percorsi.lavori().mkdir(parents=True, exist_ok=True)
+    id_lavoro, cartella = demo_cantiere.crea()
+    lv.evento(cartella, tipo="ricevuti", testo="30 documenti di prova generati", file=[], scartati=[])
+    _prepara_in_sfondo(id_lavoro, cartella)
+    return {"lavoro": id_lavoro}
+
+
+@app.post("/api/lavori/{id_lavoro}/file")
+async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
+    """Aggiunge documenti a un cantiere esistente: le pagine già lette non si rileggono."""
+    cartella = _cartella(id_lavoro)
+    if id_lavoro in _PREPARING:
+        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
+    agent = agente.stato()
+    if agent["busy"] and agent.get("job") == id_lavoro:
+        raise chatgpt.AgentError(
+            "L’agente sta analizzando questo cantiere: premi «Interrompi» prima di aggiungere file."
+        )
+    ingresso = cartella / "ingresso"
+    ingresso.mkdir(exist_ok=True)
+    accettati, scartati = await _ricevi(file, ingresso)
+    info_file = cartella / "info.json"
+    info = json.loads(info_file.read_text(encoding="utf-8"))
+    info["file"] = info.get("file", []) + accettati
+    info["scartati"] = info.get("scartati", []) + scartati
+    info_file.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+    lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
+    _prepara_in_sfondo(id_lavoro, cartella)
     return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}
 
 

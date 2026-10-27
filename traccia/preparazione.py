@@ -158,17 +158,26 @@ def _pagine_di(sorgente: Path):
 
 
 def prepara(cartella_lavoro: Path, avviso=lambda **_: None) -> list[dict]:
-    """Prepara tutte le pagine del lavoro; rifarla dà lo stesso risultato. Ritorna l'elenco delle pagine."""
+    """Prepara le pagine del lavoro; rifarla dà lo stesso risultato. Ritorna l'elenco delle pagine.
+
+    I file già preparati (presenti in pagine.json) conservano i loro pid: i file aggiunti dopo ricevono i pid
+    successivi. Così letture, chat e tentativi delle pagine esistenti restano validi.
+    """
     ingresso = cartella_lavoro / "ingresso"
     pagine_dir = cartella_lavoro / "pagine"
     pagine_dir.mkdir(parents=True, exist_ok=True)
-    elenco = []
-    sorgenti = file_sorgente(ingresso)
+    indice = cartella_lavoro / "pagine.json"
+    precedenti = json.loads(indice.read_text(encoding="utf-8")) if indice.exists() else []
+    gia_fatti = {v["file"] for v in precedenti if v.get("pid")}
+    elenco = [v for v in precedenti if v.get("pid")]
+    prossimo = max((int(v["pid"][1:]) for v in elenco), default=0) + 1
+    sorgenti = [s for s in file_sorgente(ingresso) if s.relative_to(ingresso).as_posix() not in gia_fatti]
     for indice_file, sorgente in enumerate(sorgenti):
         relativo = sorgente.relative_to(ingresso).as_posix()
         try:
             for numero, png, testo, parole, totale in _pagine_di(sorgente):
-                pid = f"p{len(elenco) + 1:04d}"
+                pid = f"p{prossimo:04d}"
+                prossimo += 1
                 impronta = hashlib.sha256(png).hexdigest()[:24]
                 bianca = not testo and _inchiostro(png) < SOGLIA_INCHIOSTRO
                 (pagine_dir / f"{pid}.png").write_bytes(png)
@@ -193,7 +202,9 @@ def prepara(cartella_lavoro: Path, avviso=lambda **_: None) -> list[dict]:
             elenco.append({"pid": None, "file": relativo, "errore": type(e).__name__})
             avviso(tipo="errore", testo=f"{relativo}: file non leggibile ({type(e).__name__})")
         avviso(tipo="file", testo=relativo, n=indice_file + 1, totale=len(sorgenti))
-    (cartella_lavoro / "pagine.json").write_text(json.dumps(elenco, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporaneo = indice.with_suffix(".tmp")
+    temporaneo.write_text(json.dumps(elenco, ensure_ascii=False, indent=1), encoding="utf-8")
+    temporaneo.replace(indice)
     return elenco
 
 

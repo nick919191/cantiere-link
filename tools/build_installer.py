@@ -82,6 +82,8 @@ def main():
         "keyring.backends",
         "--collect-all",
         "uvicorn",
+        "--collect-all",
+        "webview",
         "--copy-metadata",
         "keyring",
         "--hidden-import",

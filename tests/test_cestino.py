@@ -52,7 +52,7 @@ def test_trash_api_protects_busy_jobs_and_csrf(radice, monkeypatch):
     client = TestClient(server.app)
     assert client.delete("/api/lavori/prova").status_code == 403
     client.headers["X-Traccia-Token"] = client.get("/api/sessione").json()["token"]
-    monkeypatch.setattr(server.agente, "stato", lambda: {"busy": True})
+    monkeypatch.setattr(server.agente, "stato", lambda: {"busy": True, "job": "prova"})
     assert client.delete("/api/lavori/prova").status_code == 409
     assert directory.exists()
     monkeypatch.setattr(server.agente, "stato", lambda: {"busy": False})
@@ -66,3 +66,12 @@ def test_trash_api_protects_busy_jobs_and_csrf(radice, monkeypatch):
     assert client.get("/api/lavori").json() == []
     assert client.post("/api/cestino/" + moved.json()["id"] + "/ripristina").status_code == 200
     assert directory.exists()
+
+
+def test_trash_allowed_while_agent_works_on_another_job(radice, monkeypatch):
+    directory, _ = _crea_lavoro(radice)
+    client = TestClient(server.app)
+    client.headers["X-Traccia-Token"] = client.get("/api/sessione").json()["token"]
+    monkeypatch.setattr(server.agente, "stato", lambda: {"busy": True, "job": "altro-cantiere"})
+    assert client.delete("/api/lavori/prova").status_code == 200
+    assert not directory.exists()

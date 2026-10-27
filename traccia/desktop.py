@@ -54,33 +54,71 @@ def _scegli_porta() -> tuple[int, bool]:
     raise RuntimeError(f"Le porte da {candidate[0]} a {candidate[-1]} sono tutte occupate da altre applicazioni.")
 
 
+def _finestra():
+    """Modulo pywebview, se installato e non escluso con CANTIERELINK_BROWSER=1 (allora si usa il browser)."""
+    if os.environ.get("CANTIERELINK_BROWSER") or os.environ.get("CANTIERELINK_NO_BROWSER"):
+        return None
+    try:
+        import webview
+    except Exception:
+        return None
+    return webview
+
+
+def _attendi(url: str) -> bool:
+    for _ in range(40):
+        try:
+            if httpx.get(url + "/api/salute", timeout=1).is_success:
+                return True
+        except httpx.HTTPError:
+            pass
+        threading.Event().wait(0.5)
+    return False
+
+
+def _apri(url: str, webview) -> None:
+    """Interfaccia in una finestra propria (pywebview) oppure nel browser predefinito."""
+    if webview is None:
+        if not os.environ.get("CANTIERELINK_NO_BROWSER"):
+            webbrowser.open(url)
+        return
+    webview.create_window("CantiereLink", url, width=1380, height=860, min_size=(900, 600))
+    webview.start()
+
+
 def main():
     porta, gia_aperta = _scegli_porta()
     url = f"http://127.0.0.1:{porta}"
+    webview = _finestra()
     if gia_aperta:
-        webbrowser.open(url)
+        _apri(url, webview)
         return
     configurazione.directory().mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(configurazione.directory() / "app.lock", timeout=0):
-
-            def open_browser():
-                for _ in range(30):
-                    try:
-                        if httpx.get(url + "/api/salute", timeout=1).is_success:
-                            if not os.environ.get("CANTIERELINK_NO_BROWSER"):
-                                webbrowser.open(url)
-                            return
-                    except httpx.HTTPError:
-                        pass
-                    threading.Event().wait(0.5)
-
-            threading.Thread(target=open_browser, daemon=True).start()
             from .server import app
 
             instance = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=porta, access_log=False))
-            app.state.shutdown = lambda: setattr(instance, "should_exit", True)
-            instance.run()
+
+            def shutdown():
+                instance.should_exit = True
+                if webview is not None:
+                    for window in list(webview.windows):
+                        window.destroy()
+
+            app.state.shutdown = shutdown
+            if webview is None:
+                threading.Thread(target=lambda: _attendi(url) and _apri(url, None), daemon=True).start()
+                instance.run()
+                return
+            # Con la finestra propria il server gira in un thread: la finestra deve stare nel thread principale.
+            server_thread = threading.Thread(target=instance.run, name="server-locale", daemon=True)
+            server_thread.start()
+            if not _attendi(url):
+                raise RuntimeError("Il servizio locale non è partito. Consulta la cartella dati dell’app.")
+            _apri(url, webview)  # ritorna alla chiusura della finestra
+            instance.should_exit = True
+            server_thread.join(timeout=10)
     except Timeout as exc:
         raise RuntimeError("Un’istanza dell’app è già in esecuzione.") from exc
 

@@ -164,12 +164,12 @@ td.src:hover{background:var(--accent-bg)}
       <div class="upbar hidden" id="upbar"><i></i></div><span class="note" id="uptxt" style="margin:0"></span>
     </div>
     <div class="err" id="uperr"></div>
-    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><button class="btn s" onclick="safe(showTrash)">Cestino</button></div>
+    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><div class="jobs-tools"><button class="btn s" id="demo-button" onclick="safe(createDemo)" title="30 documenti inventati, piccoli e veloci da analizzare">Crea cantiere di prova</button><button class="btn s" onclick="safe(showTrash)">Cestino</button></div></div>
     <div class="lavori" id="lavori"></div>
   </section>
 
   <!-- LAVORO -->
-  <section id="lavoro" class="hidden"><div class="agent-banner"><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><button id="analyze-button" class="btn" onclick="safe(analyze)">Analizza / riprendi</button></div>
+  <section id="lavoro" class="hidden"><div class="agent-banner"><span class="pill n" id="agent-pill">Agente</span><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><input type="file" id="add-files" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden" onchange="safe(()=>addFiles([...this.files]))"><button id="add-button" class="btn s" onclick="$('add-files').click()" title="Le pagine già lette non vengono rilette">Aggiungi file</button><button id="stop-button" class="btn s hidden" onclick="safe(stopAgent)">Interrompi</button><button id="analyze-button" class="btn" onclick="safe(analyze)">Analizza / riprendi</button></div>
     <div class="card prog">
       <svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--fill)" stroke-width="7"/>
         <circle id="ringv" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"
@@ -178,7 +178,7 @@ td.src:hover{background:var(--accent-bg)}
       <div class="bar">
         <div style="font-weight:600" id="titolo">…</div>
         <div class="t"><i id="barv"></i></div>
-        <div class="meta"><span id="bart"></span><span id="bare"></span></div>
+        <div class="meta"><span id="bart"></span><span id="bare"></span><span id="bartok" title="Token usati con ChatGPT per questo cantiere"></span></div>
         <div class="phase" id="phase"></div>
         <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi Analizza / riprendi.</div>
       </div>
@@ -284,7 +284,9 @@ $("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.
   else $("uperr").textContent="Invio non riuscito. Riprova; se il problema resta, i file potrebbero essere troppo grandi."};
  x.onerror=()=>{$("invia").disabled=false;$("uperr").textContent="La piattaforma non risponde: controlla che l’app sia aperta."};x.send(fd)};
 const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="t">${esc(l.nome)}</div><button class="text-button trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora.</div>`}).catch(()=>{})}
+function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
+function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
+function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;
@@ -300,6 +302,7 @@ async function aggiorna(){if(!L)return;
  const fatte=stato.lette+stato.non_lette.length;
  $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
  $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
+ $("bartok").textContent=tokens(stato.consumo);
  const ord=["preparazione","lettura","composizione","pronto"],i=ord.indexOf(stato.fase);
  $("phase").innerHTML=["Ricevuti","Preparazione","Lettura e smistamento","Collegamento a ritroso","Excel"].map((t,j)=>`<span class="${j<=i||stato.fase==="pronto"?"ok":""} ${j===i+1&&stato.fase!=="pronto"?"on":""}">${t}</span>`).join("");
  $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";

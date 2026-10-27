@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import chat, chatgpt, configurazione, percorsi
+from . import chat, chatgpt, configurazione, consumi, percorsi
 from . import lavoro as lv
 from .controlli import aggiungi_zone_esatte, valida
 from .preparazione import info_pagina, prepara
@@ -14,7 +14,7 @@ from .uscita import componi
 
 _lock = threading.RLock()
 _cancel = threading.Event()
-_state = {"busy": False, "job": None, "message": "", "error": False}
+_state = {"busy": False, "job": None, "message": "", "error": False, "stopping": False, "stopped": False}
 
 
 def stato() -> dict:
@@ -23,8 +23,21 @@ def stato() -> dict:
 
 
 def stop() -> dict:
-    _cancel.set()
-    return {"message": "Interruzione richiesta. I risultati completati vengono conservati."}
+    with _lock:
+        if not _state["busy"]:
+            return {"message": "Nessuna operazione in corso."}
+        _cancel.set()
+        _state.update(stopping=True, message="Interruzione in corso: attendo la risposta della pagina corrente…")
+    return {"message": "Interruzione richiesta. Le pagine già lette restano salvate: riprendi quando vuoi."}
+
+
+def _chiama(cartella: Path, *args) -> str:
+    """Una chiamata a ChatGPT con il conteggio dei token registrato sul cantiere."""
+    consumo = {}
+    try:
+        return chatgpt.response(*args, _cancel, consumo)
+    finally:
+        consumi.registra(cartella, consumo)
 
 
 def _json(text: str) -> dict:
@@ -58,7 +71,9 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
         if not chatgpt.status().get("plan_enabled"):
             raise chatgpt.AgentError("Collega ChatGPT e abilita l’utilizzo del piano nelle impostazioni.")
         _cancel.clear()
-        _state.update(busy=True, job=cartella.name, message="Avvio dell’agente…", error=False)
+        _state.update(
+            busy=True, job=cartella.name, message="Avvio dell’agente…", error=False, stopping=False, stopped=False
+        )
 
     def run():
         try:
@@ -72,20 +87,20 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
             message = (
                 str(exc) if isinstance(exc, chatgpt.AgentError) else "Operazione non completata. Riprova dal cantiere."
             )
-            _state.update(message=message, error=True)
+            _state.update(message=message, error=not _cancel.is_set(), stopped=_cancel.is_set())
             lv.evento(cartella, tipo="errore", testo=message)
             if qid:
                 chat.fallita(cartella, qid, message)
         finally:
             with _lock:
-                _state.update(busy=False)
+                _state.update(busy=False, stopping=False)
 
     threading.Thread(target=run, name="agente-cantiere", daemon=True).start()
 
 
 def _check():
     if _cancel.is_set():
-        raise chatgpt.AgentError("Operazione interrotta. Puoi riprendere dalle pagine non completate.")
+        raise chatgpt.AgentError("Analisi interrotta. Premi «Analizza / riprendi» per continuare dalle pagine rimaste.")
 
 
 def analizza(cartella: Path, model: str, effort: str) -> None:
@@ -110,7 +125,8 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         lv.evento(cartella, tipo="lettura_pagina", pid=pid, testo=_state["message"])
         lv.segna_tentativi(cartella, [pid])
         image = base64.b64encode((cartella / "pagine" / f"{pid}.png").read_bytes()).decode()
-        result = chatgpt.response(
+        result = _chiama(
+            cartella,
             instructions,
             [
                 {
@@ -134,7 +150,6 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
             ],
             model,
             effort,
-            _cancel,
         )
         _check()
         try:
@@ -210,8 +225,12 @@ def rispondi(cartella: Path, qid: str, model: str, effort: str) -> None:
         "storico": [{"ruolo": m["ruolo"], "testo": m["testo"]} for m in history],
     }
     answer = _json(
-        chatgpt.response(
-            instructions, [{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}], model, effort, _cancel
+        _chiama(
+            cartella,
+            instructions,
+            [{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+            model,
+            effort,
         )
     )
     _check()
