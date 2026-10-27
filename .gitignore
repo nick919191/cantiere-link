@@ -17,3 +17,4 @@ dist/
 build/
 packaging/icon.ico
 packaging/icon.icns
+/MANIFEST.sha256
