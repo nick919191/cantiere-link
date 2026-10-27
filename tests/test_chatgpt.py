@@ -184,3 +184,39 @@ def test_account_cannot_change_during_signin(vault, monkeypatch):
         chatgpt.logout()
     with pytest.raises(chatgpt.AgentError):
         chatgpt.select("other")
+
+
+class _PortachiaviWindows:
+    """Come Gestione credenziali: rifiuta le voci oltre 1280 caratteri."""
+
+    def __init__(self):
+        self.voci = {}
+
+    def get_password(self, service, user):
+        return self.voci.get((service, user))
+
+    def set_password(self, service, user, value):
+        if len(value) > 1280:
+            raise OSError(1783, "CredWrite")
+        self.voci[(service, user)] = value
+
+    def delete_password(self, service, user):
+        del self.voci[(service, user)]
+
+
+def test_token_lunghi_si_salvano_a_parti_e_si_rileggono(monkeypatch):
+    portachiavi = _PortachiaviWindows()
+    monkeypatch.setattr(chatgpt, "_vault", lambda: portachiavi)
+    data = {"active": "a", "profiles": {"a": {"access": "x" * 2000, "refresh": "y" * 1500, "id": "z" * 1800}}}
+    chatgpt._write(data)
+    assert chatgpt._read() == data
+    chatgpt._write({"active": None, "profiles": {}})
+    assert chatgpt._read() == {"active": None, "profiles": {}}
+    assert (chatgpt.SERVICE, "profiles.1") not in portachiavi.voci
+
+
+def test_formato_precedente_in_una_voce_resta_leggibile(monkeypatch):
+    portachiavi = _PortachiaviWindows()
+    monkeypatch.setattr(chatgpt, "_vault", lambda: portachiavi)
+    portachiavi.voci[(chatgpt.SERVICE, "profiles")] = json.dumps({"active": None, "profiles": {"p": {}}})
+    assert chatgpt._read() == {"active": None, "profiles": {"p": {}}}

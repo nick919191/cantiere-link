@@ -26,6 +26,7 @@ TOKEN = ISSUER + "/api/accounts/oauth/token"
 RESOURCE = "https://api.openai.com/v1"
 SCOPE = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"
 SERVICE = "tracciabilita-materiali.chatgpt"
+CHUNK = 1000
 _LOCK = threading.RLock()
 _pending = None
 _message = ""
@@ -46,8 +47,15 @@ def _vault():
 
 def _read() -> dict:
     try:
-        raw = _vault().get_password(SERVICE, "profiles")
-        return json.loads(raw) if raw else {"active": None, "profiles": {}}
+        vault = _vault()
+        raw = vault.get_password(SERVICE, "profiles")
+        data = json.loads(raw) if raw else {"active": None, "profiles": {}}
+        if "chunks" in data:
+            parts = [vault.get_password(SERVICE, f"profiles.{i}") for i in range(data["chunks"])]
+            if None in parts:
+                raise ValueError("parte mancante")
+            data = json.loads("".join(parts))
+        return data
     except AgentError:
         raise
     except Exception as exc:
@@ -55,8 +63,18 @@ def _read() -> dict:
 
 
 def _write(data: dict) -> None:
+    """Il valore è diviso in parti: Gestione credenziali di Windows accetta circa 1280 caratteri per voce."""
     try:
-        _vault().set_password(SERVICE, "profiles", json.dumps(data))
+        vault = _vault()
+        raw = json.dumps(data)
+        parts = [raw[i : i + CHUNK] for i in range(0, len(raw), CHUNK)] or [""]
+        for i, part in enumerate(parts):
+            vault.set_password(SERVICE, f"profiles.{i}", part)
+        vault.set_password(SERVICE, "profiles", json.dumps({"chunks": len(parts)}))
+        i = len(parts)
+        while vault.get_password(SERVICE, f"profiles.{i}") is not None:
+            vault.delete_password(SERVICE, f"profiles.{i}")
+            i += 1
     except AgentError:
         raise
     except Exception as exc:

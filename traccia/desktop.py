@@ -1,6 +1,7 @@
 """Avvio locale su Windows e macOS; nessun eseguibile esterno dell’agente richiesto."""
 
 import os
+import socket
 import threading
 import webbrowser
 
@@ -10,21 +11,55 @@ from filelock import FileLock, Timeout
 
 from . import configurazione, percorsi
 
+PORTE_DI_RISERVA = 20
+
+
+def _stato_porta(porta: int) -> str:
+    """'libera', 'nostra' (l’app è già aperta su quella porta) o 'altra'."""
+    try:
+        with socket.create_connection(("127.0.0.1", porta), timeout=0.5):
+            pass
+    except OSError:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", porta))
+            return "libera"
+        except OSError:
+            return "altra"
+    try:
+        identity = httpx.get(f"http://127.0.0.1:{porta}/api/salute", timeout=2).json()
+    except (httpx.HTTPError, ValueError):
+        return "altra"
+    if isinstance(identity, dict) and identity.get("application") == "tracciabilita-materiali":
+        return "nostra"
+    return "altra"
+
+
+def _scegli_porta() -> tuple[int, bool]:
+    """Porta da usare e se l’app vi è già aperta. Con TRACCIA_PORTA si usa solo quella."""
+    if os.environ.get("TRACCIA_PORTA"):
+        candidate = [percorsi.PORTA]
+    else:
+        candidate = list(range(percorsi.PORTA, percorsi.PORTA + PORTE_DI_RISERVA))
+    stati = {}
+    for porta in candidate:
+        stati[porta] = _stato_porta(porta)
+        if stati[porta] == "nostra":
+            return porta, True
+    for porta in candidate:
+        if stati[porta] == "libera":
+            return porta, False
+    if len(candidate) == 1:
+        raise RuntimeError(f"La porta {percorsi.PORTA} è occupata da un’altra applicazione. Cambia TRACCIA_PORTA.")
+    raise RuntimeError(f"Le porte da {candidate[0]} a {candidate[-1]} sono tutte occupate da altre applicazioni.")
+
 
 def main():
-    url = f"http://127.0.0.1:{percorsi.PORTA}"
-    try:
-        response = httpx.get(url + "/api/salute", timeout=2)
-        try:
-            identity = response.json()
-        except ValueError:
-            identity = {}
-        if isinstance(identity, dict) and identity.get("application") == "tracciabilita-materiali":
-            webbrowser.open(url)
-            return
-        raise RuntimeError("La porta è occupata da un’altra applicazione. Imposta TRACCIA_PORTA.")
-    except (httpx.ConnectError, httpx.TimeoutException):
-        pass
+    porta, gia_aperta = _scegli_porta()
+    url = f"http://127.0.0.1:{porta}"
+    if gia_aperta:
+        webbrowser.open(url)
+        return
     configurazione.directory().mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(configurazione.directory() / "app.lock", timeout=0):
@@ -43,7 +78,7 @@ def main():
             threading.Thread(target=open_browser, daemon=True).start()
             from .server import app
 
-            instance = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=percorsi.PORTA, access_log=False))
+            instance = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=porta, access_log=False))
             app.state.shutdown = lambda: setattr(instance, "should_exit", True)
             instance.run()
     except Timeout as exc:
