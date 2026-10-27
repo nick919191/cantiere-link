@@ -1,3 +1,4 @@
+import collections
 import copy
 import io
 import json
@@ -136,6 +137,7 @@ def test_agente_pipeline_senza_chiamate_reali(radice, monkeypatch):
 def test_lotto_con_scheda_mancante_segnala_solo_quella_pagina(radice, monkeypatch):
     directory, _ = _crea_lavoro(radice)
     records = {name: schema for name, _, schema in fascicolo()}
+    richieste = []
 
     def respond(_instructions, inputs, *_args):
         schede = {}
@@ -143,6 +145,7 @@ def test_lotto_con_scheda_mancante_segnala_solo_quella_pagina(radice, monkeypatc
             if item["type"] == "input_text":
                 context = json.loads(item["text"])
                 name = context["file"].rsplit("/", 1)[-1]
+                richieste.append(name)
                 if name != "ddt300.pdf":
                     schede[context["pid"]] = copy.deepcopy(records[name])
         return json.dumps({"schede": schede})
@@ -153,6 +156,32 @@ def test_lotto_con_scheda_mancante_segnala_solo_quella_pagina(radice, monkeypatc
         agente.analizza(directory, "test-model", "")
     stato = lv.stato(directory)
     assert stato["lette"] == len(records) - 1 and stato["da_leggere"] == 1
+    # secondo tentativo automatico: solo la pagina rifiutata viene richiesta di nuovo
+    assert richieste.count("ddt300.pdf") == 2 and richieste.count("ddt200.pdf") == 1
+    assert json.loads((directory / "tentativi.json").read_text(encoding="utf-8"))["p0007"] == 2
+
+
+def test_secondo_tentativo_recupera_la_pagina(radice, monkeypatch):
+    directory, _ = _crea_lavoro(radice)
+    records = {name: schema for name, _, schema in fascicolo()}
+    visti = collections.Counter()
+
+    def respond(_instructions, inputs, *_args):
+        schede = {}
+        for item in inputs[0]["content"]:
+            if item["type"] == "input_text":
+                context = json.loads(item["text"])
+                name = context["file"].rsplit("/", 1)[-1]
+                visti[name] += 1
+                if name == "ddt300.pdf" and visti[name] == 1:
+                    continue  # la prima volta la scheda manca
+                schede[context["pid"]] = copy.deepcopy(records[name])
+        return json.dumps({"schede": schede})
+
+    monkeypatch.setattr(chatgpt, "response", respond)
+    agente._cancel.clear()
+    agente.analizza(directory, "test-model", "")
+    assert lv.stato(directory)["fase"] == "pronto" and visti["ddt300.pdf"] == 2
 
 
 def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):

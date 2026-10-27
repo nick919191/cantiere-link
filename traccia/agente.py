@@ -21,6 +21,7 @@ _cancel = threading.Event()
 _tentativi_lock = threading.Lock()
 PAGINE_IN_PARALLELO = 6  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
 PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
+GIRI_AUTOMATICI = 2  # le pagine con scheda rifiutata si ritentano una volta da sole prima di fermarsi
 # Immagine inviata al modello: le zone sono in 0-1000, ridurla non le cambia. Niente bassa risoluzione per i fogli
 # grandi: nei cantieri veri ci sono DDT scansionati in A1, e il servizio riduce comunque ogni pagina a ~2000 px.
 LATO_MASSIMO = 2000  # oltre questo è solo peso, e sopra un certo limite il servizio rifiuta la richiesta
@@ -132,7 +133,33 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         "Restituisci soltanto il JSON della scheda. Nessuna azione esterna. "
         "Trascrivi anche il testo completo dei timbri e i relativi riferimenti."
     )
-    da_leggere = [p for p in pages if not lv.scheda_pagina(p)]
+    for giro in range(1, GIRI_AUTOMATICI + 1):
+        da_leggere = [p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p)]
+        if not da_leggere:
+            break
+        if giro > 1:
+            lv.evento(cartella, tipo="lettura", testo=f"Secondo tentativo su {len(da_leggere)} pagine non accettate")
+        _leggi_tutte(cartella, da_leggere, instructions, model, effort, giro)
+    _check()
+    _state.update(message="Composizione delle prove e dell’Excel…")
+    componi(cartella)
+    rimaste = [p for p in pages if not lv.scheda_pagina(p)]
+    if rimaste:
+        file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})
+        elenco = ", ".join(file[:3]) + (f" e altri {len(file) - 3}" if len(file) > 3 else "")
+        raise chatgpt.AgentError(
+            f"Lette {len(pages) - len(rimaste)} pagine su {len(pages)}; Excel pronto con queste. "
+            f"{len(rimaste)} da rileggere ({elenco}): anche al secondo tentativo il controllo ha trovato citazioni "
+            "che non corrispondono al testo della pagina, quindi la scheda non è stata accettata. Premi "
+            "«Analizza / riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
+        )
+
+
+def _esaurita(cartella: Path, page: dict) -> bool:
+    return lv.tentativi(cartella).get(page["pid"], 0) >= lv.MAX_TENTATIVI
+
+
+def _leggi_tutte(cartella: Path, da_leggere: list[dict], instructions: str, model: str, effort: str, giro: int):
     lotti = [da_leggere[i : i + PAGINE_PER_LOTTO] for i in range(0, len(da_leggere), PAGINE_PER_LOTTO)]
     fatte = 0
     with ThreadPoolExecutor(max_workers=PAGINE_IN_PARALLELO, thread_name_prefix="lettura") as pool:
@@ -143,24 +170,12 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
                 fatte += len(futures[future])
                 _state.update(
                     message=f"Lette {fatte} di {len(da_leggere)} pagine "
-                    f"(lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta)"
+                    f"(lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta"
+                    + (", secondo tentativo)" if giro > 1 else ")")
                 )
         except BaseException:
             _cancel.set()  # i lotti non ancora iniziati si fermano subito; quelli in corso al primo controllo
             raise
-    _check()
-    _state.update(message="Composizione delle prove e dell’Excel…")
-    componi(cartella)
-    rimaste = [p for p in pages if not lv.scheda_pagina(p)]
-    if rimaste:
-        file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})
-        elenco = ", ".join(file[:3]) + (f" e altri {len(file) - 3}" if len(file) > 3 else "")
-        raise chatgpt.AgentError(
-            f"Lette {len(pages) - len(rimaste)} pagine su {len(pages)}; Excel pronto con queste. "
-            f"{len(rimaste)} da rileggere ({elenco}): il controllo ha trovato citazioni che non corrispondono "
-            "al testo della pagina, quindi la scheda non è stata accettata. Premi «Analizza / riprendi» per "
-            "ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
-        )
 
 
 def immagine_per_modello(png: Path) -> dict:
