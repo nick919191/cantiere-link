@@ -112,20 +112,47 @@ def test_agente_pipeline_senza_chiamate_reali(radice, monkeypatch):
     records = {name: schema for name, _, schema in fascicolo()}
     calls = []
 
-    def respond(_instructions, inputs, *_args):
-        context = json.loads(inputs[0]["content"][0]["text"])
-        name = context["file"].rsplit("/", 1)[-1]
-        calls.append(name)
-        return json.dumps(copy.deepcopy(records[name]))
+    def respond(instructions, inputs, *_args):
+        assert "schede" in instructions
+        schede = {}
+        for item in inputs[0]["content"]:
+            if item["type"] == "input_text":
+                context = json.loads(item["text"])
+                name = context["file"].rsplit("/", 1)[-1]
+                calls.append(name)
+                schede[context["pid"]] = copy.deepcopy(records[name])
+        return json.dumps({"schede": schede})
 
     monkeypatch.setattr(chatgpt, "response", respond)
     agente._cancel.clear()
     agente.analizza(directory, "test-model", "")
-    assert len(calls) == len(records)
+    assert sorted(calls) == sorted(records)
     assert (directory / "uscita" / "tracciabilita.xlsx").exists()
     agente.analizza(directory, "test-model", "")
     assert len(calls) == len(records), "accepted pages must not be requested again"
     assert len(list((directory / "versioni").iterdir())) == 1
+
+
+def test_lotto_con_scheda_mancante_segnala_solo_quella_pagina(radice, monkeypatch):
+    directory, _ = _crea_lavoro(radice)
+    records = {name: schema for name, _, schema in fascicolo()}
+
+    def respond(_instructions, inputs, *_args):
+        schede = {}
+        for item in inputs[0]["content"]:
+            if item["type"] == "input_text":
+                context = json.loads(item["text"])
+                name = context["file"].rsplit("/", 1)[-1]
+                if name != "ddt300.pdf":
+                    schede[context["pid"]] = copy.deepcopy(records[name])
+        return json.dumps({"schede": schede})
+
+    monkeypatch.setattr(chatgpt, "response", respond)
+    agente._cancel.clear()
+    with pytest.raises(chatgpt.AgentError, match="parziali"):
+        agente.analizza(directory, "test-model", "")
+    stato = lv.stato(directory)
+    assert stato["lette"] == len(records) - 1 and stato["da_leggere"] == 1
 
 
 def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):
@@ -143,13 +170,18 @@ def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):
         time.sleep(0.15)
         with lock:
             attivi[0] -= 1
-        context = json.loads(inputs[0]["content"][0]["text"])
-        return json.dumps(copy.deepcopy(records[context["file"].rsplit("/", 1)[-1]]))
+        schede = {}
+        for item in inputs[0]["content"]:
+            if item["type"] == "input_text":
+                context = json.loads(item["text"])
+                schede[context["pid"]] = copy.deepcopy(records[context["file"].rsplit("/", 1)[-1]])
+        return json.dumps({"schede": schede})
 
+    monkeypatch.setattr(agente, "PAGINE_PER_LOTTO", 2)
     monkeypatch.setattr(chatgpt, "response", respond)
     agente._cancel.clear()
     agente.analizza(directory, "test-model", "")
-    assert picco[0] == min(agente.PAGINE_IN_PARALLELO, len(records))
+    assert picco[0] == min(agente.PAGINE_IN_PARALLELO, -(-len(records) // 2))
     assert lv.stato(directory)["fase"] == "pronto"
     tentativi = json.loads((directory / "tentativi.json").read_text(encoding="utf-8"))
     assert len(tentativi) == len(records) and set(tentativi.values()) == {1}

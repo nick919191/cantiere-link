@@ -16,7 +16,14 @@ from .uscita import componi
 _lock = threading.RLock()
 _cancel = threading.Event()
 _tentativi_lock = threading.Lock()
-PAGINE_IN_PARALLELO = 4  # letture contemporanee a ChatGPT: ogni pagina è indipendente dalle altre
+PAGINE_IN_PARALLELO = 4  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
+PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
+ISTRUZIONI_LOTTO = (
+    '\nRicevi più pagine nella stessa richiesta: ogni immagine è preceduta dal suo JSON con il campo "pid". '
+    'Restituisci un solo oggetto JSON {"schede": {"<pid>": <scheda>, ...}} con una scheda per ogni pid ricevuto, '
+    "ciascuna nella forma descritta sopra. Le pagine sono in ordine: usa le precedenti dello stesso file per "
+    "continua_pagina_prima."
+)
 _state = {"busy": False, "job": None, "message": "", "error": False, "stopping": False, "stopped": False}
 
 
@@ -119,16 +126,20 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         "Trascrivi anche il testo completo dei timbri e i relativi riferimenti."
     )
     da_leggere = [p for p in pages if not lv.scheda_pagina(p)]
+    lotti = [da_leggere[i : i + PAGINE_PER_LOTTO] for i in range(0, len(da_leggere), PAGINE_PER_LOTTO)]
     fatte = 0
     with ThreadPoolExecutor(max_workers=PAGINE_IN_PARALLELO, thread_name_prefix="lettura") as pool:
-        futures = [pool.submit(_leggi_pagina, cartella, page, instructions, model, effort) for page in da_leggere]
+        futures = {pool.submit(_leggi_lotto, cartella, lotto, instructions, model, effort): lotto for lotto in lotti}
         try:
             for future in as_completed(futures):
-                future.result()  # rilancia l'errore della pagina (interruzione compresa)
-                fatte += 1
-                _state.update(message=f"Lette {fatte} di {len(da_leggere)} pagine ({PAGINE_IN_PARALLELO} alla volta)")
+                future.result()  # rilancia l'errore del lotto (interruzione compresa)
+                fatte += len(futures[future])
+                _state.update(
+                    message=f"Lette {fatte} di {len(da_leggere)} pagine "
+                    f"(lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta)"
+                )
         except BaseException:
-            _cancel.set()  # le pagine non ancora iniziate si fermano subito; quelle in corso al primo controllo
+            _cancel.set()  # i lotti non ancora iniziati si fermano subito; quelli in corso al primo controllo
             raise
     _check()
     _state.update(message="Composizione delle prove e dell’Excel…")
@@ -139,61 +150,67 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         )
 
 
-def _leggi_pagina(cartella: Path, page: dict, instructions: str, model: str, effort: str) -> None:
-    """Una pagina: richiesta a ChatGPT, controllo della scheda, salvataggio in archivio. Gira in un thread."""
+def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: str, effort: str) -> None:
+    """Un lotto di pagine in una richiesta a ChatGPT; ogni scheda è controllata e salvata da sola. Gira in un thread."""
     _check()
-    pid = page["pid"]
-    info = info_pagina(cartella, pid)
-    lv.evento(cartella, tipo="lettura_pagina", pid=pid, testo=f"Lettura: {page['file']} · pagina {page['pagina']}")
+    infos = {p["pid"]: info_pagina(cartella, p["pid"]) for p in lotto}
+    for p in lotto:
+        lv.evento(cartella, tipo="lettura_pagina", pid=p["pid"], testo=f"Lettura: {p['file']} · pagina {p['pagina']}")
     with _tentativi_lock:
-        lv.segna_tentativi(cartella, [pid])
-    image = base64.b64encode((cartella / "pagine" / f"{pid}.png").read_bytes()).decode()
-    result = _chiama(
-        cartella,
-        instructions,
-        [
+        lv.segna_tentativi(cartella, [p["pid"] for p in lotto])
+    content = []
+    for p in lotto:
+        info = infos[p["pid"]]
+        image = base64.b64encode((cartella / "pagine" / f"{p['pid']}.png").read_bytes()).decode()
+        content.append(
             {
-                "role": "user",
-                "content": [
+                "type": "input_text",
+                "text": json.dumps(
                     {
-                        "type": "input_text",
-                        "text": json.dumps(
-                            {
-                                "file": info["file"],
-                                "pagina": info["pagina"],
-                                "pagine_file": info["pagine_file"],
-                                "testo_nativo": info["testo_nativo"][:50000],
-                            },
-                            ensure_ascii=False,
-                        ),
+                        "pid": p["pid"],
+                        "file": info["file"],
+                        "pagina": info["pagina"],
+                        "pagine_file": info["pagine_file"],
+                        "testo_nativo": info["testo_nativo"][:50000],
                     },
-                    {"type": "input_image", "image_url": "data:image/png;base64," + image},
-                ],
+                    ensure_ascii=False,
+                ),
             }
-        ],
-        model,
-        effort,
-    )
+        )
+        content.append({"type": "input_image", "image_url": "data:image/png;base64," + image})
+    result = _chiama(cartella, instructions + ISTRUZIONI_LOTTO, [{"role": "user", "content": content}], model, effort)
     _check()
     try:
-        schema = _json(result)
-        errors = valida(schema, info["testo_nativo"])
-    except (ValueError, TypeError, KeyError, AttributeError):
-        errors = ["Scheda non valida."]
-    if errors:
-        lv.evento(cartella, tipo="correzione", pid=pid, testo="Lettura non accettata: " + "; ".join(errors)[:400])
-        # Non si spende altro piano automaticamente per correggere questa pagina.
-        return
-    aggiungi_zone_esatte(schema, info["parole"])
-    schema.update(
-        versione_lettura=percorsi.versione_lettura(),
-        impronta=info["impronta"],
-        agente="ChatGPT",
-        modello=model,
-        letto_il=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    )
-    lv.salva_lettura(info["impronta"], schema)
-    lv.evento(cartella, tipo="scheda", pid=pid, famiglia=schema["famiglia"], testo=schema["motivo"][:250])
+        data = _json(result)
+        schede = data.get("schede")
+        if not isinstance(schede, dict):
+            # Tolleranza: con una sola pagina il modello può rispondere con la scheda nuda.
+            schede = {lotto[0]["pid"]: data} if len(lotto) == 1 and "famiglia" in data else {}
+    except ValueError:
+        schede = {}
+    for p in lotto:
+        pid, info = p["pid"], infos[p["pid"]]
+        schema = schede.get(pid)
+        try:
+            if not isinstance(schema, dict):
+                raise ValueError("scheda mancante")
+            errors = valida(schema, info["testo_nativo"])
+        except (ValueError, TypeError, KeyError, AttributeError):
+            errors = ["Scheda non valida."]
+        if errors:
+            lv.evento(cartella, tipo="correzione", pid=pid, testo="Lettura non accettata: " + "; ".join(errors)[:400])
+            # Non si spende altro piano automaticamente per correggere questa pagina.
+            continue
+        aggiungi_zone_esatte(schema, info["parole"])
+        schema.update(
+            versione_lettura=percorsi.versione_lettura(),
+            impronta=info["impronta"],
+            agente="ChatGPT",
+            modello=model,
+            letto_il=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        )
+        lv.salva_lettura(info["impronta"], schema)
+        lv.evento(cartella, tipo="scheda", pid=pid, famiglia=schema["famiglia"], testo=schema["motivo"][:250])
 
 
 def rispondi(cartella: Path, qid: str, model: str, effort: str) -> None:
