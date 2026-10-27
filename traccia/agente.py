@@ -151,9 +151,15 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     _check()
     _state.update(message="Composizione delle prove e dell’Excel…")
     componi(cartella)
-    if any(not lv.scheda_pagina(p) for p in pages):
+    rimaste = [p for p in pages if not lv.scheda_pagina(p)]
+    if rimaste:
+        file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})
+        elenco = ", ".join(file[:3]) + (f" e altri {len(file) - 3}" if len(file) > 3 else "")
         raise chatgpt.AgentError(
-            "Risultati parziali: alcune letture non sono state accettate. Puoi riprendere l’analisi."
+            f"Lette {len(pages) - len(rimaste)} pagine su {len(pages)}; Excel pronto con queste. "
+            f"{len(rimaste)} da rileggere ({elenco}): il controllo ha trovato citazioni che non corrispondono "
+            "al testo della pagina, quindi la scheda non è stata accettata. Premi «Analizza / riprendi» per "
+            "ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
 
 
@@ -214,7 +220,13 @@ def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: st
         except (ValueError, TypeError, KeyError, AttributeError):
             errors = ["Scheda non valida."]
         if errors:
-            lv.evento(cartella, tipo="correzione", pid=pid, testo="Lettura non accettata: " + "; ".join(errors)[:400])
+            lv.evento(
+                cartella,
+                tipo="correzione",
+                pid=pid,
+                testo=f"Pagina da rileggere ({p['file'].rsplit('/', 1)[-1]} · p. {p['pagina']}), scheda non accettata: "
+                + "; ".join(errors)[:400],
+            )
             # Non si spende altro piano automaticamente per correggere questa pagina.
             continue
         aggiungi_zone_esatte(schema, info["parole"])

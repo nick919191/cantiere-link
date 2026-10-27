@@ -149,7 +149,7 @@ def test_lotto_con_scheda_mancante_segnala_solo_quella_pagina(radice, monkeypatc
 
     monkeypatch.setattr(chatgpt, "response", respond)
     agente._cancel.clear()
-    with pytest.raises(chatgpt.AgentError, match="parziali"):
+    with pytest.raises(chatgpt.AgentError, match=r"Lette 11 pagine su 12.*1 da rileggere \(ddt300\.pdf\)"):
         agente.analizza(directory, "test-model", "")
     stato = lv.stato(directory)
     assert stato["lette"] == len(records) - 1 and stato["da_leggere"] == 1
