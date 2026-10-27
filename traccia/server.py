@@ -95,7 +95,7 @@ def impostazioni():
 
 class Preferenze(BaseModel):
     model: str = Field(default="", max_length=150)
-    reasoning: str = "medium"
+    reasoning: str = "low"
     theme: str = "system"
     chat_width: int = Field(default=390, ge=310, le=600)
 

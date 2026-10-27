@@ -37,7 +37,8 @@ def leggi() -> dict:
         if not value.get("host_id"):
             value["host_id"] = "urn:uuid:" + str(uuid.uuid4())
             scrivi_json(path, value)
-        return {"model": "", "reasoning": "medium", "theme": "system", "chat_width": 390, **value}
+        # "low": sulle pagine semplici il risultato è lo stesso e si risparmiano i token di ragionamento
+        return {"model": "", "reasoning": "low", "theme": "system", "chat_width": 390, **value}
 
 
 def aggiorna(value: dict) -> dict:

@@ -1,5 +1,5 @@
 /* Interfaccia locale: credenziali esclusivamente nel portachiavi del sistema. */
-let localToken='',preferences={model:'',reasoning:'medium',theme:'system',chat_width:390};
+let localToken='',preferences={model:'',reasoning:'low',theme:'system',chat_width:390};
 let updateState={},updateTick=0;
 let accountState={},agentState={},modelCatalog=[],conversationId='principale',selectedVoice=null,selectedPages=[];
 let settingsPage='account',chatVersion='',lastProject=undefined,lastResult='',noticeTimer,usageTotal={};
