@@ -15,6 +15,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r requirements.txt 'pyinstaller>=6.12,<7'
+        env:
+          # Prevent collisions with Python's OpenSSL when cryptography needs a source build.
+          OPENSSL_STATIC: '1'
       - name: Install Inno Setup
         if: runner.os == 'Windows'
         run: choco install innosetup --no-progress -y

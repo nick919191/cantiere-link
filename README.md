@@ -157,6 +157,8 @@ Da questa copia puoi aprire le impostazioni e selezionare la versione precedente
 8. Allega anche gli installer `CantiereLink-Setup-VERSIONE.exe` e `CantiereLink-VERSIONE-macos-ARCH.dmg` con i loro checksum.
 9. Verifica che GitHub riporti il campo `digest` SHA256 per l’asset. L’updater rifiuta asset senza questa verifica. Il file di checksum allegato serve anche al controllo manuale.
 
+Su Mac Intel, se `cryptography` viene compilata dai sorgenti, installa le dipendenze con `OPENSSL_STATIC=1 python -m pip install -r requirements.txt pyinstaller`, come previsto nel workflow. Il collegamento statico evita conflitti fra la libreria OpenSSL inclusa da Python e quella usata da `cryptography` nel pacchetto. Vedi le [istruzioni ufficiali di compilazione](https://cryptography.io/en/latest/installation/#building-cryptography-on-macos). Il controllo di avvio del pacchetto deve riuscire prima di distribuirlo.
+
 L’app usa l’API [GitHub Releases](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) e non installa direttamente il contenuto di un branch. La verifica SHA256 controlla l’integrità del pacchetto ricevuto dal repository configurato; non è una firma indipendente del produttore.
 
 </details>
