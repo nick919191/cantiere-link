@@ -1,11 +1,14 @@
 """Agente locale limitato a lettura e risposte: nessuna esecuzione di codice dal modello."""
 
 import base64
+import io
 import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+from PIL import Image
 
 from . import chat, chatgpt, configurazione, consumi, percorsi
 from . import lavoro as lv
@@ -18,6 +21,10 @@ _cancel = threading.Event()
 _tentativi_lock = threading.Lock()
 PAGINE_IN_PARALLELO = 6  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
 PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
+# Immagine inviata al modello: le zone sono in 0-1000, ridurla non le cambia. Niente bassa risoluzione per i fogli
+# grandi: nei cantieri veri ci sono DDT scansionati in A1, e il servizio riduce comunque ogni pagina a ~2000 px.
+LATO_MASSIMO = 2000  # oltre questo è solo peso, e sopra un certo limite il servizio rifiuta la richiesta
+MAX_TESTO_NATIVO = 20_000  # caratteri: i PDF da CAD contengono migliaia di scritte inutili
 ISTRUZIONI_LOTTO = (
     '\nRicevi più pagine nella stessa richiesta: ogni immagine è preceduta dal suo JSON con il campo "pid". '
     'Restituisci un solo oggetto JSON {"schede": {"<pid>": <scheda>, ...}} con una scheda per ogni pid ricevuto, '
@@ -150,6 +157,16 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         )
 
 
+def immagine_per_modello(png: Path) -> dict:
+    """Blocco input_image della pagina: copia JPEG con lato massimo ridotto."""
+    with Image.open(png) as img:
+        img = img.convert("RGB")
+        img.thumbnail((LATO_MASSIMO, LATO_MASSIMO))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, optimize=True)
+    return {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()}
+
+
 def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: str, effort: str) -> None:
     """Un lotto di pagine in una richiesta a ChatGPT; ogni scheda è controllata e salvata da sola. Gira in un thread."""
     _check()
@@ -161,7 +178,6 @@ def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: st
     content = []
     for p in lotto:
         info = infos[p["pid"]]
-        image = base64.b64encode((cartella / "pagine" / f"{p['pid']}.png").read_bytes()).decode()
         content.append(
             {
                 "type": "input_text",
@@ -171,13 +187,13 @@ def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: st
                         "file": info["file"],
                         "pagina": info["pagina"],
                         "pagine_file": info["pagine_file"],
-                        "testo_nativo": info["testo_nativo"][:50000],
+                        "testo_nativo": info["testo_nativo"][:MAX_TESTO_NATIVO],
                     },
                     ensure_ascii=False,
                 ),
             }
         )
-        content.append({"type": "input_image", "image_url": "data:image/png;base64," + image})
+        content.append(immagine_per_modello(cartella / "pagine" / f"{p['pid']}.png"))
     result = _chiama(cartella, instructions + ISTRUZIONI_LOTTO, [{"role": "user", "content": content}], model, effort)
     _check()
     try:

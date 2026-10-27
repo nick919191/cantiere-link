@@ -143,6 +143,42 @@ def test_cartella_non_leggibile_non_blocca_gli_altri_cantieri(radice, monkeypatc
     assert not list((radice / "lavori").glob(".caricamento-*"))  # nessuna cartella provvisoria lasciata indietro
 
 
+def test_immagine_per_modello_ridotta_in_jpeg(tmp_path):
+    import base64
+    import io
+
+    from PIL import Image
+
+    png = tmp_path / "a0.png"
+    Image.new("RGB", (7382, 5315), "white").save(png)
+    blocco = agente.immagine_per_modello(png)
+    assert blocco["type"] == "input_image" and blocco["image_url"].startswith("data:image/jpeg;base64,")
+    dati = base64.b64decode(blocco["image_url"].split(",", 1)[1])
+    with Image.open(io.BytesIO(dati)) as img:
+        assert max(img.size) == agente.LATO_MASSIMO and img.format == "JPEG"
+    assert len(dati) < 500_000
+
+
+def test_rifiuto_di_chatgpt_mostra_codice_e_motivo(monkeypatch):
+    class Stream:
+        status_code = 400
+        text = json.dumps({"error": {"message": "Invalid image: too  large"}})
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            pass
+
+    monkeypatch.setattr(chatgpt, "access_token", lambda: "fake-token")
+    monkeypatch.setattr(chatgpt.httpx, "stream", lambda *a, **k: Stream())
+    with pytest.raises(chatgpt.AgentError, match=r"codice 400\): Invalid image: too large"):
+        chatgpt.response("i", [], "model", "", threading.Event())
+
+
 def test_interruzione_segnala_lo_stato(monkeypatch):
     monkeypatch.setattr(agente, "_state", {**agente._state, "busy": False, "stopping": False})
     assert "Nessuna" in agente.stop()["message"]

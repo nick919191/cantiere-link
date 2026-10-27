@@ -7,6 +7,7 @@ Il file lock serializza gli aggiornamenti dei token anche tra processi.
 import base64
 import hashlib
 import json
+import re
 import secrets
 import threading
 import time
@@ -406,6 +407,18 @@ def models() -> list[dict]:
     ]
 
 
+def _motivo_rifiuto(stream) -> str:
+    """Messaggio pubblico per una risposta non 200: codice e, se c'è, il motivo dichiarato dal servizio."""
+    try:
+        stream.read()
+        detail = json.loads(stream.text).get("error", {}).get("message", "")
+    except Exception:
+        detail = ""
+    detail = re.sub(r"\s+", " ", str(detail))[:200]
+    base = f"Richiesta non accettata da ChatGPT (codice {stream.status_code})"
+    return base + (f": {detail}" if detail else ". Controlla account, modello e livello di ragionamento.")
+
+
 def response(
     instructions: str,
     inputs: list,
@@ -429,7 +442,7 @@ def response(
             if stream.status_code == 429:
                 raise AgentError("Limite ChatGPT raggiunto. Gestisci l’utilizzo del piano e riprendi più tardi.")
             if stream.status_code != 200:
-                raise AgentError("Richiesta non accettata. Controlla account, modello e livello di ragionamento.")
+                raise AgentError(_motivo_rifiuto(stream))
             parts, size, completed = [], 0, False
             for line in stream.iter_lines():
                 if cancelled.is_set():
