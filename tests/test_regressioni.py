@@ -10,6 +10,7 @@ from pdf_minimo import pdf_con_testo
 from test_flusso import _crea_lavoro, _leggi_tutto
 
 from traccia import agente, chat, chatgpt, normalizza, server
+from traccia import lavoro as lv
 from traccia.controlli import valida
 from traccia.motore import elabora
 from traccia.preparazione import _estrai_zip
@@ -125,6 +126,49 @@ def test_agente_pipeline_senza_chiamate_reali(radice, monkeypatch):
     agente.analizza(directory, "test-model", "")
     assert len(calls) == len(records), "accepted pages must not be requested again"
     assert len(list((directory / "versioni").iterdir())) == 1
+
+
+def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):
+    import threading
+    import time
+
+    directory, _ = _crea_lavoro(radice)
+    records = {name: schema for name, _, schema in fascicolo()}
+    attivi, picco, lock = [0], [0], threading.Lock()
+
+    def respond(_instructions, inputs, *_args):
+        with lock:
+            attivi[0] += 1
+            picco[0] = max(picco[0], attivi[0])
+        time.sleep(0.15)
+        with lock:
+            attivi[0] -= 1
+        context = json.loads(inputs[0]["content"][0]["text"])
+        return json.dumps(copy.deepcopy(records[context["file"].rsplit("/", 1)[-1]]))
+
+    monkeypatch.setattr(chatgpt, "response", respond)
+    agente._cancel.clear()
+    agente.analizza(directory, "test-model", "")
+    assert picco[0] == min(agente.PAGINE_IN_PARALLELO, len(records))
+    assert lv.stato(directory)["fase"] == "pronto"
+    tentativi = json.loads((directory / "tentativi.json").read_text(encoding="utf-8"))
+    assert len(tentativi) == len(records) and set(tentativi.values()) == {1}
+
+
+def test_interruzione_ferma_le_pagine_non_iniziate(radice, monkeypatch):
+    directory, _ = _crea_lavoro(radice)
+    calls = []
+
+    def respond(*_args):
+        calls.append(1)
+        agente._cancel.set()
+        raise chatgpt.AgentError("Operazione interrotta.")
+
+    monkeypatch.setattr(chatgpt, "response", respond)
+    agente._cancel.clear()
+    with pytest.raises(chatgpt.AgentError):
+        agente.analizza(directory, "test-model", "")
+    assert len(calls) <= agente.PAGINE_IN_PARALLELO
 
 
 def test_same_number_documents_require_unambiguous_identity():
