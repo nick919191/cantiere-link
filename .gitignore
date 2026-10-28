@@ -18,3 +18,4 @@ build/
 packaging/icon.ico
 packaging/icon.icns
 /MANIFEST.sha256
+esperimenti/*/risultati/
