@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, percorsi
+from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
 from . import lavoro as lv
 from .preparazione import prepara
 
@@ -142,6 +142,27 @@ def seleziona(value: Account):
 def scollega():
     _idle()
     return chatgpt.logout()
+
+
+@app.get("/api/mistral")
+def mistral_stato():
+    return ocr.stato()
+
+
+class ChiaveMistral(BaseModel):
+    chiave: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/mistral")
+def mistral_salva(value: ChiaveMistral):
+    _idle()
+    return ocr.salva(value.chiave)
+
+
+@app.delete("/api/mistral")
+def mistral_rimuovi():
+    _idle()
+    return ocr.rimuovi()
 
 
 @app.get("/api/modelli")

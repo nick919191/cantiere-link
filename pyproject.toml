@@ -1,6 +1,6 @@
-[project]
+﻿[project]
 name = "tracciabilita-materiali"
-version = "0.3.0"
+version = "0.4.0"
 license = "MIT"
 description = "CantiereLink: materiali, documenti e tracciabilità del cantiere"
 requires-python = ">=3.12"

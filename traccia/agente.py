@@ -122,6 +122,10 @@ def _check():
 
 
 def analizza(cartella: Path, model: str, effort: str) -> None:
+    from . import ocr, veloce  # veloce usa questo modulo: import qui per evitare il ciclo
+
+    if ocr.configurato():  # con la chiave Mistral: lettura veloce (OCR + testo ridotto + immagine solo sui dubbi)
+        return veloce.analizza(cartella, model, effort)
     if not (cartella / "pagine.json").exists():
         prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
     pages = lv.pagine(cartella)

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lettura certificato 3.1</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1f1e1b;--mut:#6b6a64;--line:#dedcd3;--acc:#2f6fdb;--hl:rgba(47,111,219,.14);--key:#c2571a;--key-bg:#fbeee5;--via:#a9a79f;--ok:#2e7d4f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b19;--card:#252523;--ink:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--acc:#7aa7f2;--hl:rgba(122,167,242,.2);--key:#f0a070;--key-bg:#3d2a1e;--via:#6b6a64;--ok:#78c497}}
+:root[data-theme="dark"]{--bg:#1b1b19;--card:#252523;--ink:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--acc:#7aa7f2;--hl:rgba(122,167,242,.2);--key:#f0a070;--key-bg:#3d2a1e;--via:#6b6a64;--ok:#78c497}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 18px;font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.pagina{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.pagina img{display:block;width:100%;height:auto;transition:opacity .4s}
+.blocco{position:absolute;border-radius:3px;background:var(--hl);outline:1px solid var(--acc);transition:background .3s}
+.blocco.via{background:rgba(120,120,120,.18);outline-color:var(--via)}
+.blocco.dato{background:none;outline:2px solid var(--key)}
+.scan{position:absolute;left:0;right:0;height:2px;background:var(--acc);box-shadow:0 0 14px 3px var(--acc);pointer-events:none}
+.lato{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.eta{font-size:28px;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
+.mut{color:var(--mut);font-size:13px}
+.testo{height:300px;overflow:hidden;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.45}
+.testo div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:entra .3s ease-out}
+.testo div.via{color:var(--via);text-decoration:line-through}
+.testo div.k{color:var(--key)}
+@keyframes entra{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.testo div{animation:none}.scan{box-shadow:none}}
+.dati{display:flex;flex-wrap:wrap;gap:6px}
+.dato{font-size:13px;padding:3px 8px;border-radius:6px;background:var(--key-bg);color:var(--key);animation:entra .3s ease-out}
+.dato b{font-weight:600;margin-right:4px}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:10px}
+.leg span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.l1::before{background:var(--hl);outline:1px solid var(--acc)}.l2::before{background:rgba(120,120,120,.18);outline:1px solid var(--via)}.l3::before{outline:2px solid var(--key)}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+<h1>Lettura di certificati 3.1</h1>
+<p class="sub">Scansioni vere con il testo letto da Mistral OCR, blocco per blocco nella sua posizione. In grigio quello che il coltellino toglie prima di ChatGPT, in arancione i dati estratti.</p>
+<div class="grid">
+  <div>
+    <div class="pagina" id="pagina"><img id="img" alt="Certificato in lettura"><div class="scan" id="scan"></div></div>
+    <div class="leg"><span class="l1">blocco letto</span><span class="l2">tolto dal coltellino</span><span class="l3">contiene un dato</span></div>
+  </div>
+  <div class="lato">
+    <div class="card">
+      <div class="mut" id="cosa">Preparazione…</div>
+      <div class="eta" id="eta">stima in corso…</div>
+      <div class="bar"><i id="pb"></i></div>
+      <div class="mut num" id="taglio" style="margin-top:8px"></div>
+    </div>
+    <div class="card"><div class="mut" style="margin-bottom:6px">Testo letto dall'OCR</div><div class="testo" id="testo"></div></div>
+    <div class="card"><div class="mut" style="margin-bottom:8px">Dati estratti</div><div class="dati" id="dati"></div></div>
+    <div><button id="ancora">Ricomincia</button></div>
+  </div>
+</div>
+</main>
+<script>
+const PAGINE = /*PAGINE*/[];
+const $ = id => document.getElementById(id);
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+let giro = 0;
+
+function riga(testo, classe) {
+  const d = document.createElement("div");
+  d.textContent = testo;
+  if (classe) d.className = classe;
+  $("testo").prepend(d);
+  while ($("testo").children.length > 22) $("testo").lastChild.remove();
+}
+
+async function leggi(p, i, mio, inizio) {
+  const pag = $("pagina");
+  pag.querySelectorAll(".blocco").forEach(b => b.remove());
+  $("img").style.opacity = 0;
+  await pausa(300);
+  $("img").src = p.img;
+  $("img").style.opacity = 1;
+  $("cosa").textContent = `Pagina ${i + 1} di ${PAGINE.length} · ${p.tipo}`;
+  $("taglio").textContent = `Testo OCR ${p.caratteri[0]} caratteri → ${p.caratteri[1]} dopo il coltellino (−${Math.round(100 - p.caratteri[1] * 100 / p.caratteri[0])}%)`;
+  const durata = 5500;
+  const t0 = performance.now();
+  let k = 0;
+  while (true) {
+    if (mio !== giro) return;
+    const f = Math.min(1, (performance.now() - t0) / durata);
+    $("scan").style.top = f * 100 + "%";
+    while (k < p.blocchi.length && p.blocchi[k].box[1] <= f * 1000) {
+      const b = p.blocchi[k++];
+      const tenuto = b.righe.some(r => r[1]);
+      const el = document.createElement("div");
+      el.className = "blocco" + (b.dati.length ? " dato" : tenuto ? "" : " via");
+      const [x0, y0, x1, y1] = b.box;
+      Object.assign(el.style, {left: x0 / 10 + "%", top: y0 / 10 + "%", width: (x1 - x0) / 10 + "%", height: (y1 - y0) / 10 + "%"});
+      pag.appendChild(el);
+      for (const [testo, ok] of b.righe.slice(0, 8)) {
+        riga(testo, ok ? (b.dati.some(d => testo.toLowerCase().includes(d[1].toLowerCase())) ? "k" : "") : "via");
+        await pausa(45);
+      }
+      for (const [campo, valore] of b.dati) {
+        const d = document.createElement("span");
+        d.className = "dato";
+        d.innerHTML = `<b>${campo.replace("_", " ")}</b>`;
+        d.append(valore);
+        $("dati").append(d);
+      }
+    }
+    const fatto = i + f;
+    const resto = Math.round(((performance.now() - inizio) / fatto) * (PAGINE.length - fatto) / 1000);
+    $("eta").textContent = fatto < 0.3 ? "stima in corso…" : resto > 0 ? `circa ${resto} s` : "quasi fatto";
+    $("pb").style.width = (fatto / PAGINE.length) * 100 + "%";
+    if (f >= 1 && k >= p.blocchi.length) break;
+    await pausa(30);
+  }
+  await pausa(1200);
+}
+
+async function avvia() {
+  const mio = ++giro;
+  $("testo").innerHTML = "";
+  const inizio = performance.now();
+  for (let i = 0; i < PAGINE.length; i++) {
+    $("dati").innerHTML = "";
+    await leggi(PAGINE[i], i, mio, inizio);
+    if (mio !== giro) return;
+  }
+  $("eta").textContent = "Pronto";
+  $("cosa").textContent = `${PAGINE.length} certificati letti`;
+  $("pb").style.width = "100%";
+  $("scan").style.top = "-10px";
+}
+
+$("ancora").onclick = avvia;
+avvia();
+</script>
+</body>
+</html>
