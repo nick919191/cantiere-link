@@ -102,3 +102,20 @@ def test_tentativi_poi_pagina_dichiarata_non_letta(radice):
         assert lv.prossimo_lavoro()["lavoro"] == "prova"
     s = lv.stato(cartella)
     assert s["da_leggere"] == 0 and len(s["non_lette"]) == len(lv.pagine(cartella))
+
+
+def test_elenco_lavori_mostra_conteggi_solo_a_excel_aggiornato(radice):
+    from fastapi.testclient import TestClient
+
+    from traccia import server
+
+    cartella, schede = _crea_lavoro(radice)
+    _leggi_tutto(cartella, schede)
+    (cartella / "info.json").write_text(json.dumps({"nome": "prova"}), encoding="utf-8")
+    client = TestClient(server.app)
+    assert client.get("/api/lavori").json()[0]["conteggio"] is None
+    cli.componi("prova")
+    voce = client.get("/api/lavori").json()[0]
+    assert voce["fase"] == "pronto" and voce["conteggio"] == lv.stato(cartella)["riepilogo"]["conteggio"]
+    assert sum(voce["conteggio"].values()) > 0
+    assert all("orientamento" in p for p in lv.stato(cartella)["pagine"] if p["stato"] == "letta")

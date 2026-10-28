@@ -123,7 +123,69 @@ td.src:hover{background:var(--accent-bg)}
 .chat form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
 .chat textarea{flex:1;resize:none;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 12px;font:14px Inter,sans-serif}
 .chat textarea:focus{outline:none;border-color:var(--accent)}
-@media (max-width:960px){.flow,.ready{grid-template-columns:1fr}.bins{grid-template-columns:repeat(2,1fr)}.look{position:static}}
+/* home a schede */
+.hhead{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+.cerca{height:40px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 16px;font:14px Inter,sans-serif;min-width:200px}
+.cerca:focus{outline:none;border-color:var(--accent)}
+.lavori{grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.lav{display:flex;flex-direction:column;gap:8px;padding:18px}
+.lav:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.lav .apri{margin-top:auto;color:var(--accent);font-weight:600;font-size:14px}
+.conti{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--fill)}
+.conti i{display:block;height:100%}
+.nuovo{padding:18px;border:2px dashed var(--accent);background:var(--accent-bg);display:flex;flex-direction:column;gap:10px}
+.nuovo .t{font-weight:600;font-size:16px}
+.nuovo input.nome{margin:0;width:100%}
+.nuovo .drop{padding:18px 14px;border-radius:14px}
+.nuovo .drop .big{width:44px;height:44px;border-radius:12px;margin-bottom:10px}
+.nuovo .files{grid-template-columns:1fr;margin:0}
+.come{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}
+.come div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;font-size:14px;color:var(--muted);line-height:1.45}
+.come b{display:block;color:var(--ink);margin:6px 0 2px}
+.come span{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-weight:700;font-size:13px}
+/* passi del lavoro */
+.job{display:grid;grid-template-columns:220px minmax(0,1fr);gap:16px;align-items:start}
+.passi{position:sticky;top:12px;display:flex;flex-direction:column;gap:4px}
+.passi button{display:flex;align-items:center;gap:10px;text-align:left;border:0;background:none;color:var(--soft);font:500 14px Inter,sans-serif;padding:10px 12px;border-radius:12px;cursor:pointer}
+.passi button:disabled{cursor:default;opacity:.55}
+.passi button .n{width:26px;height:26px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+.passi button.fatto{color:var(--green)}
+.passi button.ora{color:var(--accent)}
+.passi button.ora .n{animation:pulse 1.4s infinite}
+.passi button.visto{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.didascalia{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:14px 18px;margin-bottom:14px}
+.didascalia h2{margin:0 0 2px}.didascalia p{margin:0;color:var(--muted);font-size:14px;line-height:1.45}
+.pv{display:none}.pv.on{display:block}
+.avviso{background:var(--orange-bg);color:var(--orange);border-radius:12px;padding:10px 14px;font-size:14px;margin-bottom:14px}
+.avviso.r{background:var(--red-bg);color:var(--red)}
+.gruppi{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.gruppo{flex:1;min-width:170px;padding:12px;border-top:4px solid var(--c)}
+.gruppo.via{opacity:.6}
+.gruppo .gt{display:flex;justify-content:space-between;gap:6px;font-size:13px;font-weight:600;margin-bottom:8px}
+.gruppo.manca{border:2px dashed var(--red);border-top-width:4px;color:var(--red);font-size:13px}
+.fogli{display:flex;flex-wrap:wrap;gap:6px}
+.fogli img{width:34px;aspect-ratio:.72;object-fit:cover;object-position:top;border-radius:3px;border:1px solid var(--line);background:#fff;cursor:pointer;animation:pop .4s both}
+.fogli img.girata{outline:2px solid var(--hl);outline-offset:1px}
+.freccia{align-self:center;color:var(--soft);font-size:20px}
+.anelli{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.anelli .filo{position:absolute;left:8%;right:8%;top:26px;height:3px;background:var(--line)}
+.anello{position:relative;text-align:center;cursor:pointer;border-radius:12px;padding:4px 2px 10px}
+.anello:hover,.anello.sel{background:var(--fill)}
+.anello .c{width:46px;height:46px;margin:0 auto;border-radius:50%;background:var(--card);border:3px solid var(--c);display:grid;place-items:center;font-weight:700;color:var(--c);position:relative}
+.anello .nm{font-size:12px;font-weight:600;margin:6px 0}
+.anello .pila{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;padding:0 4px;min-height:12px}
+.anello .pila i{width:9px;height:9px;border-radius:50%;background:var(--c);animation:pop .35s both}
+.anello .mt{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.3}
+.anello .mt b{display:block;font-size:20px;color:var(--c)}
+.elenco{margin-top:14px;max-height:360px;overflow:auto;border-top:1px solid var(--line)}
+table.corta{min-width:0}table.corta td{min-width:0}
+.esito .pill{font-size:12px}
+#p-risultato .stati{grid-template-columns:repeat(4,1fr);margin:14px 0 22px}
+.fornitori{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:22px}
+.fornitore{padding:16px}.fornitore h3{margin:0 0 6px;font-size:15px}
+.fornitore ul{margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5}
+@media (max-width:960px){.flow,.ready{grid-template-columns:1fr}.bins{grid-template-columns:repeat(2,1fr)}.look{position:static}
+ .job{grid-template-columns:1fr}.passi{position:static;flex-direction:row;overflow-x:auto}.passi button .t{display:none}.come{grid-template-columns:1fr}.anelli{grid-template-columns:repeat(3,1fr)}}
 </style>
 <link href="/web/app.css" rel="stylesheet">
 </head>
@@ -147,25 +209,35 @@ td.src:hover{background:var(--accent-bg)}
 
   <!-- HOME -->
   <section id="home" class="hidden">
-    <h1>Carica i documenti del cantiere</h1>
-    <p class="sub">PDF, immagini o un archivio ZIP. Gli originali restano invariati. Dopo il caricamento premi Analizza: testo e immagini saranno inviati all’agente ChatGPT collegato.</p>
-    <input class="nome" id="nome" placeholder="Nome del cantiere (facoltativo)">
-    <div class="drop" id="drop">
-      <div class="big"><svg class="ic" style="width:28px;height:28px"><use href="#up"/></svg></div>
-      <div style="font-weight:600;font-size:17px">Trascina qui i file</div>
-      <div style="color:var(--muted);font-size:14px;margin:6px 0 16px">oppure</div>
-      <button class="btn" type="button" onclick="event.stopPropagation();sel.click()">Scegli i file</button>
-      <input type="file" id="sel" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden">
+    <div class="hhead"><div><h1>I tuoi cantieri</h1>
+      <p class="sub" style="margin:0">Carichi i documenti del cantiere: CantiereLink li mette in ordine, legge i certificati e ti dice cosa manca e a chi chiederlo. Gli originali restano invariati.</p></div>
+      <div class="jobs-tools"><input class="cerca" id="cerca" placeholder="Cerca un cantiere" oninput="filtra(this.value)" aria-label="Cerca un cantiere"><button class="btn s" id="demo-button" onclick="safe(createDemo)" title="30 documenti inventati, piccoli e veloci da analizzare">Cantiere di prova</button><button class="btn s" onclick="safe(showTrash)">Cestino</button></div></div>
+    <div class="lavori" id="griglia">
+      <div class="card nuovo">
+        <div class="t">＋ Nuovo cantiere</div>
+        <input class="nome" id="nome" placeholder="Nome del cantiere (facoltativo)">
+        <div class="drop" id="drop">
+          <div class="big"><svg class="ic" style="width:24px;height:24px"><use href="#up"/></svg></div>
+          <div style="font-weight:600">Trascina qui i file</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 10px">PDF, immagini o un archivio ZIP</div>
+          <button class="btn s" type="button" onclick="event.stopPropagation();sel.click()">Scegli i file</button>
+          <input type="file" id="sel" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden">
+        </div>
+        <div class="files" id="files"></div>
+        <div class="send hidden" id="send">
+          <button class="btn" id="invia">Crea e carica</button>
+          <button class="btn s" id="annulla">Svuota</button>
+          <div class="upbar hidden" id="upbar"><i></i></div><span class="note" id="uptxt" style="margin:0"></span>
+        </div>
+        <div class="err" id="uperr"></div>
+      </div>
+      <div id="lavori" style="display:contents"></div>
     </div>
-    <div class="files" id="files"></div>
-    <div class="send hidden" id="send">
-      <button class="btn" id="invia">Carica e prepara le pagine</button>
-      <button class="btn s" id="annulla">Svuota</button>
-      <div class="upbar hidden" id="upbar"><i></i></div><span class="note" id="uptxt" style="margin:0"></span>
+    <div class="come">
+      <div><span>1</span><b>Carichi i file</b>Tutti i PDF insieme, anche in disordine o girati.</div>
+      <div><span>2</span><b>Guardi la catena</b>Per ogni materiale: DDT, certificato 3.1, colata e timbro. Vedi subito cosa manca.</div>
+      <div><span>3</span><b>Scarichi e chiedi</b>Excel di tracciabilità, ZIP ordinato e richiesta pronta per ogni fornitore.</div>
     </div>
-    <div class="err" id="uperr"></div>
-    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><div class="jobs-tools"><button class="btn s" id="demo-button" onclick="safe(createDemo)" title="30 documenti inventati, piccoli e veloci da analizzare">Crea cantiere di prova</button><button class="btn s" onclick="safe(showTrash)">Cestino</button></div></div>
-    <div class="lavori" id="lavori"></div>
   </section>
 
   <!-- LAVORO -->
@@ -179,43 +251,60 @@ td.src:hover{background:var(--accent-bg)}
         <div style="font-weight:600" id="titolo">…</div>
         <div class="t"><i id="barv"></i></div>
         <div class="meta"><span id="bart"></span><span id="bare"></span><span id="bartok" title="Token usati con ChatGPT per questo cantiere"></span></div>
-        <div class="phase" id="phase"></div>
         <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi Analizza / riprendi.</div>
       </div>
     </div>
-    <div class="flow">
-      <div class="card look">
-        <h3>Il documento in esame</h3>
-        <div class="who"><span class="dot" id="lookdot"></span><span id="lookfile">In attesa delle pagine…</span></div>
-        <div class="page" id="lookpage"><div class="scan"></div></div>
-        <div class="thought" id="thought">Le pagine compaiono qui mentre vengono lette.</div>
-        <div class="crops" id="crops"></div>
-      </div>
-      <div>
-        <div class="bins" id="bins"></div>
-        <div class="card feed"><h4>Diario del lavoro</h4><div id="feed"></div></div>
-      </div>
-    </div>
+    <div class="avviso hidden" id="vecchio"></div>
+    <div class="job">
+      <nav class="passi" id="passi" aria-label="Passi del lavoro"></nav>
+      <div class="corpo">
+        <div class="didascalia"><h2 id="ptitolo"></h2><p id="ptesto"></p></div>
 
-    <div class="res hidden" id="res">
-      <div class="ready">
-        <div class="card hero">
-          <span class="pill g">Completato</span>
-          <h1 style="margin-top:12px">L'Excel è pronto</h1>
-          <p class="sub" style="margin:0" id="ressub"></p>
-          <div class="acts">
-            <a class="btn" id="scarica"><svg class="ic"><use href="#down"/></svg>Scarica Excel e prove</a>
-            <a class="btn s" id="riordina"><svg class="ic"><use href="#fold"/></svg>Documenti riordinati e rinominati</a>
+        <div class="pv" id="p-carica"><div class="card" style="padding:18px" id="ricevuti"></div></div>
+
+        <div class="pv" id="p-smisto"><div class="flow">
+          <div class="card look">
+            <h3>Il documento in esame</h3>
+            <div class="who"><span class="dot" id="lookdot"></span><span id="lookfile">In attesa delle pagine…</span></div>
+            <div class="page" id="lookpage"><div class="scan"></div></div>
+            <div class="thought" id="thought">Le pagine compaiono qui mentre vengono lette.</div>
+            <div class="crops" id="crops"></div>
           </div>
-          <div class="note"><svg class="ic"><use href="#info"/></svg>Lettura e riconoscimento sono automatici e possono contenere errori. Verifica sempre l'Excel con i documenti originali.</div>
+          <div>
+            <div class="bins" id="bins"></div>
+            <div class="card feed"><h4>Diario del lavoro</h4><div id="feed"></div></div>
+          </div>
+        </div></div>
+
+        <div class="pv" id="p-ordine"><div id="ordine"></div></div>
+
+        <div class="pv" id="p-catena"><div class="card" style="padding:18px">
+          <div class="anelli" id="anelli"></div>
+          <div class="elenco tabwrap"><table class="corta" id="elenco"></table></div>
+        </div></div>
+
+        <div class="pv" id="p-risultato">
+          <div class="card hero esito" id="esito">
+            <span class="pill" id="esito-pill"></span>
+            <h1 style="margin-top:12px" id="esito-titolo"></h1>
+            <p class="sub" style="margin:0" id="ressub"></p>
+            <div id="esito-avvisi"></div>
+            <div class="acts">
+              <button class="btn" id="scarica" onclick="safe(()=>scaricaFile('scarica'))"><svg class="ic"><use href="#down"/></svg>Scarica Excel e prove</button>
+              <button class="btn s" id="riordina" onclick="safe(()=>scaricaFile('fascicolo-ordinato'))"><svg class="ic"><use href="#fold"/></svg>ZIP con i documenti in ordine</button>
+            </div>
+            <div class="note"><svg class="ic"><use href="#info"/></svg>Lettura e riconoscimento sono automatici e possono contenere errori. Verifica sempre l'Excel con i documenti originali.</div>
+          </div>
+          <div class="card stati" id="stati"></div>
+          <h2>Da chiedere ai fornitori</h2>
+          <div class="fornitori" id="fornitori"></div>
+          <h2>Collegamenti a ritroso</h2>
+          <p class="sub">Tabella del costruttore → DDT del commerciante → certificato 3.1 → colata. Le caselle si aprono sul documento, con il dato evidenziato.</p>
+          <div class="card chain"><div class="cols"><div>Voce</div><div>DDT</div><div>Certificato 3.1</div><div>Colata</div><div>Esito</div></div><div id="chain"></div></div>
+          <h2>Tracciabilità</h2>
+          <div class="card tabwrap"><table id="tab"></table></div>
         </div>
-        <div class="card stati" id="stati"></div>
       </div>
-      <h2>Collegamenti a ritroso</h2>
-      <p class="sub">Tabella del costruttore → DDT del commerciante → certificato 3.1 → colata. Le caselle si aprono sul documento, con il dato evidenziato.</p>
-      <div class="card chain"><div class="cols"><div>Voce</div><div>DDT commerciante</div><div>Certificato 3.1</div><div>Colata</div><div>Esito</div></div><div id="chain"></div></div>
-      <h2>Tracciabilità</h2>
-      <div class="card tabwrap"><table id="tab"></table></div>
     </div>
   </section>
 </div>
@@ -258,6 +347,7 @@ const COL=["PRODUTTORE","COLATA","TIPO DI ACCIAIO","CE/DoP ACCIAIERIA","CERT 3.1
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const api=async(p,o)=>{const r=await fetch(p,o);const d=await r.json();if(!r.ok)throw new Error(d.detail||"Operazione non riuscita");return d;};
+let ris=null,passoScelto=null,passoAttuale=-1,firmaOrdine="",anelloScelto=null;
 let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),timer=null,risultatoCaricato=false,inizio=true;
 
 function vai(id){location.hash=id?"#/"+id:"";}
@@ -286,26 +376,42 @@ $("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.
 const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
 function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
 function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
+const voci=n=>n+(n===1?" voce":" voci");
+function esitoLavoro(l){const c=l.conteggio;
+ if(l.fase!=="pronto")return [{preparazione:"Preparo le pagine",lettura:"Sto leggendo · "+l.percentuale+"%",composizione:"Collego la catena"}[l.fase]||l.fase,"b"];
+ const tot=c?Object.values(c).reduce((a,x)=>a+x,0):0;
+ if(!tot)return ["Nessuna voce trovata","o"];
+ if(c.MANCANTE)return [`Mancano documenti per ${voci(c.MANCANTE)}`,"r"];
+ if(c["DA CONFERMARE"])return [`${voci(c["DA CONFERMARE"])} da confermare`,"o"];
+ return [`Tutto collegato · ${tot} voci`,"g"]}
+function barraConti(l){const c=l.conteggio;
+ if(l.fase!=="pronto")return `<div class="conti"><i style="width:${l.fase==="preparazione"?5:l.percentuale}%;background:var(--accent)"></i></div>`;
+ const tot=c?Object.values(c).reduce((a,x)=>a+x,0):0;if(!tot)return `<div class="conti"></div>`;
+ return `<div class="conti">${Object.entries(STATI).map(([k,s])=>`<i style="width:${(c[k]||0)/tot*100}%;background:var(--${{g:"green",b:"accent",o:"orange",r:"red"}[s]})" title="${k}: ${c[k]||0}"></i>`).join("")}</div>`}
+function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>{const [e,c]=esitoLavoro(l);return `<div class="card lav" data-nome="${esc(l.nome.toLowerCase())}" onclick="vai('${l.lavoro}')"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div><span class="pill ${c}">${esc(e)}</span></div>${barraConti(l)}<div class="apri">Apri →</div></div>`}).join(""):`<div class="note" style="align-self:center">Nessun cantiere ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`;filtra($("cerca").value)}).catch(()=>{})}
+function filtra(q){q=(q||"").trim().toLowerCase();document.querySelectorAll("#lavori .lav").forEach(e=>e.classList.toggle("hidden",!!q&&!e.dataset.nome.includes(q)))}
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
- $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
+ $("feed").innerHTML="";$("crops").innerHTML="";ris=null;passoScelto=null;passoAttuale=-1;firmaOrdine="";anelloScelto=null;stato=null;$("ordine").innerHTML="";$("vecchio").classList.add("hidden");
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
  aggiorna();timer=setInterval(aggiorna,1500)}
 async function aggiorna(){if(!L)return;
- try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").textContent="Lavoro non trovato";return}
+ try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").innerHTML=`Cantiere non trovato · <a href="#" onclick="vai('');return false">torna ai tuoi cantieri</a>`;return}
  $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
  const p=stato.fase==="pronto"?100:stato.percentuale;
  $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
- $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
+ $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Smisto e leggo le pagine",composizione:"Collego la catena e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
  const fatte=stato.lette+stato.non_lette.length;
  $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
  $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
  $("bartok").textContent=tokens(stato.consumo);
  const ord=["preparazione","lettura","composizione","pronto"],i=ord.indexOf(stato.fase);
- $("phase").innerHTML=["Ricevuti","Preparazione","Lettura e smistamento","Collegamento a ritroso","Excel"].map((t,j)=>`<span class="${j<=i||stato.fase==="pronto"?"ok":""} ${j===i+1&&stato.fase!=="pronto"?"on":""}">${t}</span>`).join("");
+ passi();ricevuti();ordine();
+ const vecchio=!!(stato.riepilogo&&stato.fase!=="pronto"&&ris);
+ $("vecchio").classList.toggle("hidden",!vecchio);
+ if(vecchio)$("vecchio").textContent="Ci sono pagine nuove o non ancora lette: la catena e l'Excel che vedi sono della versione precedente. Premi «Analizza / riprendi» per aggiornarli.";
  $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
  $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
  // pagine nei contenitori
@@ -321,7 +427,7 @@ async function aggiorna(){if(!L)return;
  if(stato.fase==="pronto"&&!risultatoCaricato){risultatoCaricato=true;risultato()}}
 function img(pid){return `/api/lavori/${L}/miniature/${pid}.png`}
 function metti(x){const st=$("bin-"+x.famiglia).querySelector(".stack");if(st.children.length<18)st.insertAdjacentHTML("beforeend",`<img src="${img(x.pid)}" alt="">`)}
-function vola(x){const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
+function vola(x){if(!$("lookpage").offsetParent){metti(x);return}const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
  const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
@@ -347,6 +453,75 @@ async function mostraPagina(pid,conZone){const box=$("lookpage");
   box.querySelectorAll(".box").forEach(b=>b.remove());
   zone.slice(0,12).forEach(([x0,y0,x1,y1],k)=>setTimeout(()=>box.insertAdjacentHTML("beforeend",`<div class="box" style="left:${x0/10}%;top:${y0/10}%;width:${(x1-x0)/10}%;height:${(y1-y0)/10}%"></div>`),k*120))}catch(e){}}
 
+
+/* ---------- passi ---------- */
+const PASSI=[
+ {k:"carica",n:"Ricevo i file",t:"I file sono arrivati: li divido in pagine singole. Gli originali restano invariati."},
+ {k:"smisto",n:"Smisto e leggo",t:"Guardo ogni pagina, la leggo e la metto nella sua famiglia. Clicca un contenitore per vedere le sue pagine."},
+ {k:"ordine",n:"Metto in ordine",t:"Le pagine in fila nell'ordine della catena, come nello ZIP finale. Quelle evidenziate erano girate e le raddrizzo."},
+ {k:"catena",n:"Collego la catena",t:"Ogni pallino è una voce: cammina lungo la catena e si ferma dove manca un pezzo. Clicca un anello per vedere chi è fermo lì e perché."},
+ {k:"risultato",n:"Risultato",t:"Lo stato del cantiere, l'Excel, lo ZIP ordinato e cosa chiedere a ogni fornitore."}];
+function passoDaFase(){return {preparazione:0,lettura:1,composizione:3,pronto:4}[stato.fase]??0}
+function passoAperto(i){return i===0||(i<=2&&stato.fase!=="preparazione")||(i>=3&&!!ris)}
+function passi(){const cur=passoDaFase();
+ if(cur!==passoAttuale){passoAttuale=cur;passoScelto=null}
+ let vis=passoScelto??cur;if(!passoAperto(vis))vis=Math.min(cur,1);
+ const pronto=stato.fase==="pronto";
+ $("passi").innerHTML=PASSI.map((s,i)=>`<button class="${i<cur||pronto?"fatto":i===cur?"ora":""} ${i===vis?"visto":""}" ${passoAperto(i)?"":"disabled"} onclick="scegliPasso(${i})"><span class="n">${i<cur||pronto?"✓":i+1}</span><span class="t">${s.n}</span></button>`).join("");
+ PASSI.forEach((s,i)=>$("p-"+s.k).classList.toggle("on",i===vis));
+ $("ptitolo").textContent=`${vis+1}. ${PASSI[vis].n}`;$("ptesto").textContent=PASSI[vis].t}
+function scegliPasso(i){passoScelto=i;passi();if(PASSI[i].k==="ordine"){firmaOrdine="";ordine()}}
+function ricevuti(){$("ricevuti").innerHTML=stato.fase==="preparazione"?`<div class="who"><span class="dot"></span>Preparo le pagine…</div>`:
+ `<b>${stato.file} file ricevuti, ${stato.pagine_totali} pagine pronte.</b><div class="note" style="margin-top:6px">Gli originali restano invariati. Se arrivano altri documenti usa «Aggiungi file»: le pagine già lette non vengono rilette.</div>`}
+
+/* ---------- ordine della catena (come lo ZIP ordinato) ---------- */
+const CARTELLE=[["Costruttore",["packing_costruttore","dop_costruttore"]],["DDT",["ddt"]],["Certificati 3.1",["certificato_31","lettera_accompagnamento"]],["DoP e CE",["dop_ce_prodotto"]]];
+function vediPagina(pid){$("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");$("mopen").classList.add("hidden");$("mbody").innerHTML="";$("modal").classList.add("on");safe(()=>pagina(pid))}
+function ordine(){if(!stato||!$("p-ordine").classList.contains("on"))return;
+ const lette=stato.pagine.filter(x=>x.famiglia);const firma=lette.length+":"+stato.fase;if(firma===firmaOrdine)return;firmaOrdine=firma;
+ const fogli=ps=>`<div class="fogli">${ps.map((x,k)=>`<img src="${img(x.pid)}" alt="" style="animation-delay:${Math.min(k,40)*25}ms" class="${x.orientamento?"girata":""}" title="${esc(x.file)} · pagina ${x.pagina}${x.orientamento?" · girata di "+x.orientamento+"°, raddrizzata":""}" onclick="vediPagina('${x.pid}')">`).join("")}</div>`;
+ const gruppi=CARTELLE.map(([nome,fam],i)=>{const ps=lette.filter(x=>fam.includes(x.famiglia));
+  const tinta=FAM[fam[0]].c,num=String(i+1).padStart(2,"0");
+  return (i?'<div class="freccia">→</div>':"")+(ps.length?`<div class="card gruppo" style="--c:${tinta}"><div class="gt"><span>${num} · ${nome}</span><span style="color:${tinta}">${ps.length}</span></div>${fogli(ps)}</div>`
+   :`<div class="card gruppo manca" style="--c:var(--red)"><div class="gt"><span>${num} · ${nome}</span></div>${stato.fase==="lettura"?"Ancora nessuna pagina":"Manca: nessuna pagina di questo tipo"}</div>`)}).join("");
+ const via=lette.filter(x=>["da_escludere","illeggibile"].includes(x.famiglia));
+ const girate=lette.filter(x=>x.orientamento).length;
+ $("ordine").innerHTML=`<div class="gruppi">${gruppi}</div>
+  ${via.length?`<div class="card gruppo via" style="--c:var(--soft);margin-top:12px"><div class="gt"><span>99 · Non usati (fuori dalla catena)</span><span>${via.length}</span></div>${fogli(via)}</div>`:""}
+  <div class="acts" style="margin-top:14px;align-items:center">${girate?`<span class="pill o">↻ ${girate} pagine girate: nello ZIP sono raddrizzate</span>`:""}
+  ${stato.fase==="pronto"?`<button class="btn s" onclick="safe(()=>scaricaFile('fascicolo-ordinato'))"><svg class="ic"><use href="#fold"/></svg>Scarica lo ZIP in questo ordine</button>`:`<span class="note" style="margin:0">Lo ZIP ordinato sarà pronto alla fine.</span>`}</div>`}
+
+/* ---------- catena ---------- */
+const ANELLI=[["tabella","Tabella costruttore","var(--violet)"],["ddt","DDT","var(--accent)"],["cert","Certificato 3.1","var(--orange)"],["colata","Colata","var(--orange)"],["prove","Timbro e DoP","var(--teal)"],["ok","Completa","var(--green)"]];
+function anello(v){if(v.stato==="PROVATO")return "ok";
+ const ms=(v.motivi||[]).concat(v.richieste||[]).map(m=>m.toLowerCase());
+ // DEDOTTO: certificato e DDT ci sono, si ferma solo se manca il timbro giusto.
+ if(v.stato==="DEDOTTO")return ms.some(m=>/(senza|nessun|manca)\b.*timbr|timbr.*(altro|divers)/.test(m))?"prove":"ok";
+ for(const m of ms){
+  if(/\bddt\b/.test(m)&&/non |manca|assente|senza/.test(m))return "ddt";
+  if(/timbr|\bdop\b|\bce\b|marcatura/.test(m))return "prove";
+  if(/colat/.test(m))return "colata";
+  if(/certificat/.test(m))return "cert"}
+ return "prove"}
+function motivo(v){return (v.motivi&&v.motivi[0])||(v.richieste&&v.richieste[0]&&"manca: "+v.richieste[0])||(v.note&&v.note[0])||"da verificare"}
+function catena(){if(!ris)return;const voci=ris.voci.map(v=>({...v,anello:anello(v)}));
+ $("anelli").innerHTML='<div class="filo"></div>'+ANELLI.map(([k,nome,c],i)=>{const vv=voci.filter(v=>v.anello===k);
+  const ded=vv.filter(v=>v.stato==="DEDOTTO").length;
+  const mt=k==="ok"?`<b>${vv.length}</b>a posto${ded?` (${ded} ${ded===1?"dedotta":"dedotte"})`:""}`
+   :k==="tabella"?(ris.avviso_packing?`<b style="color:var(--orange)">!</b>manca: voci prese dai DDT`:`<b>0</b>tutte passano`)
+   :vv.length?`<b>${vv.length}</b>${esc(motivo(vv[0]))}`:`<b>0</b>tutte passano`;
+  return `<div class="anello ${anelloScelto===k?"sel":""}" style="--c:${c}" onclick="scegliAnello('${k}')"><div class="c">${i+1}</div><div class="nm">${nome}</div><div class="pila">${vv.map((v,j)=>`<i style="animation-delay:${j*30}ms;${v.stato==="DEDOTTO"?"opacity:.55":""}" title="${esc(v.voce)} · ${v.stato}"></i>`).join("")}</div><div class="mt">${mt}</div></div>`}).join("");
+ const vv=voci.filter(v=>anelloScelto?v.anello===anelloScelto:v.anello!=="ok");
+ $("elenco").innerHTML=`<tr><th>N</th><th>Voce</th><th>Stato</th><th>Perché</th><th>DDT</th><th>Fornitore</th><th></th></tr>`+(vv.length?vv.map(v=>`<tr><td>${v.n}</td><td>${esc(v.voce)}</td><td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td>${esc(motivo(v))}</td><td>${esc(v.ddt||"—")}</td><td>${esc(v.fornitore||"—")}</td><td><button class="row-ask" onclick="selectVoice(${v.n})">Chiedi in chat ↗</button></td></tr>`).join("")
+  :`<tr><td colspan="7" class="note">${anelloScelto?"Nessuna voce ferma qui.":"Nessuna voce ferma: tutte le voci hanno la catena completa."}</td></tr>`)}
+function scegliAnello(k){anelloScelto=anelloScelto===k?null:k;catena()}
+
+/* ---------- download con errori leggibili ---------- */
+async function scaricaFile(tipo){const r=await fetch(`/api/lavori/${L}/${tipo}`);
+ if(!r.ok){let d="";try{d=(await r.json()).detail}catch(e){}throw new Error(d?d.charAt(0).toUpperCase()+d.slice(1)+".":"Download non riuscito.")}
+ const nome=(r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/)?.[1]||tipo+".zip";
+ const u=URL.createObjectURL(await r.blob());const a=document.createElement("a");a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}
+
 /* ---------- famiglie ---------- */
 function famiglia(k){if(!stato)return;const ps=stato.pagine.filter(x=>x.famiglia===k);
  $("mtitle").textContent=`${FAM[k].n} · ${ps.length} pagine`;$("mopen").classList.add("hidden");
@@ -361,10 +536,27 @@ function chiudi(){$("modal").classList.remove("on");$("mframe").src="about:blank
 $("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};document.onkeydown=e=>{if(e.key==="Escape")chiudi()};
 
 /* ---------- risultato ---------- */
+function esito(r){const c=r.conteggio,tot=r.voci.length;let pill,cls,titolo;
+ if(!tot)[pill,cls,titolo]=["Da controllare","o","Nessuna voce trovata"];
+ else if(c.MANCANTE)[pill,cls,titolo]=["Mancano documenti","r",`Mancano documenti per ${c.MANCANTE} ${c.MANCANTE===1?"voce":"voci"} su ${tot}`];
+ else if(c["DA CONFERMARE"])[pill,cls,titolo]=["Da confermare","o",`${c["DA CONFERMARE"]} ${c["DA CONFERMARE"]===1?"voce":"voci"} su ${tot} da confermare`];
+ else [pill,cls,titolo]=["Completato","g",`Tutto collegato: ${tot} voci`];
+ $("esito-pill").className="pill "+cls;$("esito-pill").textContent=pill;$("esito-titolo").textContent=titolo;
+ $("ressub").textContent=tot?`L'Excel e lo ZIP ordinato sono pronti con quello che c'è${c.MANCANTE||c["DA CONFERMARE"]?": quando arrivano i documenti mancanti usa «Aggiungi file» e rifaccio i collegamenti":""}. ${stato?stato.pagine_totali+" pagine da "+stato.file+" file. ":""}Ogni dato ha il collegamento alla pagina da cui viene.`
+  :"Non ho trovato né la tabella del costruttore né DDT con materiali: controlla di aver caricato i documenti giusti.";
+ const avvisi=[];
+ if(r.avviso_packing)avvisi.push("Manca la tabella (packing) del costruttore: le voci sono prese dai DDT ricevuti dal costruttore, quindi al massimo DEDOTTO.");
+ if(stato&&stato.non_lette.length)avvisi.push(`${stato.non_lette.length} pagine non lette dopo più tentativi: la lettura è incompleta.`);
+ $("esito-avvisi").innerHTML=avvisi.map(a=>`<div class="avviso" style="margin:12px 0 0">${esc(a)}</div>`).join("")}
+function fornitori(r){const per={};
+ r.voci.forEach(v=>(v.richieste||[]).forEach(q=>{const f=v.fornitore||"Fornitore non individuato";((per[f]??={})[q]??=[]).push(v)}));
+ const nomi=Object.keys(per);
+ window._richieste=nomi.map(f=>`Buongiorno,\nper il cantiere ${stato?stato.nome:""} ci servono:\n`+Object.entries(per[f]).map(([q,vv])=>`- ${q} per: ${vv.map(v=>v.voce+(v.ddt?" (DDT "+v.ddt+")":"")).join(", ")}`).join("\n")+"\nGrazie.");
+ $("fornitori").innerHTML=nomi.length?nomi.map((f,i)=>`<div class="card fornitore"><h3>${esc(f)}</h3><ul>${Object.entries(per[f]).map(([q,vv])=>`<li><b>${esc(q)}</b> per ${vv.length} ${vv.length===1?"voce":"voci"}</li>`).join("")}</ul><button class="btn s" onclick="copiaRichiesta(${i})">Copia richiesta</button></div>`).join("")
+  :`<div class="note">Nessun documento da chiedere.</div>`}
+function copiaRichiesta(i){navigator.clipboard.writeText(window._richieste[i]).then(()=>notify("Richiesta copiata: incollala in una mail al fornitore."),()=>notify("Copia non riuscita: seleziona il testo dall'Excel, foglio «Richieste ai fornitori»."))}
 async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
- $("res").classList.remove("hidden");
- $("ressub").textContent=`${stato.pagine_totali} pagine da ${stato.file} file · ${r.voci.length} voci · ogni dato ha il collegamento alla pagina da cui viene.`;
- $("scarica").href=`/api/lavori/${L}/scarica`;$("riordina").href=`/api/lavori/${L}/fascicolo-ordinato`;
+ ris=r;esito(r);fornitori(r);catena();if(stato)passi();
  $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("");
  const prova=(v,c)=>v.colonne[c].fonti.length?`/api/lavori/${L}/uscita/prove/v${String(v.n).padStart(3,"0")}_c${String(COL.indexOf(c)+1).padStart(2,"0")}.html`:null;
  const manca=s=>/non nel fascicolo|Non presente/i.test(s||"");

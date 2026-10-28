@@ -364,7 +364,10 @@ def elenco():
         except OSError:
             # Una cartella non leggibile (permessi) non deve nascondere tutti gli altri cantieri.
             continue
-        voci.append({k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")})
+        voce = {k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")}
+        # Conteggi per stato solo se l'Excel corrisponde alle letture attuali: la home li mostra sulla scheda.
+        voce["conteggio"] = (s["riepilogo"] or {}).get("conteggio") if s["fase"] == "pronto" else None
+        voci.append(voce)
     return voci
 
 

@@ -119,7 +119,7 @@ def stato(cartella: Path) -> dict:
         if s:
             lette += 1
             per_famiglia[s["famiglia"]] = per_famiglia.get(s["famiglia"], 0) + 1
-            voce.update(famiglia=s["famiglia"], stato="letta")
+            voce.update(famiglia=s["famiglia"], stato="letta", orientamento=s.get("orientamento", 0))
         elif t.get(p["pid"], 0) >= MAX_TENTATIVI:
             non_lette.append(p["pid"])
             voce.update(stato="non_letta")
