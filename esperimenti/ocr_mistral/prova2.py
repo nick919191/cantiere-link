@@ -451,13 +451,22 @@ def ocr_pagina(client: httpx.Client, png: Path, uscita: Path, conta) -> dict:
     return risultato
 
 
+def _opzione(nome: str, predefinito):
+    return sys.argv[sys.argv.index(nome) + 1] if nome in sys.argv else predefinito
+
+
 def main() -> int:
     cartella = Path(sys.argv[1]).resolve()
     pagine = [p for p in json.loads((cartella / "pagine.json").read_text(encoding="utf-8")) if p.get("pid")]
     # --coltellino: taglio del coltellino con il dizionario imparato sui cantieri SCL; stesso OCR della v2
     con_coltellino = "--coltellino" in sys.argv
+    # varianti per il tempo d'attesa: --lotto N, --parallelo N, --modello slug, --pipeline (verifica subito dopo il
+    # proprio lotto, senza aspettare gli altri), --nome etichetta della cartella dei risultati
+    lotto_n = int(_opzione("--lotto", p1.PAGINE_PER_LOTTO))
+    parallelo = int(_opzione("--parallelo", p1.LOTTI_IN_PARALLELO))
+    pipeline = "--pipeline" in sys.argv
     base = Path(__file__).parent / "risultati"
-    risultati = base / (cartella.name + ("_v3" if con_coltellino else "_v2"))
+    risultati = base / (cartella.name + ("_v3" if con_coltellino else "_v2") + _opzione("--nome", ""))
     cartella_ocr = base / (cartella.name + "_v2") / "ocr"
     cartella_ocr.mkdir(parents=True, exist_ok=True)
     risultati.mkdir(parents=True, exist_ok=True)
@@ -492,10 +501,11 @@ def main() -> int:
 
     # B2: lotti per famiglia, nell'ordine delle pagine
     modello, sforzo = _options()
+    modello = _opzione("--modello", modello)
     gruppi: dict = {}
     for p in pagine:
         gruppi.setdefault(famiglia[p["pid"]], []).append(p)
-    richieste = [(f, lotto) for f, ps in gruppi.items() for lotto in p1.lotti(ps, p1.PAGINE_PER_LOTTO)]
+    richieste = [(f, lotto) for f, ps in gruppi.items() for lotto in p1.lotti(ps, lotto_n)]
 
     def leggi(richiesta):
         f, lotto = richiesta
@@ -517,17 +527,11 @@ def main() -> int:
         ]
         return p1.chiama("B_lettura", istruzioni_per(f), contenuto, modello, sforzo, conta)
 
-    inizio = time.perf_counter()
-    compatte = {}
-    with ThreadPoolExecutor(p1.LOTTI_IN_PARALLELO) as pool:
-        for parziale in pool.map(leggi, richieste):
-            compatte.update(parziale)
-    tempi["B_lettura"] = time.perf_counter() - inizio
-    (risultati / "compatte.json").write_text(json.dumps(compatte, ensure_ascii=False, indent=1), encoding="utf-8")
+    schede, dubbi, errori, da_verificare, rileggi, aggiunte = {}, {}, {}, [], set(), {}
 
-    schede, dubbi, errori, da_verificare, rileggi = {}, {}, {}, [], set()
-    for p in pagine:
-        pid, c = p["pid"], compatte.get(p["pid"])
+    def esamina(p, c) -> bool:
+        """Scheda, dubbi ed errori di una pagina; True se va verificata con l'immagine."""
+        pid = p["pid"]
         schede[pid] = espandi(c) if isinstance(c, dict) else None
         dubbi[pid] = _dubbi(c) if isinstance(c, dict) else []
         errori[pid] = valida(schede[pid], ocr[pid]["testo"]) if schede[pid] else ["scheda mancante"]
@@ -538,9 +542,27 @@ def main() -> int:
             dubbi[pid].append(["scheda", "testo OCR quasi vuoto"])
         if len(assenti) >= 2 or poco_testo:
             rileggi.add(pid)
-        if dubbi[pid] or errori[pid]:
-            da_verificare.append(p)
-    print(f"B. lettura {tempi['B_lettura']:.1f} s · {len(richieste)} richieste · da verificare: {len(da_verificare)}")
+        return bool(dubbi[pid] or errori[pid])
+
+    def leggi_e_verifica(richiesta):
+        """Pipeline: il lotto letto va subito in verifica, mentre gli altri lotti sono ancora in lettura."""
+        parziale = leggi(richiesta)
+        dv = [p for p in richiesta[1] if esamina(p, parziale.get(p["pid"]))]
+        da_verificare.extend(dv)
+        for lotto in p1.lotti(dv, lotto_n):
+            applica_verifica(verifica(lotto))
+        return parziale
+
+    def applica_verifica(parziale):
+        for pid, c in (parziale.get("schede") or {}).items():
+            if pid in rileggi and isinstance(c, dict):
+                schede[pid] = espandi(c)
+        for pid, corr in (parziale.get("correzioni") or {}).items():
+            if schede.get(pid) and isinstance(corr, dict):
+                schede[pid] = applica(schede[pid], corr)
+        for pid, testo in (parziale.get("aggiunte") or {}).items():
+            if isinstance(testo, str):
+                aggiunte[pid] = testo
 
     # C
     def verifica(lotto):
@@ -582,20 +604,26 @@ def main() -> int:
             return {}
 
     inizio = time.perf_counter()
-    aggiunte = {}
-    with ThreadPoolExecutor(p1.LOTTI_IN_PARALLELO) as pool:
-        for parziale in pool.map(verifica, p1.lotti(da_verificare, p1.PAGINE_PER_LOTTO)):
-            for pid, c in (parziale.get("schede") or {}).items():
-                if pid in rileggi and isinstance(c, dict):
-                    schede[pid] = espandi(c)
-            for pid, corr in (parziale.get("correzioni") or {}).items():
-                if schede.get(pid) and isinstance(corr, dict):
-                    schede[pid] = applica(schede[pid], corr)
-            for pid, testo in (parziale.get("aggiunte") or {}).items():
-                if isinstance(testo, str):
-                    aggiunte[pid] = testo
-    tempi["C_verifica"] = time.perf_counter() - inizio
-    print(f"C. verifica {tempi['C_verifica']:.1f} s su {len(da_verificare)} pagine")
+    compatte = {}
+    with ThreadPoolExecutor(parallelo) as pool:
+        for parziale in pool.map(leggi_e_verifica if pipeline else leggi, richieste):
+            compatte.update(parziale)
+    tempi["B_lettura" if not pipeline else "BC_pipeline"] = time.perf_counter() - inizio
+    (risultati / "compatte.json").write_text(json.dumps(compatte, ensure_ascii=False, indent=1), encoding="utf-8")
+    if not pipeline:
+        da_verificare += [p for p in pagine if esamina(p, compatte.get(p["pid"]))]
+    print(
+        f"B. lettura {time.perf_counter() - inizio:.1f} s · {len(richieste)} richieste · "
+        f"da verificare: {len(da_verificare)}"
+    )
+
+    if not pipeline:
+        inizio = time.perf_counter()
+        with ThreadPoolExecutor(parallelo) as pool:
+            for parziale in pool.map(verifica, p1.lotti(da_verificare, lotto_n)):
+                applica_verifica(parziale)
+        tempi["C_verifica"] = time.perf_counter() - inizio
+        print(f"C. verifica {tempi['C_verifica']:.1f} s su {len(da_verificare)} pagine")
 
     # esito e confronto
     accettate, confronto = 0, {"uguali": 0, "solo_forma": 0, "diversi": 0, "solo_attuale": 0, "solo_nuovo": 0}
