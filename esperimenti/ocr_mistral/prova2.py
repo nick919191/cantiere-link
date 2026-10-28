@@ -26,6 +26,9 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 import prova as p1  # noqa: E402
 
+sys.path.insert(0, str(Path(__file__).parents[1] / "coltellino"))
+import coltellino  # noqa: E402
+
 from traccia import lavoro as lv  # noqa: E402
 from traccia import percorsi  # noqa: E402
 from traccia.agente import _options, immagine_per_modello  # noqa: E402
@@ -451,8 +454,16 @@ def ocr_pagina(client: httpx.Client, png: Path, uscita: Path, conta) -> dict:
 def main() -> int:
     cartella = Path(sys.argv[1]).resolve()
     pagine = [p for p in json.loads((cartella / "pagine.json").read_text(encoding="utf-8")) if p.get("pid")]
-    risultati = Path(__file__).parent / "risultati" / (cartella.name + "_v2")
-    (risultati / "ocr").mkdir(parents=True, exist_ok=True)
+    # --coltellino: taglio del coltellino con il dizionario imparato sui cantieri SCL; stesso OCR della v2
+    con_coltellino = "--coltellino" in sys.argv
+    base = Path(__file__).parent / "risultati"
+    risultati = base / (cartella.name + ("_v3" if con_coltellino else "_v2"))
+    cartella_ocr = base / (cartella.name + "_v2") / "ocr"
+    cartella_ocr.mkdir(parents=True, exist_ok=True)
+    risultati.mkdir(parents=True, exist_ok=True)
+    dizionario = coltellino.carica(coltellino.DIZIONARIO) if con_coltellino else frozenset()
+    if con_coltellino and not dizionario:
+        sys.exit("Manca il dizionario: lanciare prima esperimenti/coltellino/impara.py")
     conta, tempi = p1.Contatore(), {}
 
     inizio = time.perf_counter()
@@ -460,7 +471,7 @@ def main() -> int:
         with ThreadPoolExecutor(p1.OCR_IN_PARALLELO) as pool:
             esiti = pool.map(
                 lambda p: ocr_pagina(
-                    client, cartella / "pagine" / f"{p['pid']}.png", risultati / "ocr" / f"{p['pid']}.json", conta
+                    client, cartella / "pagine" / f"{p['pid']}.png", cartella_ocr / f"{p['pid']}.json", conta
                 ),
                 pagine,
             )
@@ -471,7 +482,10 @@ def main() -> int:
     famiglia, tagli, punti = {}, {}, {}
     for p in pagine:
         famiglia[p["pid"]], punti[p["pid"]] = famiglia_probabile(ocr[p["pid"]]["testo"])
-        tagli[p["pid"]] = taglia(ocr[p["pid"]]["testo"], famiglia[p["pid"]])
+        if con_coltellino:
+            tagli[p["pid"]] = coltellino.taglia(ocr[p["pid"]]["testo"], famiglia[p["pid"]], dizionario)
+        else:
+            tagli[p["pid"]] = taglia(ocr[p["pid"]]["testo"], famiglia[p["pid"]])
     car_prima = sum(len(o["testo"]) for o in ocr.values())
     car_dopo = sum(len(t) for t in tagli.values())
     print(f"A. OCR {tempi['A_ocr']:.1f} s · testo {car_prima} -> {car_dopo} caratteri dopo il taglio")

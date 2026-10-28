@@ -11,8 +11,12 @@ Regole, tutte deterministiche:
 Il dizionario si impara con `impara(pagine)`; `taglia(testo, famiglia, dizionario)` restituisce il testo ridotto.
 """
 
+import json
 import re
 from collections import defaultdict
+from pathlib import Path
+
+DIZIONARIO = Path(__file__).parent / "risultati" / "dizionario.json"
 
 CONTATTI = re.compile(
     r"partita iva|p\.? ?iva|codice fiscale|cod\. ?fisc|capitale sociale|cap\. ?soc|r\.?e\.?a\.|"
@@ -116,12 +120,23 @@ def impara(pagine: list[dict], valori_di) -> set[str]:
         and len(f) >= 6
         and "#" not in re.sub(r"^[#.\s]+", "", f)  # niente numeri dentro la riga: una cifra può essere un valore
         and not SOCIETA.search(f)  # una ragione sociale ripetuta può essere il produttore
+        and len(re.findall(r"[a-zà-ü]{2,}", f)) >= 4  # righe brevi (marchio, città, stabilimento) restano
     }
 
 
 def _prosa(testo: str, soglia: int) -> bool:
     """Testo lungo quasi senza cifre: condizioni, formule legali, descrizioni d'uso. Mai se porta un valore."""
     return len(testo) > soglia and sum(ch.isdigit() for ch in testo) < 0.03 * len(testo) and not PROTETTO.search(testo)
+
+
+def salva(dizionario: set[str], file) -> None:
+    """Il dizionario resta fuori da git: è ricavato da documenti dei clienti."""
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(json.dumps(sorted(dizionario), ensure_ascii=False, indent=0), encoding="utf-8")
+
+
+def carica(file) -> frozenset[str]:
+    return frozenset(json.loads(file.read_text(encoding="utf-8"))) if file.exists() else frozenset()
 
 
 def _cella_utile(cella: str, certificato: bool, dizionario) -> bool:
