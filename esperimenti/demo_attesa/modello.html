@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analisi in corso</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1f1e1b;--mut:#6b6a64;--line:#dedcd3;--acc:#2f6fdb;--acc-bg:#e6effc;--ok:#2e7d4f;--hl:rgba(47,111,219,.18);--key:#c2571a;--key-bg:#fbeee5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b19;--card:#252523;--ink:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--acc:#7aa7f2;--acc-bg:#24324a;--ok:#78c497;--hl:rgba(122,167,242,.25);--key:#f0a070;--key-bg:#3d2a1e}}
+:root[data-theme="dark"]{--bg:#1b1b19;--card:#252523;--ink:#ecebe6;--mut:#a3a29b;--line:#3a3a36;--acc:#7aa7f2;--acc-bg:#24324a;--ok:#78c497;--hl:rgba(122,167,242,.25);--key:#f0a070;--key-bg:#3d2a1e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:24px 16px}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 20px;font-size:14px}
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.pagina{position:relative;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.pagina img{display:block;width:100%;height:auto;transition:opacity .5s}
+.box{position:absolute;border-radius:3px;background:var(--hl);transition:opacity .3s}
+.box.k{background:none;outline:2px solid var(--key);outline-offset:1px}
+.scan{position:absolute;left:0;right:0;height:2px;background:var(--acc);box-shadow:0 0 12px 2px var(--acc);opacity:.9;pointer-events:none}
+.miniature{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.miniature span{font-size:12px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
+.miniature span.on{border-color:var(--acc);color:var(--acc)}
+.miniature span.ok{border-color:var(--ok);color:var(--ok)}
+.lato{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.eta{font-size:30px;font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+.fasi div{padding:3px 0;color:var(--mut)}
+.fasi div.on{color:var(--ink);font-weight:600}
+.fasi div.ok{color:var(--ok)}
+.flusso{height:180px;overflow:hidden;position:relative;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.flusso div{animation:entra .35s ease-out}
+@keyframes entra{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.flusso div{animation:none}.scan{display:none}}
+.dati{display:flex;flex-wrap:wrap;gap:6px}
+.dato{font-size:13px;padding:3px 8px;border-radius:6px;background:var(--key-bg);color:var(--key)}
+.dato b{font-weight:600;margin-right:4px}
+.mut{color:var(--mut);font-size:13px}
+button{font:inherit;font-size:14px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+</style>
+</head>
+<body>
+<main>
+<h1>Analisi del cantiere in corso</h1>
+<p class="sub">Demo con documenti inventati: le parole evidenziate sono quelle realmente estratte da ogni pagina, nella loro posizione.</p>
+<div class="grid">
+  <div>
+    <div class="pagina" id="pagina"><img id="img" alt="Pagina in analisi"><div class="scan" id="scan"></div></div>
+    <div class="miniature" id="mini"></div>
+  </div>
+  <div class="lato">
+    <div class="card">
+      <div class="mut" id="cosa">Preparazione…</div>
+      <div class="eta" id="eta">stima in corso…</div>
+      <div class="bar"><i id="pb"></i></div>
+    </div>
+    <div class="card fasi" id="fasi">
+      <div>○ Lettura del testo</div><div>○ Riconoscimento del documento</div><div>○ Estrazione dei dati</div><div>○ Controlli e collegamenti</div>
+    </div>
+    <div class="card"><div class="mut">Parole lette</div><div class="flusso" id="flusso"></div></div>
+    <div class="card"><div class="mut" style="margin-bottom:8px">Dati trovati</div><div class="dati" id="dati"></div></div>
+    <div><button id="ancora">Ricomincia</button></div>
+  </div>
+</div>
+</main>
+<script>
+const PAGINE = /*PAGINE*/[];
+const $ = id => document.getElementById(id);
+const pausa = ms => new Promise(r => setTimeout(r, ms));
+let giro = 0;
+
+function fasi(k) {
+  [...$("fasi").children].forEach((d, i) => {
+    const t = d.textContent.slice(2);
+    d.className = i < k ? "ok" : i === k ? "on" : "";
+    d.textContent = (i < k ? "✓ " : i === k ? "● " : "○ ") + t;
+  });
+}
+
+function stima(fatte, inizio) {
+  if (fatte < 1) return "stima in corso…";
+  const perPagina = (performance.now() - inizio) / fatte;
+  const resto = Math.round((perPagina * (PAGINE.length - fatte)) / 1000);
+  return resto > 0 ? `circa ${resto} s` : "quasi fatto";
+}
+
+async function analizza(p, i, mio, inizio) {
+  const pag = $("pagina"), img = $("img"), scan = $("scan");
+  pag.querySelectorAll(".box").forEach(b => b.remove());
+  img.style.opacity = 0;
+  await pausa(250);
+  img.src = p.img;
+  img.style.opacity = 1;
+  [...$("mini").children].forEach((m, j) => (m.className = j < i ? "ok" : j === i ? "on" : ""));
+  $("cosa").textContent = `Pagina ${i + 1} di ${PAGINE.length} · ${p.tipo}`;
+  fasi(0);
+  const parole = [...p.parole].sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+  const durata = 2200 + parole.length * 35;
+  const t0 = performance.now();
+  let k = 0;
+  while (k < parole.length) {
+    if (mio !== giro) return;
+    const frazione = Math.min(1, (performance.now() - t0) / durata);
+    const y = frazione * 1000;
+    scan.style.top = frazione * 100 + "%";
+    while (k < parole.length && parole[k][1] <= y) {
+      const [x0, y0, x1, y1, parola, etichetta] = parole[k++];
+      const b = document.createElement("div");
+      b.className = "box" + (etichetta ? " k" : "");
+      Object.assign(b.style, {left: x0 / 10 + "%", top: y0 / 10 + "%", width: (x1 - x0) / 10 + "%", height: (y1 - y0) / 10 + "%"});
+      pag.appendChild(b);
+      const riga = document.createElement("div");
+      riga.textContent = parola;
+      if (etichetta) riga.style.color = "var(--key)";
+      $("flusso").prepend(riga);
+      if ($("flusso").children.length > 14) $("flusso").lastChild.remove();
+      if (etichetta) {
+        const d = document.createElement("span");
+        d.className = "dato";
+        d.innerHTML = `<b>${etichetta}</b>`;
+        d.append(parola);
+        $("dati").prepend(d);
+        if ($("dati").children.length > 12) $("dati").lastChild.remove();
+      }
+      fasi(k / parole.length < 0.25 ? 0 : k / parole.length < 0.5 ? 1 : 2);
+    }
+    $("eta").textContent = stima(i + frazione, inizio);
+    $("pb").style.width = ((i + frazione) / PAGINE.length) * 100 + "%";
+    await pausa(30);
+  }
+  fasi(3);
+  await pausa(500);
+}
+
+async function avvia() {
+  const mio = ++giro;
+  $("dati").innerHTML = "";
+  $("flusso").innerHTML = "";
+  $("mini").innerHTML = PAGINE.map(p => `<span>${p.tipo}</span>`).join("");
+  const inizio = performance.now();
+  for (let i = 0; i < PAGINE.length; i++) {
+    await analizza(PAGINE[i], i, mio, inizio);
+    if (mio !== giro) return;
+  }
+  fasi(4);
+  $("eta").textContent = "Pronto";
+  $("cosa").textContent = `${PAGINE.length} pagine analizzate · Excel pronto`;
+  $("pb").style.width = "100%";
+  $("scan").style.top = "-10px";
+  [...$("mini").children].forEach(m => (m.className = "ok"));
+}
+
+$("ancora").onclick = avvia;
+avvia();
+</script>
+</body>
+</html>
