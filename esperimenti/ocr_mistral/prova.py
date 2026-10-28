@@ -173,7 +173,8 @@ def main() -> int:
                             conta,
                         ),
                         pagine,
-                    ), strict=False,
+                    ),
+                    strict=False,
                 )
             )
     tempi["A_ocr"] = time.perf_counter() - inizio
