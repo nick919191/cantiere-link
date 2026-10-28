@@ -128,15 +128,15 @@ TABELLA_DOP_RUMORE = re.compile(  # righe della tabella delle prestazioni
 CAMPI_CHIAVE = {  # campi senza i quali la pagina va riletta con l'immagine
     "certificato_31": ["testata.numero", "testata.produttore", "righe"],
     "ddt": ["testata.numero", "testata.data", "testata.emittente", "righe"],
-    "dop_ce_prodotto": ["testata.fabbricante", "testata.qualita"],
+    "dop_ce_prodotto": ["testata.fabbricante", "testata.qualita", "testata.numero_dop"],
     "dop_costruttore": ["testata.fabbricante", "testata.numero_dop"],
     "lettera_accompagnamento": ["testata.ddt_citato"],
     "packing_costruttore": ["righe"],
 }
 
 
-def mancanti(scheda: dict) -> list[str]:
-    if scheda.get("continua_pagina_prima"):
+def mancanti(scheda: dict, prima_del_file: bool = False) -> list[str]:
+    if scheda.get("continua_pagina_prima") and not prima_del_file:  # la prima pagina di un file non continua nulla
         return []
     esito = []
     for campo in CAMPI_CHIAVE.get(scheda["famiglia"], []):
@@ -207,6 +207,22 @@ Ricevi il testo OCR della pagina già ripulito (niente immagine). Rispondi con u
   "righe[2].colata", "timbri", "famiglia". Non segnalare O/0 o 5/S nelle qualità (S275J0): li corregge il programma.
 """
 
+NOTE_FAMIGLIA = {  # casi visti nei fascicoli, in aggiunta alle istruzioni della famiglia
+    "dop_ce_prodotto": """
+Note DoP:
+- Intestazione nella forma «02 N° 2024 DDT / PA/9279»: numero_dop = «02 N° 2024» (numero e anno della DoP),
+  ddt_citato = «PA/9279». Il numero DoP può stare anche in riga 1 (codice del prodotto-tipo) o dopo «N.» in testata.
+- Anche sulle etichette CE e sulle pagine seguenti compila tutti i campi di testata che si leggono: fabbricante,
+  organismo (le 4 cifre accanto a CE o «N° 1608»), fpc, norma, qualita, data.
+- qualita: tutte le qualità coperte come scritte, anche in forma «S275 grado: JR,J0,J2».
+""",
+    "ddt": """
+Note DDT:
+- Ogni riga della tabella articoli è una riga, comprese le righe «CERTIFICATI: ...» (servizio "si"): anche su queste
+  compila profilo e qualita se scritti (es. «CERTIFICATI: UPN 140 - HEA 120» -> profilo «UPN 140 - HEA 120»).
+""",
+}
+
 
 def _testo_istruzioni() -> tuple[str, str, dict[str, str]]:
     lettura = (percorsi.ISTRUZIONI / "lettura.md").read_text(encoding="utf-8")
@@ -220,7 +236,7 @@ def istruzioni_per(famiglia: str | None) -> str:
     prima, regole, famiglie = _testo_istruzioni()
     scelte = list(famiglie) if famiglia is None else [famiglia, "da_escludere"]
     testo = prima + ISTRUZIONI_COMPATTE + "\n" + regole
-    testo += "\n\n" + "\n\n".join(famiglie[f] for f in scelte if f in famiglie)
+    testo += "\n\n" + "\n\n".join(famiglie[f] + NOTE_FAMIGLIA.get(f, "") for f in scelte if f in famiglie)
     if famiglia:
         testo += (
             f"\n\nLe pagine di questa richiesta sembrano «{famiglia}». Se una non lo è, scegli la famiglia giusta "
@@ -286,7 +302,31 @@ def espandi(c: dict) -> dict:
                     "zona": [],
                 }
             )
+    correggi_qualita(scheda)
     return scheda
+
+
+def _qualita_corretta(v: str) -> str:
+    """Errori tipici dell'OCR sulle qualità EN 10025: '5275' -> 'S275', 'S275JO' -> 'S275J0', 'JR,JO' -> 'JR,J0'."""
+    nuovo = re.sub(r"(?<![\w.])5(\s?\d{3})(?=\b|[A-Z])", r"S\1", v)
+    if re.search(r"S\s?\d{3}", nuovo):
+        nuovo = re.sub(r"(?<=J)O(?=\b|[^A-Za-z])", "0", nuovo)
+    return nuovo
+
+
+def correggi_qualita(scheda: dict) -> None:
+    """Corregge le qualità in Python; il testo corretto entra nella trascrizione, con un avviso per la persona."""
+    valori = [scheda["testata"].get("qualita")] + [r.get("qualita") for r in scheda["righe"]]
+    for val in valori:
+        if not val or not val["v"]:
+            continue
+        nuovo = _qualita_corretta(val["v"])
+        if nuovo != val["v"]:
+            avviso = f"qualità corretta dal programma: «{val['v']}» letto come «{nuovo}»"
+            if avviso not in scheda["avvisi"]:
+                scheda["avvisi"].append(avviso)
+            scheda["trascrizione"] = (scheda["trascrizione"] + "\n" + nuovo).strip()
+            val.update(v=nuovo, cit=nuovo)
 
 
 def _dubbi(c: dict) -> list[list[str]]:
@@ -477,9 +517,12 @@ def main() -> int:
         schede[pid] = espandi(c) if isinstance(c, dict) else None
         dubbi[pid] = _dubbi(c) if isinstance(c, dict) else []
         errori[pid] = valida(schede[pid], ocr[pid]["testo"]) if schede[pid] else ["scheda mancante"]
-        assenti = mancanti(schede[pid]) if schede[pid] else ["scheda"]
+        assenti = mancanti(schede[pid], p["pagina"] == 1) if schede[pid] else ["scheda"]
         dubbi[pid] += [[campo, "campo chiave vuoto: cercalo sull'immagine"] for campo in assenti]
-        if len(assenti) >= 2:
+        poco_testo = len(tagli[pid]) < 300 and not (schede[pid] or {}).get("bianca")
+        if poco_testo:  # l'OCR ha letto quasi niente: la scheda dal solo testo non è affidabile
+            dubbi[pid].append(["scheda", "testo OCR quasi vuoto"])
+        if len(assenti) >= 2 or poco_testo:
             rileggi.add(pid)
         if dubbi[pid] or errori[pid]:
             da_verificare.append(p)
@@ -541,12 +584,13 @@ def main() -> int:
     print(f"C. verifica {tempi['C_verifica']:.1f} s su {len(da_verificare)} pagine")
 
     # esito e confronto
-    accettate, confronto = 0, {"uguali": 0, "diversi": 0, "solo_attuale": 0, "solo_nuovo": 0}
+    accettate, confronto = 0, {"uguali": 0, "solo_forma": 0, "diversi": 0, "solo_attuale": 0, "solo_nuovo": 0}
     differenze, esito, famiglie_ok = [], {}, [0, 0]
     for p in pagine:
         pid, s = p["pid"], schede.get(p["pid"])
         if s:
-            s["trascrizione"] = aggiunte.get(pid, "")
+            correggi_qualita(s)
+            s["trascrizione"] = (s["trascrizione"] + "\n" + aggiunte.get(pid, "")).strip()
         err = valida(s, ocr[pid]["testo"]) if s else ["scheda mancante"]
         accettate += not err
         attuale = lv.leggi_lettura(p["impronta"])
@@ -571,6 +615,8 @@ def main() -> int:
                     if not n
                     else "solo_nuovo"
                     if not a
+                    else "solo_forma"  # uno contiene l'altro: '9279' / '9279 2024'
+                    if piatto(a) in piatto(n) or piatto(n) in piatto(a)
                     else "diversi"
                 )
                 confronto[e] += 1
