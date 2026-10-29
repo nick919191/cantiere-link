@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La catena viva</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--mut:#6e6e73;--soft:#a1a1a6;--line:#e5e5ea;--fill:#f2f2f4;
+  --acc:#0071e3;--acc-bg:#e8f1fc;--g:#248a3d;--g-bg:#e7f6ea;--b:#0071e3;--b-bg:#e8f1fc;--o:#b25000;--o-bg:#fff4e5;--r:#d70015;--r-bg:#fdecee;
+  --f-packing_costruttore:#6e3ad6;--f-ddt:#0071e3;--f-certificato_31:#248a3d;--f-dop_ce_prodotto:#b25000;--f-dop_costruttore:#0a7c86;
+  --f-lettera_accompagnamento:#5e5ce6;--f-da_escludere:#a1a1a6;--f-illeggibile:#d70015}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--mut:#a1a1a6;--soft:#6e6e73;--line:#38383a;--fill:#2c2c2e;
+  --acc:#2997ff;--acc-bg:#0a2540;--g:#30d158;--g-bg:#0f2e17;--b:#2997ff;--b-bg:#0a2540;--o:#ff9f0a;--o-bg:#33240a;--r:#ff453a;--r-bg:#3a1210;
+  --f-packing_costruttore:#bf9cff;--f-ddt:#2997ff;--f-certificato_31:#30d158;--f-dop_ce_prodotto:#ff9f0a;--f-dop_costruttore:#5ad8e6;
+  --f-lettera_accompagnamento:#a5a3ff;--f-da_escludere:#6e6e73;--f-illeggibile:#ff453a}}
+:root[data-theme="dark"]{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--mut:#a1a1a6;--soft:#6e6e73;--line:#38383a;--fill:#2c2c2e;
+  --acc:#2997ff;--acc-bg:#0a2540;--g:#30d158;--g-bg:#0f2e17;--b:#2997ff;--b-bg:#0a2540;--o:#ff9f0a;--o-bg:#33240a;--r:#ff453a;--r-bg:#3a1210;
+  --f-packing_costruttore:#bf9cff;--f-ddt:#2997ff;--f-certificato_31:#30d158;--f-dop_ce_prodotto:#ff9f0a;--f-dop_costruttore:#5ad8e6;
+  --f-lettera_accompagnamento:#a5a3ff;--f-da_escludere:#6e6e73;--f-illeggibile:#ff453a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Inter,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+.top{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700}
+.crumb{color:var(--mut)}.crumb b{color:var(--ink);font-weight:500}.sp{flex:1}
+.tabs{display:flex;gap:4px;background:var(--fill);padding:3px;border-radius:999px}
+.tabs button{border:0;background:none;color:var(--mut);padding:6px 12px;border-radius:999px;font:500 13px inherit;cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:999px;background:var(--acc);color:#fff;border:0;font:500 14px inherit;cursor:pointer}
+.btn.s{background:var(--fill);color:var(--ink)}
+.pill{font-size:11px;font-weight:600;padding:4px 10px;border-radius:999px;display:inline-block;white-space:nowrap}
+.g{background:var(--g-bg);color:var(--g)}.b{background:var(--b-bg);color:var(--b)}.o{background:var(--o-bg);color:var(--o)}.r{background:var(--r-bg);color:var(--r)}
+.mut{color:var(--mut);font-size:13px}
+h2{font-size:18px;margin:26px 0 4px;letter-spacing:-.01em}
+.sub{color:var(--mut);margin:0 0 12px;font-size:14px}
+
+/* stato unico + esito */
+.esito{padding:22px 24px;display:grid;grid-template-columns:1fr auto;gap:18px;align-items:start}
+@media(max-width:760px){.esito{grid-template-columns:1fr}}
+.esito h1{font-size:28px;letter-spacing:-.02em;margin:10px 0 4px}
+.esito .acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.avviso{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;margin-top:10px;font-size:14px;flex-wrap:wrap}
+.avviso .btn{height:30px;padding:0 12px;font-size:13px}
+.barra{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:14px;background:var(--fill)}
+.barra i{display:block;height:100%;transition:width .9s cubic-bezier(.2,.8,.2,1);width:0}
+.conta{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px}
+.conta button{border:0;background:none;padding:0;cursor:pointer;font:inherit;color:var(--mut);font-size:13px}
+.conta button b{font-size:15px;margin-right:4px}
+.conta button.on{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+
+/* fascicolo in ordine di catena */
+.fasc{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.fasc2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+@media(max-width:760px){.fasc{grid-template-columns:repeat(2,1fr)}}
+.fam{padding:12px;min-height:118px;position:relative;transition:border-color .5s,background .5s}
+.fam .h{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+.fam .lab{font-size:12px;color:var(--mut);line-height:1.25}
+.fam .n{font-size:24px;font-weight:700;color:var(--fc)}
+.fam .freccia{position:absolute;right:-9px;top:44px;color:var(--soft);font-size:13px;z-index:1}
+.fam.manca{border:2px dashed var(--r);background:var(--r-bg)}
+.fam.manca .n{color:var(--r)}
+.fam .blocca{font-size:12px;color:var(--r);font-weight:600;margin-top:6px}
+.pila{display:flex;flex-wrap:wrap;gap:3px;margin-top:8px}
+.pila i{width:11px;height:15px;border-radius:2px;border:1.5px solid var(--fc);background:var(--card);opacity:0;transform:translateY(-30px) scale(.6);
+  transition:opacity .4s,transform .6s cubic-bezier(.2,.8,.2,1)}
+.pila i.in{opacity:1;transform:none}
+.pila em{font-size:11px;color:var(--mut);font-style:normal;align-self:center;margin-left:2px}
+.mini{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:12px;color:var(--mut)}
+.mini i{width:8px;height:8px;border-radius:2px;background:var(--fc)}
+
+/* grappoli: dove si ferma la catena */
+.catena{padding:18px 18px 14px;overflow-x:auto}
+.scena{position:relative;min-width:760px}
+.anelli{display:grid;grid-template-columns:repeat(6,1fr);position:relative}
+.anelli::before{content:"";position:absolute;left:8%;right:8%;top:17px;height:2px;background:var(--line)}
+.anello{text-align:center;position:relative}
+.anello .o{width:36px;height:36px;border-radius:50%;margin:0 auto;border:2px solid var(--line);background:var(--card);display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--mut);transition:.4s}
+.anello.rotto .o{border-color:var(--r);color:var(--r);background:var(--r-bg)}
+.anello.dubbio .o{border-color:var(--o);color:var(--o);background:var(--o-bg)}
+.anello.fine .o{border-color:var(--g);color:var(--g);background:var(--g-bg)}
+.anello .t{font-size:12px;color:var(--mut);margin-top:6px}
+.campo{position:relative;height:var(--hc,170px);margin-top:10px}
+.pallino{position:absolute;width:10px;height:10px;border-radius:50%;left:0;top:0;transition:transform 1.3s cubic-bezier(.3,.9,.3,1.15);cursor:pointer}
+.pallino.PROVATO{background:var(--g)}.pallino.DEDOTTO{background:var(--b)}.pallino[data-s="DA CONFERMARE"]{background:var(--o)}.pallino.MANCANTE{background:var(--r)}
+.pallino.spento{opacity:.18}
+.grappolo{position:absolute;text-align:center;font-size:12px;line-height:1.3;padding:6px;border-radius:10px;cursor:pointer;opacity:0;transition:opacity .5s,background .2s;width:15%}
+.grappolo.on{opacity:1}.grappolo:hover,.grappolo.sel{background:var(--fill)}
+.grappolo b{display:block;font-size:20px;letter-spacing:-.02em}
+.legenda{display:flex;gap:14px;font-size:12px;color:var(--mut);flex-wrap:wrap;margin-top:6px}
+.legenda span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;background:var(--c)}
+
+/* elenco + richieste */
+.basso{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;margin-top:14px}
+@media(max-width:860px){.basso{grid-template-columns:1fr}}
+.elenco{padding:6px 0}
+.riga{display:grid;grid-template-columns:28px minmax(0,1.3fr) 70px 112px minmax(0,1.6fr);gap:10px;align-items:center;padding:8px 14px;border-top:1px solid var(--line);font-size:13px;animation:entra .3s ease-out}
+.riga:first-child{border-top:0}
+.riga .num{color:var(--soft);font-size:12px}
+.riga .anell{display:flex;gap:3px}
+.riga .anell i{width:16px;height:6px;border-radius:3px;background:var(--line)}
+.riga .anell i.ok{background:var(--g)}.riga .anell i.ko{background:var(--r)}.riga .anell i.dub{background:var(--o)}
+.riga .mot{color:var(--mut);font-size:12.5px}
+.riga .flag{font-size:11px;color:var(--o);display:block}
+@keyframes entra{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.richieste{padding:16px}
+.rich{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px}
+.rich .chi{font-weight:600;font-size:14px}
+.rich ul{margin:6px 0 8px;padding-left:18px;font-size:13px}
+.rich .btn{height:30px;font-size:12.5px;padding:0 12px}
+details{margin-top:14px}
+summary{cursor:pointer;color:var(--mut);font-size:14px;padding:10px 0}
+.filtro{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:13px;color:var(--mut);border-bottom:1px solid var(--line)}
+.filtro button{border:0;background:none;color:var(--acc);cursor:pointer;font:inherit}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+<div class="top">
+  <div class="logo">T</div><b>CantiereLink</b><span class="crumb" id="crumb"></span><div class="sp"></div>
+  <div class="tabs" id="tabs"></div>
+</div>
+
+<section class="card esito" id="esito">
+  <div>
+    <span class="pill" id="statopill"></span>
+    <h1 id="titolo"></h1>
+    <div class="mut" id="sottotitolo"></div>
+    <div id="avvisi"></div>
+    <div class="barra" id="barra"></div>
+    <div class="conta" id="conta"></div>
+  </div>
+  <div class="acts"><button class="btn" id="principale">Scarica Excel</button><button class="btn s">Aggiungi file</button></div>
+</section>
+
+<h2>Il fascicolo, in ordine di catena</h2>
+<p class="sub">Le famiglie che servono alla catena sono in alto. Una famiglia necessaria vuota si vede subito, con le voci che ferma.</p>
+<div class="fasc" id="fasc"></div>
+<div class="fasc2" id="fasc2"></div>
+
+<h2>Dove si ferma la catena</h2>
+<p class="sub">Ogni pallino è una voce. Parte dal DDT e si ferma al primo anello che non passa. Tocca un grappolo per vedere le voci e cosa chiedere.</p>
+<div class="card catena"><div class="scena" id="scena"><div class="anelli" id="anelli"></div><div class="campo" id="campo"></div></div>
+  <div class="legenda"><span style="--c:var(--g)">provato</span><span style="--c:var(--b)">dedotto</span><span style="--c:var(--o)">da confermare</span><span style="--c:var(--r)">mancante</span></div></div>
+
+<div class="basso">
+  <div class="card elenco"><div class="filtro"><span id="ftesto"></span><button id="tutte" class="hidden">Mostra tutte</button></div><div id="elenco"></div></div>
+  <div class="card richieste"><b>Da chiedere ai fornitori</b><div class="mut">Raggruppato per fornitore e documento mancante.</div><div id="richieste"></div></div>
+</div>
+
+<details><summary>Tabella completa a 12 colonne (come nell'Excel)</summary><p class="mut">Resta disponibile, filtrata dal grappolo scelto. Nella proposta non è più la vista principale.</p></details>
+<details><summary>Dettagli della lettura (diario, pagine, token)</summary><p class="mut">Il pannello «Il documento in esame» e il diario si chiudono qui a lavoro finito.</p></details>
+</main>
+<script>
+const DATI = /*DATI*/{};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const NECESSARIE = ["packing_costruttore", "ddt", "certificato_31", "dop_ce_prodotto", "dop_costruttore"];
+const FACOLTATIVE = ["lettera_accompagnamento", "da_escludere", "illeggibile"];
+const NOMIF = {packing_costruttore: "Tabella del costruttore", ddt: "DDT", certificato_31: "Certificati 3.1", dop_ce_prodotto: "DoP e CE di prodotto",
+  dop_costruttore: "DoP del costruttore", lettera_accompagnamento: "Lettere", da_escludere: "Non pertinenti", illeggibile: "Illeggibili"};
+const ANELLO_FAM = {tabella: "packing_costruttore", ddt: "ddt", cert: "certificato_31", prove: "dop_ce_prodotto"};
+const STATI = [["PROVATO", "g", "var(--g)"], ["DEDOTTO", "b", "var(--b)"], ["DA CONFERMARE", "o", "var(--o)"], ["MANCANTE", "r", "var(--r)"]];
+const DOC = {tabella: "tabella del costruttore", ddt: "DDT di consegna", cert: "certificato 3.1", colata: "indicazione della colata", prove: "timbro sul certificato o DoP"};
+let C = null, filtro = null, giro = 0;
+
+function tabs() {
+  $("tabs").innerHTML = DATI.cantieri.map((c, i) => `<button data-i="${i}">${esc(c.vero ? c.nome + " · vero" : "Esempio inventato")}</button>`).join("");
+  [...$("tabs").children].forEach(b => b.onclick = () => apri(+b.dataset.i));
+}
+
+function apri(i) {
+  C = DATI.cantieri[i];
+  filtro = null;
+  giro++;
+  [...$("tabs").children].forEach((b, j) => b.classList.toggle("on", i === j));
+  // se manca la tabella del costruttore, ogni voce si ferma lì prima ancora del DDT: è il primo anello
+  C.voci.forEach(v => v.tappa = v.anello);
+  esito();
+  fascicolo();
+  grappoli();
+  elenco();
+  richieste();
+}
+
+/* ---------- un solo stato, esito onesto ---------- */
+function esito() {
+  const n = C.voci.length, conta = {};
+  C.voci.forEach(v => conta[v.stato] = (conta[v.stato] || 0) + 1);
+  const dasist = n - (conta.PROVATO || 0);
+  const perAnello = {};
+  C.voci.filter(v => v.anello !== "ok").forEach(v => (perAnello[v.anello] ||= []).push(v));
+  const primo = Object.entries(perAnello).sort((a, b) => b[1].length - a[1].length)[0];
+  $("crumb").innerHTML = `/ <b>${esc(C.nome)}</b>`;
+  $("statopill").className = "pill " + (dasist ? (conta.MANCANTE ? "r" : "o") : "g");
+  $("statopill").textContent = "Completato · " + (dasist ? "da sistemare" : "tracciabilità provata");
+  $("titolo").textContent = dasist ? `${dasist} voci su ${n} da sistemare` : `Tutte le ${n} voci provate`;
+  $("sottotitolo").textContent = primo
+    ? `${primo[1].length} si fermano a «${DATI.nomi_anelli[primo[0]]}»: ${primo[1][0].motivo}.`
+    : "Ogni dato ha il collegamento alla pagina da cui viene.";
+  let av = "";
+  if (C.avviso_packing)
+    av += `<div class="avviso o"><b>Tabella del costruttore non trovata.</b> Le voci sono ricavate dai DDT. <button class="btn s">Aggiungi la tabella</button></div>`;
+  const intest = C.voci.filter(v => v.intestazione);
+  if (intest.length)
+    av += `<div class="avviso o">${intest.length} voci sembrano intestazioni del DDT, non materiali (es. «${esc(intest[0].voce)}»). <button class="btn s">Escludile</button></div>`;
+  $("avvisi").innerHTML = av;
+  $("barra").innerHTML = STATI.map(([s, , col]) => `<i style="background:${col}" data-w="${(conta[s] || 0) / n * 100}"></i>`).join("");
+  requestAnimationFrame(() => [...$("barra").children].forEach(i => i.style.width = i.dataset.w + "%"));
+  $("conta").innerHTML = STATI.map(([s, , col]) => `<button data-s="${s}"><b style="color:${col}">${conta[s] || 0}</b>${s.toLowerCase()}</button>`).join("");
+  [...$("conta").children].forEach(b => b.onclick = () => filtra({stato: b.dataset.s}));
+  $("principale").textContent = "Scarica Excel";
+}
+
+/* ---------- fascicolo in ordine di catena, con le pagine che volano dentro ---------- */
+function fascicolo() {
+  const mio = giro;
+  const ferma = {};
+  C.voci.forEach(v => { const f = ANELLO_FAM[v.anello]; if (f) ferma[f] = (ferma[f] || 0) + 1; });
+  if (C.avviso_packing) ferma.packing_costruttore = C.voci.length;
+  $("fasc").innerHTML = NECESSARIE.map((f, i) => {
+    const n = C.famiglie[f] || 0;
+    return `<div class="card fam ${n ? "" : "manca"}" style="--fc:var(--f-${f})" id="fam-${f}">
+      <div class="h"><div class="lab">${i + 1}. ${NOMIF[f]}</div><div class="n">${n}</div></div>
+      ${n ? `<div class="pila">${"<i></i>".repeat(Math.min(n, 24))}${n > 24 ? `<em>+${n - 24}</em>` : ""}</div>`
+          : `<div class="blocca">Manca${ferma[f] ? ` · ferma ${ferma[f]} voci` : ""}</div>`}
+      ${i < NECESSARIE.length - 1 ? '<span class="freccia">→</span>' : ""}</div>`;
+  }).join("");
+  $("fasc2").innerHTML = FACOLTATIVE.map(f => `<span class="mini" style="--fc:var(--f-${f})"><i></i>${NOMIF[f]} ${C.famiglie[f] || 0}</span>`).join("");
+  // il volo delle miniature: riparte anche riaprendo un lavoro finito
+  const fogli = [...document.querySelectorAll(".pila i")];
+  fogli.forEach((f, k) => setTimeout(() => mio === giro && f.classList.add("in"), 120 + k * 28));
+}
+
+/* ---------- grappoli: ogni voce scorre lungo la catena e si ferma dove si rompe ---------- */
+function grappoli() {
+  const mio = giro;
+  const anelli = DATI.anelli;
+  const gruppi = {};
+  C.voci.forEach(v => (gruppi[v.tappa] ||= []).push(v));
+  $("anelli").innerHTML = anelli.map((a, i) => {
+    const g = gruppi[a] || [];
+    let cls = !g.length ? "" : a === "ok" ? "fine" : g.some(v => v.stato === "MANCANTE") ? "rotto" : "dubbio";
+    // senza tabella del costruttore le voci si ricavano dai DDT: l'anello 1 è saltato, non superato
+    if (a === "tabella" && C.avviso_packing) cls = "dubbio";
+    const nota = a === "tabella" && C.avviso_packing ? '<div class="t" style="color:var(--o)">saltato: voci dai DDT</div>' : "";
+    return `<div class="anello ${cls}" id="an-${a}"><div class="o">${a === "ok" ? "✓" : i + 1}</div><div class="t">${DATI.nomi_anelli[a]}</div>${nota}</div>`;
+  }).join("");
+  const campo = $("campo");
+  campo.innerHTML = "";
+  const W = $("scena").clientWidth, col = W / anelli.length;
+  const per = Math.max(4, Math.floor((col - 24) / 14));
+  const righeMax = Math.max(...anelli.map(a => Math.ceil((gruppi[a] || []).length / per)), 1);
+  campo.style.setProperty("--hc", righeMax * 14 + 70 + "px");
+  const ordine = [...C.voci].sort((a, b) => anelli.indexOf(a.tappa) - anelli.indexOf(b.tappa));
+  const pos = {};
+  ordine.forEach((v, k) => {
+    const d = document.createElement("div");
+    d.className = "pallino " + v.stato.replace(" ", "_");
+    d.dataset.s = v.stato;
+    d.title = `${v.n}. ${v.voce} · ${v.stato} · ${v.motivo}`;
+    d.style.transform = `translate(${col * 1.5 - 5}px, -40px)`;  // partono tutti dal DDT
+    d.style.transitionDelay = (k * 0.03) + "s";
+    d.onclick = () => filtra({anello: v.tappa});
+    campo.appendChild(d);
+    const a = anelli.indexOf(v.tappa);
+    const j = pos[a] = (pos[a] || 0);
+    pos[a]++;
+    const x = col * a + col / 2 - (Math.min(per, (gruppi[v.tappa]).length) * 14) / 2 + (j % per) * 14;
+    const y = Math.floor(j / per) * 14;
+    v._dest = `translate(${x}px, ${y}px)`;
+    v._el = d;
+  });
+  requestAnimationFrame(() => requestAnimationFrame(() => C.voci.forEach(v => { if (mio === giro) v._el.style.transform = v._dest; })));
+  anelli.forEach((a, i) => {
+    const g = gruppi[a];
+    if (!g) return;
+    const l = document.createElement("div");
+    l.className = "grappolo";
+    l.dataset.a = a;
+    l.style.left = col * i + col * 0.075 + "px";
+    l.style.width = col * 0.85 + "px";
+    l.style.top = Math.ceil(g.length / per) * 14 + 6 + "px";
+    const motivi = {};
+    g.forEach(v => motivi[v.motivo] = (motivi[v.motivo] || 0) + 1);
+    const lista = Object.entries(motivi).sort((x, y) => y[1] - x[1]);
+    const mot = a === "ok" ? "catena completa"
+      : lista.length === 1 ? esc(lista[0][0]) : lista.map(([m, n]) => `${n} · ${esc(m)}`).join("<br>");
+    l.innerHTML = `<b>${g.length}</b>${mot}`;
+    l.onclick = () => filtra({anello: a});
+    campo.appendChild(l);
+    setTimeout(() => mio === giro && l.classList.add("on"), 1300 + g.length * 30);
+  });
+}
+
+/* ---------- elenco compatto: una riga per voce, gli anelli superati, il motivo ---------- */
+function filtra(f) {
+  filtro = f;
+  elenco();
+  richieste();
+  document.querySelectorAll(".grappolo").forEach(g => g.classList.toggle("sel", f && f.anello === g.dataset.a));
+  document.querySelectorAll(".conta button").forEach(b => b.classList.toggle("on", f && f.stato === b.dataset.s));
+  C.voci.forEach(v => v._el && v._el.classList.toggle("spento", !!f && !passa(v)));
+}
+function passa(v) {
+  return !filtro || (filtro.anello ? v.tappa === filtro.anello : v.stato === filtro.stato);
+}
+function elenco() {
+  const vis = C.voci.filter(passa).sort((a, b) => ["MANCANTE", "DA CONFERMARE", "DEDOTTO", "PROVATO"].indexOf(a.stato) - ["MANCANTE", "DA CONFERMARE", "DEDOTTO", "PROVATO"].indexOf(b.stato));
+  $("ftesto").textContent = filtro ? `${vis.length} voci · ${filtro.anello ? "ferme a «" + DATI.nomi_anelli[filtro.anello] + "»" : filtro.stato.toLowerCase()}` : `Tutte le ${vis.length} voci, prima quelle da sistemare`;
+  $("tutte").style.display = filtro ? "" : "none";
+  $("tutte").onclick = () => filtra(null);
+  const an = DATI.anelli.slice(0, 5);
+  $("elenco").innerHTML = vis.slice(0, 60).map(v => {
+    const stop = DATI.anelli.indexOf(v.tappa);
+    const tacche = an.map((a, i) => `<i class="${i === 0 && C.avviso_packing ? "dub" : i < stop || v.tappa === "ok" ? "ok" : i === stop ? (v.stato === "MANCANTE" ? "ko" : "dub") : ""}"></i>`).join("");
+    const cls = STATI.find(s => s[0] === v.stato)[1];
+    return `<div class="riga"><span class="num">${v.n ?? ""}</span><span>${esc(v.voce)}${v.intestazione ? '<span class="flag">sembra un\'intestazione del DDT</span>' : ""}</span>
+      <span class="mut">DDT ${esc(v.ddt || "—")}</span><span class="anell" title="${esc(DATI.nomi_anelli[v.tappa])}">${tacche}</span>
+      <span class="mot"><span class="pill ${cls}">${v.stato}</span> ${v.stato === "PROVATO" ? "" : esc(v.motivo)}</span></div>`;
+  }).join("") + (vis.length > 60 ? `<div class="riga"><span></span><span class="mut">… altre ${vis.length - 60}</span></div>` : "");
+}
+
+/* ---------- richieste ai fornitori: cosa chiedere, a chi, per quali DDT ---------- */
+function richieste() {
+  const gruppi = {};
+  C.voci.filter(v => v.anello !== "ok" && v.stato !== "DEDOTTO" && passa(v)).forEach(v => {
+    const chi = v.fornitore || "Fornitore non indicato";
+    const k = chi + "|" + v.anello;
+    (gruppi[k] ||= {chi, anello: v.anello, voci: []}).voci.push(v);
+  });
+  const per = {};
+  Object.values(gruppi).forEach(g => (per[g.chi] ||= []).push(g));
+  const html = Object.entries(per).map(([chi, gs]) => {
+    const testo = gs.map(g => `${DOC[g.anello] || "documento"} per ${g.voci.length} voci (DDT ${[...new Set(g.voci.map(v => v.ddt))].join(", ")})`);
+    return `<div class="rich"><div class="chi">${esc(chi)}</div><ul>${testo.map(t => `<li>${esc(t)}</li>`).join("")}</ul>
+      <button class="btn s" data-t="${esc("Buongiorno, per la tracciabilità del cantiere ci servono: " + testo.join("; ") + ". Grazie.")}">Copia richiesta</button></div>`;
+  }).join("");
+  $("richieste").innerHTML = html || `<p class="mut">Niente da chiedere${filtro ? " per questa selezione" : ""}.</p>`;
+  $("richieste").querySelectorAll("button").forEach(b => b.onclick = () => {
+    navigator.clipboard?.writeText(b.dataset.t).catch(() => {});
+    b.textContent = "Copiata";
+  });
+}
+
+tabs();
+apri(0);
+let attesa;
+addEventListener("resize", () => { clearTimeout(attesa); attesa = setTimeout(() => C && grappoli(), 200); });
+</script>
+</body>
+</html>
