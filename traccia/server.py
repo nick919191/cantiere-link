@@ -376,11 +376,18 @@ def restore_job(key: str):
 class UpdatePreferences(BaseModel):
     automatic: bool
     dismissed: str = Field(default="", max_length=40)
+    prova: bool | None = None  # anche le versioni di prova; None = lascia com'è
 
 
 @app.put("/api/aggiornamenti/preferenze")
 def update_preferences(choice: UpdatePreferences):
-    configurazione.aggiorna({"update_checks": choice.automatic, "dismissed_update": choice.dismissed})
+    prima = aggiornamenti.anteprime()
+    valori = {"update_checks": choice.automatic, "dismissed_update": choice.dismissed}
+    if choice.prova is not None:
+        valori["update_prerelease"] = choice.prova
+    configurazione.aggiorna(valori)
+    if choice.prova is not None and choice.prova != prima:
+        threading.Thread(target=lambda: aggiornamenti.check(force=True), daemon=True).start()
     return aggiornamenti.status()
 
 

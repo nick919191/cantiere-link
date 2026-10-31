@@ -58,6 +58,7 @@ def aggiorna(value: dict) -> dict:
             "modello_mistral",
             "modello_deepseek",
             "update_checks",
+            "update_prerelease",
             "dismissed_update",
         ):
             if name in value:

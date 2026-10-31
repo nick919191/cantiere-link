@@ -1,4 +1,4 @@
-"""Versioni GitHub stabili, installate separatamente e attivate solo su richiesta."""
+"""Versioni GitHub (stabili, e di prova se l'utente lo sceglie), installate separatamente e attivate su richiesta."""
 
 import hashlib
 import json
@@ -87,6 +87,7 @@ def status():
         version=VERSIONE_APP,
         repository=metadata()["repository"],
         automatic=configurazione.leggi().get("update_checks", True),
+        prova=anteprime(),
         dismissed=configurazione.leggi().get("dismissed_update", ""),
         next_version=active.get("version") if active else None,
         restart=bool(active and active["version"] != VERSIONE_APP)
@@ -112,8 +113,13 @@ def version(value):
     return tuple(int(x) for x in value.removeprefix("v").split("."))
 
 
-def parse_release(data, repo):
-    if data.get("draft") or data.get("prerelease"):
+def anteprime() -> bool:
+    """L'utente vuole sapere anche delle versioni di prova (pre-release su GitHub)."""
+    return bool(configurazione.leggi().get("update_prerelease", False))
+
+
+def parse_release(data, repo, prova=False):
+    if data.get("draft") or (data.get("prerelease") and not prova):
         return None
     tag = data.get("tag_name", "")
     if version(tag) <= version(VERSIONE_APP):
@@ -139,6 +145,7 @@ def parse_release(data, repo):
         "notes": str(data.get("body") or "Nessuna nota di rilascio.")[:12000],
         "page": f"https://github.com/{repo}/releases/tag/{tag}",
         "filename": name,
+        "prova": bool(data.get("prerelease")),
     }
 
 
@@ -146,9 +153,12 @@ def _fetch():
     repo = metadata()["repository"]
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
         raise UpdateError("Repository degli aggiornamenti non configurato.")
+    prova = anteprime()
+    # releases/latest dà solo l'ultima stabile; con le versioni di prova serve l'elenco
+    indirizzo = f"https://api.github.com/repos/{repo}/releases" + ("?per_page=15" if prova else "/latest")
     try:
         response = httpx.get(
-            f"https://api.github.com/repos/{repo}/releases/latest",
+            indirizzo,
             timeout=20,
             headers={"Accept": "application/vnd.github+json", "User-Agent": "CantiereLink"},
         )
@@ -157,8 +167,22 @@ def _fetch():
         if response.status_code in (403, 429):
             raise UpdateError("Controllo temporaneamente limitato da GitHub. Riprova più tardi.")
         response.raise_for_status()
-        item = parse_release(response.json(), repo)
-        return item, "Nuova versione disponibile." if item else "Stai usando una versione aggiornata."
+        if prova:
+            elenco = [r for r in response.json() if isinstance(r, dict) and not r.get("draft")]
+            valide = []
+            for r in elenco:
+                try:
+                    valide.append((version(r.get("tag_name", "")), r))
+                except UpdateError:
+                    continue
+            if not valide:
+                return None, "Stai usando una versione aggiornata."
+            item = parse_release(max(valide, key=lambda x: x[0])[1], repo, prova=True)
+        else:
+            item = parse_release(response.json(), repo)
+        if not item:
+            return None, "Stai usando una versione aggiornata."
+        return item, "Nuova versione di prova disponibile." if item["prova"] else "Nuova versione disponibile."
     except (httpx.HTTPError, ValueError) as exc:
         raise UpdateError(
             "Impossibile controllare gli aggiornamenti. La versione installata resta utilizzabile."
@@ -173,7 +197,11 @@ def check(force=False):
         if not force and (
             not configurazione.leggi().get("update_checks", True) or time.time() - cache.get("time", 0) < INTERVAL
         ):
-            if cache.get("version") == VERSIONE_APP and cache.get("repository") == metadata()["repository"]:
+            if (
+                cache.get("version") == VERSIONE_APP
+                and cache.get("repository") == metadata()["repository"]
+                and cache.get("prova", False) == anteprime()
+            ):
                 _state.update(
                     available=cache.get("available"), checked_at=cache.get("time"), message=cache.get("message", "")
                 )
@@ -192,6 +220,7 @@ def check(force=False):
                 "version": VERSIONE_APP,
                 "repository": metadata()["repository"],
                 "message": message,
+                "prova": anteprime(),
             },
         )
     except UpdateError as exc:

@@ -276,3 +276,28 @@ def test_native_download_never_runs_installer_without_second_action(updates, tmp
     with pytest.raises(upd.UpdateError):
         upd.open_installer()
     assert len(calls) == 1
+
+
+def test_versioni_di_prova_solo_se_scelte(updates, monkeypatch):
+    import httpx
+
+    from traccia import configurazione
+
+    repo = upd.metadata()["repository"]
+    prova = release("0.9.1") | {"prerelease": True}
+    assert upd.parse_release(prova, repo) is None
+    assert upd.parse_release(prova, repo, prova=True)["prova"] is True
+    indirizzi = []
+
+    def get(url, **kw):
+        indirizzi.append(url)
+        if url.endswith("/latest"):
+            return httpx.Response(200, json=release("0.9.0"), request=httpx.Request("GET", url))
+        return httpx.Response(200, json=[release("0.9.0"), prova], request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(upd.httpx, "get", get)
+    item, messaggio = upd._fetch()
+    assert item["version"] == "0.9.0" and indirizzi[-1].endswith("/latest")  # predefinito: solo stabili
+    configurazione.aggiorna({"update_prerelease": True})
+    item, messaggio = upd._fetch()
+    assert item["version"] == "0.9.1" and item["prova"] and "prova" in messaggio
