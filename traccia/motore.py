@@ -18,7 +18,7 @@ import json
 
 from . import normalizza as nz
 
-VERSIONE = "0.6.0"
+VERSIONE = "0.6.1"
 PENNA_VALE_COME_PROVA = False
 
 STESSO = ("uguale", "serie")  # '5678' e '5678/1' sono lo stesso DDT (suffisso di serie), con avviso
@@ -45,8 +45,9 @@ def _tetto(stato: str, massimo: str) -> str:
     return stato if ORDINE[stato] >= ORDINE[massimo] else massimo
 
 
-def _c(v: str, *fonti) -> dict:
-    return {"v": v, "fonti": [f for f in fonti if f]}
+def _c(v: str, *fonti, perche: str = "") -> dict:
+    """Cella: valore, fonti (id in prove["fonti"]) e perché il motore ha messo lì quel dato (vista a tabella)."""
+    return {"v": v, "fonti": [f for f in fonti if f], "perche": perche}
 
 
 def _stessa(a: str, b: str) -> bool:
@@ -415,20 +416,33 @@ def _cantiere(prove: dict) -> dict:
         pezzi = [f"DoP n. {dop.get('numero_dop', '')}" + (f" del {dop['data']}" if dop.get("data") else "")]
         pezzi += [f"CE {dop['cpr']}"] if dop.get("cpr") else []
         pezzi += [x for x in (dop.get("norma"), dop.get("classe_esecuzione")) if x]
-        ce = _c("; ".join(pezzi), dop["fonti"].get("numero_dop"), dop["fonti"].get("cpr"))
+        ce = _c(
+            "; ".join(pezzi),
+            dop["fonti"].get("numero_dop"),
+            dop["fonti"].get("cpr"),
+            perche="DoP del costruttore trovata nel fascicolo, con lo stesso fabbricante.",
+        )
     else:
-        ce = _c(NON_PRESENTE)
+        ce = _c(NON_PRESENTE, perche="Nel fascicolo non c'è una DoP del costruttore.")
     ddt_costr = [d for d in prove["ddt"] if d["tipo"] == "costruttore_cliente"]
     ddt_c = (
         _c(
             "; ".join(f"DDT n. {d['numero']} del {d['data']}" for d in ddt_costr),
             *[d["fonti"].get("numero") for d in ddt_costr],
+            perche="DDT con cui il costruttore ha consegnato il materiale al cliente, trovati nel fascicolo.",
         )
         if ddt_costr
-        else _c(NON_PRESENTE)
+        else _c(NON_PRESENTE, perche="Nel fascicolo non ci sono DDT del costruttore al cliente.")
     )
     fonti_costr = [fid for fid, f in prove["fonti"].items() if costr and _stessa(f["valore"], costr)]
-    return {"costruttore": _c(costr or "Non individuato", *fonti_costr), "ce": ce, "ddt": ddt_c}
+    costruttore = _c(
+        costr or "Non individuato",
+        *fonti_costr,
+        perche="Chi ha preparato la tabella (packing) dei materiali o ha emesso i DDT al cliente."
+        if costr
+        else "Nessun documento indica con sicurezza il costruttore.",
+    )
+    return {"costruttore": costruttore, "ce": ce, "ddt": ddt_c}
 
 
 def _dop_del_certificato(prove: dict, cert: dict) -> list[dict]:
@@ -452,48 +466,100 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
     cert, rc, doc = dec["cert"], dec["colata"], dec["ddt"]
     vf = voce["fonti"]
     if cert:
-        produttore = _c(cert["produttore"], cert["fonti"].get("produttore"))
+        produttore = _c(
+            cert["produttore"],
+            cert["fonti"].get("produttore"),
+            perche="Acciaieria che ha emesso il certificato 3.1 collegato a questa voce.",
+        )
         numero = _c(
             f"{cert['numero']} del {cert['data']}" if cert["data"] else cert["numero"],
             cert["fonti"].get("numero"),
             cert["fonti"].get("data"),
+            perche="Certificato 3.1 collegato alla voce: è quello dichiarato dal costruttore (cercato per numero)"
+            if voce["certificato"]
+            else "Certificato 3.1 collegato alla voce: ha una riga con lo stesso profilo e la stessa qualità.",
         )
         pezzi = [(v, f) for v, f in cert["ce_dop"]]
         for d in _dop_del_certificato(prove, cert):
             testo = "DoP" + (f" {d['numero_dop']}" if d.get("numero_dop") else f" (DDT acciaieria {d['ddt_citato']})")
             testo += f", {d['norma']}" if d.get("norma") else ""
             pezzi.append((testo, d["fonti"].get("numero_dop") or d["fonti"].get("ddt_citato")))
-        ce = _c("; ".join(v for v, _ in pezzi) or NON_PRESENTE, *[f for _, f in pezzi])
+        ce = _c(
+            "; ".join(v for v, _ in pezzi) or NON_PRESENTE,
+            *[f for _, f in pezzi],
+            perche="Marcatura CE e DoP stampate sul certificato, più le DoP collegate per numero o per DDT"
+            " dell'acciaieria."
+            if pezzi
+            else "Né il certificato né il fascicolo riportano una DoP dell'acciaieria.",
+        )
     elif voce["certificato"]:
         produttore = _c(
-            f"{voce['emesso_da']} (dichiarato dal costruttore)" if voce["emesso_da"] else "", vf.get("emesso_da")
+            f"{voce['emesso_da']} (dichiarato dal costruttore)" if voce["emesso_da"] else "",
+            vf.get("emesso_da"),
+            perche="Il certificato non è nel fascicolo: è il produttore scritto dal costruttore nella sua tabella.",
         )
         data = f" del {voce['data_certificato']}" if voce["data_certificato"] else ""
-        numero = _c(f"{voce['certificato']}{data} - non nel fascicolo", vf.get("certificato"))
-        ce = _c(NON_PRESENTE)
+        numero = _c(
+            f"{voce['certificato']}{data} - non nel fascicolo",
+            vf.get("certificato"),
+            perche="Il costruttore dichiara questo certificato, ma nel fascicolo non c'è: va chiesto al fornitore.",
+        )
+        ce = _c(NON_PRESENTE, perche="Senza certificato non si può collegare una DoP dell'acciaieria.")
     else:
-        produttore, numero, ce = _c(NON_PRESENTE), _c(NON_PRESENTE), _c(NON_PRESENTE)
+        nessuno = "Nessun certificato dichiarato o trovato per questa voce."
+        produttore, numero, ce = (
+            _c(NON_PRESENTE, perche=nessuno),
+            _c(NON_PRESENTE, perche=nessuno),
+            _c(NON_PRESENTE, perche=nessuno),
+        )
     if rc:
-        tipo = _c(rc["qualita"], rc["fonti"].get("qualita"))
+        tipo = _c(
+            rc["qualita"],
+            rc["fonti"].get("qualita"),
+            perche="Qualità della riga del certificato da cui viene la colata.",
+        )
     elif dec["righe_cert"]:
-        tipo = _c(dec["righe_cert"][0]["qualita"], dec["righe_cert"][0]["fonti"].get("qualita"))
+        tipo = _c(
+            dec["righe_cert"][0]["qualita"],
+            dec["righe_cert"][0]["fonti"].get("qualita"),
+            perche="Qualità della prima riga del certificato con questo profilo.",
+        )
     elif voce.get("qualita"):
-        tipo = _c(f"{voce['qualita']} (dichiarato)", vf.get("qualita"))
+        tipo = _c(
+            f"{voce['qualita']} (dichiarato)",
+            vf.get("qualita"),
+            perche="Qualità scritta dal costruttore: nessun certificato la conferma.",
+        )
     else:
-        tipo = _c((dec["riga_ddt"] or {}).get("qualita", ""), (dec["riga_ddt"] or {}).get("fonti", {}).get("qualita"))
+        tipo = _c(
+            (dec["riga_ddt"] or {}).get("qualita", ""),
+            (dec["riga_ddt"] or {}).get("fonti", {}).get("qualita"),
+            perche="Qualità scritta sulla riga del DDT." if dec["riga_ddt"] else "Qualità non trovata.",
+        )
     commerciante = (
-        _c(doc["emittente"], doc["fonti"].get("emittente")) if doc else _c(voce["fornito_da"], vf.get("fornito_da"))
+        _c(doc["emittente"], doc["fonti"].get("emittente"), perche="Chi ha emesso il DDT collegato a questa voce.")
+        if doc
+        else _c(
+            voce["fornito_da"], vf.get("fornito_da"), perche="Fornitore indicato dal costruttore nella sua tabella."
+        )
     )
     if doc:
         ddt = _c(
             f"DDT n. {doc['numero']}" + (f" del {doc['data']}" if doc["data"] else ""),
             doc["fonti"].get("numero"),
             doc["fonti"].get("data"),
+            perche="DDT con cui il materiale è arrivato al costruttore: è il numero citato nella sua tabella"
+            if voce["ddt"]
+            else "DDT con cui il materiale è arrivato al costruttore: ha una riga con lo stesso profilo.",
         )
     elif voce["ddt"]:
-        ddt = _c(f"DDT n. {voce['ddt']} - non nel fascicolo", vf.get("ddt"))
+        ddt = _c(
+            f"DDT n. {voce['ddt']} - non nel fascicolo",
+            vf.get("ddt"),
+            perche="Il costruttore cita questo DDT, ma nel fascicolo non c'è.",
+        )
     else:
-        ddt = _c(NON_PRESENTE)
+        ddt = _c(NON_PRESENTE, perche="Nessun DDT trovato per questa voce.")
     centro = next(
         (
             d
@@ -505,19 +571,40 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
     titolo = voce["parte_opera"]
     return {
         "PRODUTTORE": produttore,
-        "COLATA": _c(rc["colata"], rc["fonti"].get("colata")) if rc else _c(""),
+        "COLATA": _c(
+            rc["colata"],
+            rc["fonti"].get("colata"),
+            perche="Colata della riga del certificato con lo stesso profilo e la stessa qualità della voce.",
+        )
+        if rc
+        else _c(
+            "",
+            perche="Il certificato ha più colate possibili per questo profilo: va scelta sull'originale."
+            if dec["colate_possibili"]
+            else "Senza una riga del certificato corrispondente la colata non si può ricavare.",
+        ),
         "TIPO DI ACCIAIO": tipo,
         "CE/DoP ACCIAIERIA": ce,
         "CERT 3.1 ACCIAIERIA": numero,
         "COMMERCIANTE / CENTRO TRASF.": commerciante,
-        "CE/DoP CENTRO": _c(f"DoP {centro.get('numero_dop', '')}", centro["fonti"].get("numero_dop"))
+        "CE/DoP CENTRO": _c(
+            f"DoP {centro.get('numero_dop', '')}",
+            centro["fonti"].get("numero_dop"),
+            perche="DoP di prodotto emessa dallo stesso commerciante o centro di trasformazione.",
+        )
         if centro
-        else _c(NON_PRESENTE),
+        else _c(NON_PRESENTE, perche="Nessuna DoP del commerciante nel fascicolo."),
         "DDT COMMERCIANTE": ddt,
         "COSTRUTTORE": cantiere["costruttore"],
         "CE/DoP COSTRUTTORE": cantiere["ce"],
         "DDT COSTRUTTORE": cantiere["ddt"],
-        "PARTE D'OPERA": _c(f"{titolo} - {voce['etichetta']}" if titolo else voce["etichetta"], vf.get("materiale")),
+        "PARTE D'OPERA": _c(
+            f"{titolo} - {voce['etichetta']}" if titolo else voce["etichetta"],
+            vf.get("materiale"),
+            perche="Voce presa dalla tabella del costruttore."
+            if voce["origine"] != "dai_ddt"
+            else "Manca la tabella del costruttore: voce presa dai DDT che ha ricevuto.",
+        ),
     }
 
 

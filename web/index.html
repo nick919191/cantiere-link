@@ -102,6 +102,17 @@ input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px va
 .stato{border-radius:12px;padding:14px}.stato .v{font-size:28px;font-weight:700}.stato .l{font-size:12px}
 .note{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;margin-top:14px;line-height:1.45}
 .tabwrap{overflow-x:auto}
+table.dati td.cella{cursor:pointer;vertical-align:top}table.dati td.cella:hover{background:var(--fill)}
+table.dati td.sel{outline:2px solid var(--hl);outline-offset:-2px;border-radius:4px}
+table.dati .doc{display:block;margin-top:3px;font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+table.dati .doc:hover{text-decoration:underline}table.dati .vuoto{color:var(--soft)}
+.dettaglio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;padding:16px;margin:12px 0 18px}
+.dettaglio .pagina{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;align-self:start}
+.dettaglio .pagina img{display:block;width:100%}.dettaglio .vuota{padding:40px 16px;color:var(--muted);text-align:center}
+.dettaglio h3{margin:0 0 6px;font-size:15px}.dettaglio .k{color:var(--muted);font-size:12px;margin-top:12px}
+.dettaglio .cit{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--fill);padding:6px 8px;border-radius:6px;white-space:pre-wrap}
+.dettaglio .schede{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+@media(max-width:900px){.dettaglio{grid-template-columns:1fr}}
 table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1900px}
 td{min-width:120px}td:first-child{min-width:40px}td.nota{min-width:380px}
 .fermo .scan{display:none}
@@ -270,9 +281,16 @@ td.src:hover{background:var(--accent-bg)}
             <div class="acts">
               <button class="btn" id="scarica" onclick="safe(()=>scaricaFile('scarica'))"><svg class="ic"><use href="#down"/></svg>Scarica Excel e prove</button>
               <button class="btn s" id="riordina" onclick="safe(()=>scaricaFile('fascicolo-ordinato'))"><svg class="ic"><use href="#fold"/></svg>ZIP con i documenti in ordine</button>
+              <button class="btn s" id="vedi-tabella" onclick="safe(mostraTabella)">▦ Vedi tabella</button>
             </div>
             <div class="note"><svg class="ic"><use href="#info"/></svg>Lettura e riconoscimento sono automatici e possono contenere errori. Verifica sempre l'Excel con i documenti originali.</div>
           </div>
+          <section class="hidden" id="tabella-dati" aria-label="Tabella dei dati">
+            <h2>Tabella dei dati</h2>
+            <p class="sub">Clicca una cella: sotto vedi la pagina con il dato evidenziato e perché è stato usato. Clicca 📄 per aprire il documento originale.</p>
+            <div class="card tabwrap"><table class="dati" id="tdati"></table></div>
+            <div class="card dettaglio" id="dettaglio"></div>
+          </section>
           <div class="card stati" id="stati"></div>
           <h2>Da chiedere ai fornitori</h2>
           <div class="fornitori" id="fornitori"></div>
@@ -507,6 +525,34 @@ function apri(url,titolo){$("mtitle").textContent=titolo;$("mopen").href=url;$("
 function chiudi(){$("modal").classList.remove("on");$("mframe").src="about:blank"}
 $("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};document.onkeydown=e=>{if(e.key==="Escape")chiudi()};
 
+/* ---------- tabella dei dati (versione A): cella -> pagina evidenziata, documento e perché ---------- */
+let tab=null,celSel=null;
+const corto=f=>String(f||"").split("/").pop();
+async function mostraTabella(){const sez=$("tabella-dati");
+ if(!sez.classList.contains("hidden")){sez.classList.add("hidden");$("vedi-tabella").textContent="▦ Vedi tabella";return}
+ tab=await api(`/api/lavori/${L}/tabella`);sez.classList.remove("hidden");$("vedi-tabella").textContent="▦ Nascondi tabella";
+ const docLink=d=>`<a class="doc" href="#" title="Apri il documento originale" onclick="event.stopPropagation();apriOriginale('${d.pid}',${Number(d.pagina)||1},'${esc(corto(d.file)).replace(/'/g,"\\'")}');return false">📄 ${esc(corto(d.file))} · p. ${d.pagina}</a>`;
+ $("tdati").innerHTML=`<tr><th>N</th><th>Voce</th><th>Stato</th>${tab.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>`+
+  tab.voci.map((v,i)=>`<tr><td>${v.n}</td><td>${esc(v.voce)}</td><td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td>${tab.colonne.map(c=>{const x=v.celle[c]||{v:"",documenti:[]};
+   return `<td class="cella" data-i="${i}" data-c="${esc(c)}">${x.v?esc(x.v):'<span class="vuoto">—</span>'}${x.documenti.slice(0,2).map(docLink).join("")}</td>`}).join("")}</tr>`).join("");
+ $("tdati").onclick=e=>{const td=e.target.closest("td.cella");if(td)scegliCella(td)};
+ const prima=$("tdati").querySelector('td.cella[data-c="COLATA"]')||$("tdati").querySelector("td.cella");
+ if(prima)scegliCella(prima);else $("dettaglio").innerHTML='<div class="note">Nessuna voce nel risultato.</div>';
+ sez.scrollIntoView({behavior:"smooth",block:"start"})}
+function scegliCella(td){$("tdati").querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));td.classList.add("sel");
+ const v=tab.voci[td.dataset.i],c=td.dataset.c;celSel={v,c,k:0};dettaglio()}
+function dettaglio(){const {v,c,k}=celSel,x=v.celle[c]||{v:"",perche:"",documenti:[]},d=x.documenti[k];
+ const pagina=d?`<div class="pagina"><img src="/api/lavori/${L}/pagine/${d.pid}.png" alt="pagina">${d.zona&&d.zona.length===4?`<div class="box" style="left:${d.zona[0]/10}%;top:${d.zona[1]/10}%;width:${(d.zona[2]-d.zona[0])/10}%;height:${(d.zona[3]-d.zona[1])/10}%"></div>`:""}</div>`
+  :'<div class="pagina"><div class="vuota">Per questo dato non c\'è una pagina nel fascicolo.</div></div>';
+ const schede=x.documenti.length>1?`<div class="schede">${x.documenti.map((y,j)=>`<button class="btn s" style="height:28px;padding:0 10px${j===k?";border-color:var(--accent)":""}" onclick="celSel.k=${j};dettaglio()">${esc(corto(y.file))} · p. ${y.pagina}</button>`).join("")}</div>`:"";
+ $("dettaglio").innerHTML=`${pagina}<div><h3>Voce ${v.n} · ${esc(v.voce)} → ${esc(c)}</h3><span class="pill ${STATI[v.stato]}">${v.stato}</span>
+  <div class="k">Valore</div><div>${x.v?esc(x.v):"—"}</div>
+  <div class="k">Documento</div><div>${d?`<a href="#" onclick="apriOriginale('${d.pid}',${Number(d.pagina)||1},'${esc(corto(d.file)).replace(/'/g,"\\'")}');return false">📄 ${esc(d.file)} · pagina ${d.pagina} — apri il documento</a>`:"—"}</div>${schede}
+  <div class="k">Perché è stato usato</div><div>${esc(x.perche||"Risultato preparato con una versione precedente: rifai l'analisi per vedere il motivo.")}</div>
+  ${d&&d.cit?`<div class="k">Testo letto sulla pagina</div><div class="cit">${esc(d.cit)}</div>`:""}
+  ${v.note&&v.note.length?`<div class="k">Note della voce</div><div>${esc(v.note.join(" "))}</div>`:""}</div>`}
+function apriOriginale(pid,pagina,nome){apri(`/api/lavori/${L}/originale/${pid}#page=${pagina}`,`${nome} · pagina ${pagina}`)}
+
 /* ---------- risultato ---------- */
 function esito(r){const c=r.conteggio,tot=r.voci.length;let pill,cls,titolo;
  if(!tot)[pill,cls,titolo]=["Da controllare","o","Nessuna voce trovata"];
@@ -528,7 +574,7 @@ function fornitori(r){const per={};
   :`<div class="note">Nessun documento da chiedere.</div>`}
 function copiaRichiesta(i){navigator.clipboard.writeText(window._richieste[i]).then(()=>notify("Richiesta copiata: incollala in una mail al fornitore."),()=>notify("Copia non riuscita: seleziona il testo dall'Excel, foglio «Richieste ai fornitori»."))}
 async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
- ris=r;esito(r);fornitori(r);if(stato)passi();
+ ris=r;esito(r);fornitori(r);if(stato)passi();$("tabella-dati").classList.add("hidden");$("vedi-tabella").textContent="▦ Vedi tabella";
  $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("")}
 </script>
 <script src="/web/app.js"></script>

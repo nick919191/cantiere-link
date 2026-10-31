@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from . import agente, aggiornamenti, cestino, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
 from . import lavoro as lv
+from .motore import COLONNE
 from .preparazione import info_pagina, prepara
 
 
@@ -603,6 +604,48 @@ def scheda(id_lavoro: str, pid: str):
     if not info:
         raise HTTPException(404, "pagina non trovata")
     return {"pagina": info, "scheda": lv.scheda_pagina(info)}
+
+
+@app.get("/api/lavori/{id_lavoro}/tabella")
+def tabella(id_lavoro: str):
+    """Risultato in forma di tabella: per ogni cella valore, perché e documenti da cui viene (pagina e zona)."""
+    uscita = _cartella(id_lavoro) / "uscita"
+    if not (uscita / "risultato.json").exists() or not (uscita / "prove.json").exists():
+        raise HTTPException(404, "risultato non ancora pronto")
+    risultato = json.loads((uscita / "risultato.json").read_text(encoding="utf-8"))
+    fonti = json.loads((uscita / "prove.json").read_text(encoding="utf-8")).get("fonti", {})
+    voci = []
+    for v in risultato.get("voci", []):
+        celle = {}
+        for col, cella in v["colonne"].items():
+            documenti = []
+            for fid in cella.get("fonti", []):
+                f = fonti.get(fid)
+                if f and f.get("pid"):
+                    documenti.append({k: f.get(k) for k in ("pid", "file", "pagina", "cit", "zona")})
+            celle[col] = {"v": cella.get("v", ""), "perche": cella.get("perche", ""), "documenti": documenti}
+        voci.append(
+            {
+                "n": v["n"],
+                "voce": v["voce"],
+                "stato": v["stato"],
+                "note": v.get("note", []),
+                "celle": celle,
+            }
+        )
+    return {"colonne": COLONNE, "voci": voci}
+
+
+@app.get("/api/lavori/{id_lavoro}/originale/{pid}")
+def originale(id_lavoro: str, pid: str):
+    """Il file originale (PDF o immagine) da cui viene la pagina, senza modifiche."""
+    c = _cartella(id_lavoro)
+    info = next((p for p in lv.pagine(c) if p["pid"] == pid), None)
+    if not info:
+        raise HTTPException(404, "pagina non trovata")
+    f = _dentro(c / "ingresso", info["file"])
+    tipo = "application/pdf" if f.suffix.lower() == ".pdf" else None
+    return FileResponse(f, media_type=tipo, content_disposition_type="inline", filename=f.name)
 
 
 MAX_PAROLE = 400  # riquadri mostrati sulla pagina: oltre non si vede differenza e la pagina si appesantisce

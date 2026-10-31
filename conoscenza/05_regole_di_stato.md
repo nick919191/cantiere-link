@@ -33,3 +33,6 @@ candidato senza indizi -> DA CONFERMARE per esclusione; nessun candidato -> MANC
 - Mai valori inventati; anomalie (manoscritti, timbri illeggibili, documenti mancanti) = avviso esplicito.
 - Lettura incompleta ≠ MANCANTE.
 - PROVATO indica un legame scritto sui documenti; non sostituisce la verifica di un tecnico.
+
+Motore 0.6.1 (31/10/2026): stesse regole della 0.6.0; ogni cella ha in più il campo `perche` (perché il
+motore ha messo lì quel dato, o perché manca), mostrato nella vista a tabella dell'app.
