@@ -4,11 +4,11 @@
 
 Dai documenti di cantiere alla tracciabilità dei materiali da carpenteria metallica. CantiereLink collega distinta, documento di trasporto (DDT), certificato 3.1 e colata. Ogni risultato mantiene il rimando alle pagine usate per ricostruirlo.
 
-[Guida interattiva](https://nick919191.github.io/cantiere-link/docs/) · [Scarica l’app](https://github.com/nick919191/cantiere-link/releases/tag/v0.3.0) · [Installazione](#installazione) · [Primo cantiere](#il-primo-cantiere) · [Aggiornamenti](#aggiornamenti) · [Licenza](#licenza) · [Contatti](#contatti)
+[Guida interattiva](https://nick919191.github.io/cantiere-link/docs/) · [Scarica l’app](https://github.com/nick919191/cantiere-link/releases) · [Installazione](#installazione) · [Primo cantiere](#il-primo-cantiere) · [Collegare un agente](#collegare-un-agente-claude-chatgpt) · [Aggiornamenti](#aggiornamenti) · [Licenza](#licenza) · [Contatti](#contatti)
 
 La guida HTML include una catena documentale esplorabile, istruzioni Windows/Mac, schermate, percorso guidato e lettura vocale facoltativa. Puoi consultarla online, scaricare il progetto e aprire `docs/index.html`, oppure scegliere Guida interattiva nell’app. Il README qui sotto resta leggibile direttamente su GitHub, con sezioni espandibili.
 
-Versione 0.3.0 in anteprima, destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
+Versione 0.5.0 in anteprima (versione di prova), destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
 
 ## A cosa serve
 
@@ -16,8 +16,9 @@ Versione 0.3.0 in anteprima, destinata alla valutazione. Consulta gli allegati d
 - Leggere e classificare distinta, DDT, certificati, dichiarazioni e allegati.
 - Ricostruire i collegamenti fra materiale, fornitore, certificato e colata.
 - Distinguere prove, deduzioni, ambiguità e documenti mancanti.
-- Interrogare le pagine dalla chat laterale e aprire le fonti della risposta.
+- Vedere il risultato in una tabella: per ogni dato il documento, la pagina evidenziata e il perché è stato usato.
 - Esportare Excel, prove e documenti riordinati.
+- Farsi aiutare da un agente (Claude, ChatGPT o un altro che usa MCP) che comanda l’app.
 
 È pensata per studi di ingegneria, imprese e carpenterie che controllano fascicoli documentali. Il risultato aiuta la verifica tecnica; non certifica la conformità dei materiali e non sostituisce il controllo degli originali.
 
@@ -33,12 +34,12 @@ flowchart LR
 
 ## Installazione
 
-La distribuzione per utenti finali usa un installer `.exe` su Windows e un pacchetto `.dmg` su Mac. Python e librerie sono inclusi: non occorre installarli separatamente. L’interfaccia si apre nel browser locale, senza un sito remoto a cui caricare il cantiere. Serve Internet per collegare l’agente e analizzare i documenti.
+La distribuzione per utenti finali usa un installer `.exe` su Windows e un pacchetto `.dmg` su Mac. Python e librerie sono inclusi: non occorre installarli separatamente. L’interfaccia si apre nel browser locale, senza un sito remoto a cui caricare il cantiere. Serve Internet per analizzare i documenti.
 
 <details open>
 <summary>Windows — installer</summary>
 
-1. Scarica [CantiereLink-Setup-0.3.0.exe](https://github.com/nick919191/cantiere-link/releases/download/v0.3.0/CantiereLink-Setup-0.3.0.exe).
+1. Scarica `CantiereLink-Setup-VERSIONE.exe` dalla [pagina delle release](https://github.com/nick919191/cantiere-link/releases).
 2. Apri il file e completa l’installazione per il tuo utente.
 3. Apri CantiereLink dal menu Start. Puoi aggiungere un collegamento sul desktop.
 4. Per arrestare il servizio locale usa Impostazioni → Chiudi applicazione. Chiudere soltanto la scheda del browser non arresta il servizio.
@@ -66,9 +67,19 @@ Installa Python 3.12 o successivo da [python.org](https://www.python.org/downloa
 </details>
 
 <details>
-<summary>Collegare ChatGPT</summary>
+<summary>Accessi e modelli: ChatGPT, Mistral, DeepSeek</summary>
 
-Apri Impostazioni → Account e agente → Continua con ChatGPT. Completa l’accesso nel browser e autorizza l’utilizzo del piano. Puoi conservare più registrazioni e scegliere l’account attivo.
+Impostazioni → Accessi e modelli raccoglie i tre servizi. Per ognuno puoi scegliere il modello; se non lo cambi resta quello predefinito.
+
+| Servizio | Come si accede | A cosa serve | Modello predefinito |
+|---|---|---|---|
+| ChatGPT | account (piano ChatGPT) | legge le pagine e compila le schede | Automatico, ragionamento Basso |
+| Mistral OCR | chiave API | legge il testo delle scansioni: lettura molto più rapida | `mistral-ocr-latest` |
+| DeepSeek | chiave API | prima della lettura riconosce tipo di pagina e timbri; le pagine inutili non si leggono | `deepseek-flash` |
+
+ChatGPT è necessario. Mistral e DeepSeek sono facoltativi; DeepSeek lavora insieme a Mistral. Ogni chiave viene verificata prima di essere salvata (pulsante Prova la chiave) e resta nel portachiavi del sistema.
+
+Per ChatGPT: Continua con ChatGPT. Completa l’accesso nel browser e autorizza l’utilizzo del piano. Puoi conservare più registrazioni e scegliere l’account attivo.
 
 ![Account e agente: collegamento a ChatGPT](docs/assets/impostazioni.png)
 
@@ -79,15 +90,13 @@ Il collegamento segue [Sign in with ChatGPT per applicazioni open source locali]
 ## Il primo cantiere
 
 1. Inserisci un nome e carica PDF, immagini o ZIP.
-2. Attendi la preparazione locale delle pagine, poi premi Analizza / riprendi.
-3. Segui il diario. Le letture accettate vengono conservate; quelle non valide restano da verificare.
-4. Apri i collegamenti a ritroso e confronta i dati con le pagine originali.
-5. Seleziona Chiedi in chat su una voce, oppure aggiungi pagine con `+` e formula una domanda precisa.
+2. L’app prepara le pagine e avvia l’analisi da sola. Le barre mostrano ogni fase: ricevuti, preparazione, lettura e smistamento, collegamento dei documenti, Excel.
+3. Premi Ferma quando vuoi non consumare token: le pagine lette restano salvate e il cantiere non riparte finché non premi Riprendi.
+4. Usa Aggiungi file anche durante l’analisi: i file nuovi entrano in coda, quelli identici non vengono aggiunti e le pagine già lette non si rileggono.
+5. Nel risultato premi Vedi tabella: cliccando una cella vedi la pagina con il dato evidenziato, il documento originale e il perché il dato è stato usato.
 6. Scarica Excel e prove o i documenti riordinati.
 
-![Cantiere sintetico con collegamenti e chat](docs/assets/cantiere.png)
-
-Le schermate e la [demo esplorabile](demo/tracciabilita-demo.html) usano documenti inventati. La demo simula anche le risposte e il collegamento ChatGPT. L’app reale richiede un account collegato per analisi e chat.
+Le schermate e la [demo esplorabile](demo/tracciabilita-demo.html) usano documenti inventati. Le schermate sono della versione 0.3.0: alcune parti (chat, catena) non ci sono più.
 
 | Esito | Significato |
 |---|---|
@@ -99,18 +108,30 @@ Le schermate e la [demo esplorabile](demo/tracciabilita-demo.html) usano documen
 <details>
 <summary>Limiti da conoscere prima di usare i risultati</summary>
 
-- Una pagina viene richiesta una volta per ogni avvio dell’analisi. Non sono previsti tentativi aggiuntivi nascosti. Premi Riprendi per le pagine non accettate.
+- Le pagine non accettate dal controllo vengono ritentate al massimo quattro volte, poi segnalate come non lette. Dopo un errore l’analisi non riparte da sola: premi Riprendi.
 - Un fascicolo non letto completamente produce esiti provvisori. L’assenza di un documento non è accertata se alcune pagine restano irrisolte.
 - La presenza di una citazione nella trascrizione non prova che una scansione sia stata letta correttamente. Controlla l’immagine originale.
-- La chat consulta al massimo otto pagine pertinenti per domanda. Puoi indicare una voce e selezionare le fonti. Le risposte non cambiano stati, documenti o Excel.
+- Tipo di pagina, timbri e Markdown di DeepSeek sono indizi: decidono come leggere, mai i valori. Le pagine girate non vengono raddrizzate e si leggono con le istruzioni di tutti i tipi.
 - Le letture conservano versione delle istruzioni, modello e data. Le precedenti elaborazioni restano nella cartella `versioni` del cantiere.
 - Caricamento massimo: 500 MiB. Archivi: massimo 2.000 elementi, 1 GB espanso, tre livelli di annidamento.
 
 </details>
 
+## Collegare un agente (Claude, ChatGPT)
+
+Un agente sul computer può usare CantiereLink come uno strumento tramite MCP (Model Context Protocol): elencare i cantieri, crearne uno con i documenti indicati, aggiungere file, avviare o fermare l’analisi, leggere la tabella con motivo e fonte di ogni dato, preparare le richieste ai fornitori, cercare nelle pagine lette, salvare l’Excel. Gli stati restano quelli decisi dal motore.
+
+Impostazioni → Collega un agente mostra i comandi pronti da copiare per Claude Code, Claude Desktop e l’app ChatGPT per computer. Se l’app è chiusa, l’agente la apre. L’analisi consuma il piano ChatGPT e le chiavi dell’utente: l’agente la avvia solo su richiesta. ChatGPT sul web non vede i programmi del computer.
+
+```text
+# avvio del collegamento (stdin/stdout)
+CantiereLink --mcp                      # app installata
+python mcp_cantierelink.py              # dai sorgenti, con il Python della .venv
+```
+
 ## Aggiornamenti
 
-L’app controlla le release stabili di `nick919191/cantiere-link` quando è aperta, al massimo una volta al giorno. Il controllo contatta GitHub senza inviare documenti o credenziali ChatGPT. Puoi disattivarlo in Impostazioni → Aggiornamenti o premere Controlla adesso.
+L’app controlla le release di `nick919191/cantiere-link` quando è aperta, al massimo una volta al giorno: solo le stabili, oppure anche le versioni di prova se scegli Impostazioni → Aggiornamenti → Anche le versioni di prova. Il controllo contatta GitHub senza inviare documenti o credenziali ChatGPT. Puoi disattivarlo in Impostazioni → Aggiornamenti o premere Controlla adesso.
 
 Quando una nuova release è disponibile:
 
@@ -121,7 +142,7 @@ Quando una nuova release è disponibile:
 
 Interfaccia e programma vengono aggiornati insieme. I cantieri non vengono spostati, eliminati o riscritti dall’installazione. L’aggiornamento diventa attivo solo dopo la preparazione riuscita. Se fallisce, la versione in uso resta disponibile.
 
-La versione 0.3.0 è una release preliminare: il controllo automatico la esclude, perché propone soltanto release stabili. Un commit o un tag da soli non producono un aggiornamento installabile.
+Le versioni di prova (pre-release su GitHub) vengono proposte solo a chi ha scelto di riceverle. Un commit o un tag da soli non producono un aggiornamento installabile.
 
 <details>
 <summary>Tornare alla versione precedente</summary>
@@ -165,13 +186,13 @@ L’app usa l’API [GitHub Releases](https://docs.github.com/en/rest/releases/r
 
 ## Eliminare e ripristinare un cantiere
 
-Nella schermata iniziale premi Elimina sul cantiere, poi conferma Sposta nel cestino. Il cantiere scompare dai lavori, conservando originali, risultati e conversazioni. Per recuperarlo apri Cestino e premi Ripristina. Una preparazione o un’operazione dell’agente in corso impedisce la rimozione.
+Nella schermata iniziale premi Elimina sul cantiere, poi conferma Sposta nel cestino. Il cantiere scompare dai lavori, conservando originali e risultati. Per recuperarlo apri Cestino e premi Ripristina. Una preparazione o un’operazione dell’agente in corso impedisce la rimozione.
 
 Il cestino è recuperabile: continua a occupare spazio su disco. Non elimina la cache condivisa delle letture. Non è prevista una cancellazione definitiva automatica.
 
 ## Documenti e riservatezza
 
-Originali, risultati e conversazioni restano sul computer. Testo e immagini pertinenti vengono inviati a OpenAI quando avvii analisi o chat. Non si tratta di un modello interamente offline. L’app non usa un proprio server centrale; le richieste al modello usano `store: false`.
+Originali e risultati restano sul computer. Testo e immagini pertinenti vengono inviati a OpenAI quando avvii l’analisi; con le chiavi impostate, le immagini delle pagine vanno anche a Mistral (scansioni) e a DeepSeek (riconoscimento). Non si tratta di un modello interamente offline. L’app non usa un proprio server centrale; le richieste al modello usano `store: false`.
 
 | Sistema | Cartella dati predefinita |
 |---|---|
@@ -223,7 +244,7 @@ ruff format --check traccia tests tools avvia.py
 
 I test automatici usano risposte simulate. L’accesso con un account reale, il ciclo completo con una release GitHub pubblicata e il collaudo nativo su macOS restano da verificare. La configurazione della CI non dimostra che quei collaudi siano già riusciti.
 
-I comandi CLI e `.claude/` restano strumenti opzionali per il flusso precedente. Richiedono `TRACCIA_RADICE` impostata alla cartella del progetto e non vanno eseguiti contemporaneamente all’agente ChatGPT sullo stesso lavoro.
+I comandi CLI (`python -m traccia ...`, compreso `mcp`) e `.claude/` restano strumenti opzionali; il flusso di lettura con Claude Code è quello precedente. Richiedono `TRACCIA_RADICE` impostata alla cartella del progetto e non vanno eseguiti contemporaneamente all’agente ChatGPT sullo stesso lavoro.
 
 Gli esempi usano identificatori neutri: Produttore 001, Fornitore 001, Costruttore 001. Prima della pubblicazione verifica anche la cronologia Git: l’anonimizzazione del pacchetto non riscrive autori e commit precedenti.
 

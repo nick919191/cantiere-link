@@ -6,7 +6,7 @@ Per ogni pagina, prima della lettura, DeepSeek guarda l'immagine e dice:
     packing (righe con "EN 10204") e il timbro col DDT ("DDT N..." su una pagina che non è un DDT).
 Tutto è un INDIZIO: decide istruzioni e controlli della lettura, mai i valori. I valori li legge ChatGPT (blocco 2,
 in veloce.py). Il risultato si conserva in archivio/mappa per impronta della pagina: non si paga due volte.
-Verificato sulle 86 pagine Viollier: tipo giusto 83/86, righe packing 31/31, timbri col DDT 6/6.
+Verificato su un fascicolo reale di 86 pagine: tipo giusto 83/86, righe packing 31/31, timbri col DDT 6/6.
 """
 
 import hashlib
@@ -115,7 +115,7 @@ def pulisci_md(md: str) -> str:
 
 
 def righe_materiale_md(md: str, famiglia: str, troncato: bool) -> int | None:
-    """Packing: righe di tabella con "EN 10204" (sulle 31 packing Viollier = righe del PDF, 31 su 31).
+    """Packing: righe di tabella con "EN 10204" (su 31 packing di un fascicolo reale = righe del PDF, 31 su 31).
     Altri tipi o Markdown troncato: None, il conteggio non è affidabile (sui DDT non funziona)."""
     if famiglia != "packing_costruttore" or troncato or not md:
         return None
