@@ -432,6 +432,8 @@ def _testi(cartella: Path, pagine: list[dict]) -> dict[str, dict]:
             for f in as_completed(futures):
                 p = futures[f]
                 esito[p["pid"]] = {**f.result(), "nativo": False, "info": info[p["pid"]]}
+                testo = f"Testo: {p['file']} · pagina {p['pagina']}"
+                lv.evento(cartella, tipo="testo_pagina", pid=p["pid"], testo=testo)
                 fatte += 1
                 agente.avanzamento("testo", fatte, len(scansioni))
                 _messaggio(f"Testo letto: {fatte} di {len(scansioni)} pagine scansionate")

@@ -61,6 +61,12 @@ input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px va
 .page img{display:block;width:100%}
 .page .scan{position:absolute;left:0;right:0;height:16%;background:linear-gradient(transparent,rgba(0,113,227,.14),transparent);animation:scan 2.4s linear infinite;pointer-events:none}
 @keyframes scan{from{top:-16%}to{top:100%}}
+.page .w{position:absolute;background:rgba(0,113,227,.16);border-bottom:2px solid rgba(0,113,227,.55);border-radius:2px;opacity:0;animation:parola .35s forwards;pointer-events:none}
+.page .w.blocco{border:1px solid rgba(0,113,227,.5);border-bottom-width:1px;background:rgba(0,113,227,.08)}
+@keyframes parola{from{opacity:0;transform:scaleX(.3);transform-origin:left}to{opacity:1;transform:none}}
+.page .righe{position:absolute;inset:8% 10%;background:repeating-linear-gradient(transparent 0 14px,rgba(0,113,227,.12) 14px 20px);-webkit-mask:linear-gradient(#000,#000) top/100% 0 no-repeat;mask:linear-gradient(#000,#000) top/100% 0 no-repeat;animation:righe 2.4s linear infinite;pointer-events:none}
+@keyframes righe{to{-webkit-mask-size:100% 100%;mask-size:100% 100%}}
+.fermo .w{animation:none;opacity:.5}.fermo .righe{display:none}
 .box{position:absolute;border:2px solid var(--hl);background:rgba(255,159,10,.14);border-radius:4px;box-shadow:0 0 0 3px rgba(255,159,10,.18);animation:in .4s}
 .thought{margin-top:12px;font-size:13px;line-height:1.45;padding:10px 12px;border-radius:10px;background:var(--fill);min-height:42px}
 .thought b{color:var(--accent);font-weight:600}
@@ -372,8 +378,9 @@ async function aggiorna(){if(!L)return;
  // eventi
  const ev=await api(`/api/lavori/${L}/eventi?da=${ultimoEv}`).catch(()=>[]);
  ultimoEv+=ev.length;ev.forEach(evento);
+ const vista=[...ev].reverse().find(e=>e.pid&&e.tipo in FASE_PAGINA);if(vista)inEsame(vista);
  const ultimo=ev.length?ev[ev.length-1].t:null;if(ultimo)window._ultimoT=ultimo;
- $("idle").classList.toggle("hidden",!(stato.fase==="lettura"&&window._ultimoT&&Date.now()/1000-window._ultimoT>180));
+ $("idle").classList.toggle("hidden",!(stato.fase==="lettura"&&typeof agentState!=="undefined"&&agentState.busy&&agentState.job===L&&window._ultimoT&&Date.now()/1000-window._ultimoT>180));
  inizio=false;
  if(stato.fase==="pronto"&&!risultatoCaricato){risultatoCaricato=true;risultato()}}
 function img(pid){return `/api/lavori/${L}/miniature/${pid}.png`}
@@ -385,15 +392,13 @@ function vola(x){if(!$("lookpage").offsetParent){metti(x);return}const bin=$("bi
 const TIPI={ricevuti:["Ricevuti","n"],preparate:["Preparazione","g"],fermata:["Fermata","o"],ripresa:["Ripresa","b"],
  errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
 // eventi di avanzamento: aggiornano sempre la stessa riga invece di aggiungerne una per file o per pagina
-const VIVI={file:"Preparazione",pagina:"Preparazione",lettura:"Lettura",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
+const VIVI={file:"Preparazione",pagina:"Preparazione",lettura:"Lettura",testo_pagina:"Lettura del testo",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
 function rigaViva(e){let testo=e.testo||"";
  if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
  if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
  $("feed-live").innerHTML=`<time>${esc(e.ora)}</time><span class="pill b">${VIVI[e.tipo]}</span><span>${esc(testo)}</span>`;
  $("feed-live").classList.remove("hidden")}
 function evento(e){
- if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace("Claude guarda ","");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
- if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
  if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
  if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" onclick="apri('/api/ritagli/${encodeURIComponent(e.ritaglio)}','Ritaglio: ${esc(e.testo)}')">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
  if(VIVI[e.tipo]){rigaViva(e);return}
@@ -403,8 +408,21 @@ function evento(e){
  $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
  while($("feed").children.length>8)$("feed").lastChild.remove()}
 let pagMostrata=null;
+// che cosa sta facendo l'app sulla pagina: testo sotto l'immagine
+const FASE_PAGINA={pagina:["Preparazione","Divido il file in pagine e controllo il verso…"],
+ testo_pagina:["Lettura del testo","Riconosco parole e tabelle della scansione…"],
+ lettura_pagina:["Lettura","Capisco che documento è e cerco i dati: DDT, certificato, colata…"],scheda:null};
+function inEsame(e){const nome=(e.testo||"").replace(/^(Lettura|Testo): /,"");$("lookfile").textContent=nome;
+ if(e.tipo==="scheda"){const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${esc(f?f.n:e.famiglia)}.</b> ${esc(e.testo)}`;mostraPagina(e.pid,true);return}
+ const [t,d]=FASE_PAGINA[e.tipo];$("thought").innerHTML=`<b>${t}.</b> ${d}`;mostraPagina(e.pid,false)}
+const SCANSIONE_MS=2400; // un passaggio della linea di scansione (come l'animazione CSS "scan")
 async function mostraPagina(pid,conZone){const box=$("lookpage");
- if(pagMostrata!==pid){pagMostrata=pid;box.innerHTML=`<img src="/api/lavori/${L}/pagine/${pid}.png" alt="pagina"><div class="scan"></div>`}
+ if(pagMostrata!==pid){pagMostrata=pid;box.innerHTML=`<img src="/api/lavori/${L}/pagine/${pid}.png" alt="pagina"><div class="scan"></div>`;
+  // parole riconosciute: compaiono quando la linea di scansione ci passa sopra
+  api(`/api/lavori/${L}/pagine/${pid}/parole`).then(d=>{if(pagMostrata!==pid)return;
+   const html=d.riquadri.map(([x0,y0,x1,y1])=>`<div class="w${d.origine==="ocr"?" blocco":""}" style="left:${x0/10}%;top:${y0/10}%;width:${Math.max(x1-x0,4)/10}%;height:${Math.max(y1-y0,4)/10}%;animation-delay:${Math.round(y0/1000*SCANSIONE_MS)}ms"></div>`).join("");
+   box.insertAdjacentHTML("beforeend",html);
+   if(!d.riquadri.length)box.insertAdjacentHTML("beforeend",'<div class="righe"></div>')}).catch(()=>{})}
  if(!conZone)return;
  try{const d=await api(`/api/lavori/${L}/pagine/${pid}`);if(pagMostrata!==pid||!d.scheda)return;
   const zone=[];const s=d.scheda;Object.values(s.testata||{}).forEach(v=>v.v&&v.zona&&v.zona.length&&zone.push(v.zona));

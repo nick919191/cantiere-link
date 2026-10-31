@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from . import agente, aggiornamenti, cestino, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
 from . import lavoro as lv
-from .preparazione import prepara
+from .preparazione import info_pagina, prepara
 
 
 @asynccontextmanager
@@ -603,6 +603,44 @@ def scheda(id_lavoro: str, pid: str):
     if not info:
         raise HTTPException(404, "pagina non trovata")
     return {"pagina": info, "scheda": lv.scheda_pagina(info)}
+
+
+MAX_PAROLE = 400  # riquadri mostrati sulla pagina: oltre non si vede differenza e la pagina si appesantisce
+
+
+@app.get("/api/lavori/{id_lavoro}/pagine/{pid}/parole")
+def parole(id_lavoro: str, pid: str):
+    """Riquadri del testo riconosciuto (0-1000 sull'immagine), per l'animazione della lettura nel documento in esame.
+
+    Testo nativo del PDF: le parole. Scansioni: i blocchi dell'OCR Mistral, se la pagina è già passata dall'OCR.
+    """
+    c = _cartella(id_lavoro)
+    if not any(p["pid"] == pid for p in lv.pagine(c)):
+        raise HTTPException(404, "pagina non trovata")
+    info = info_pagina(c, pid)
+    riquadri = [r[:4] for r in info.get("parole", [])]
+    origine = "testo" if riquadri else ""
+    if not riquadri:
+        f = ocr.file_cache(info["impronta"])
+        w, h = info.get("larghezza") or 0, info.get("altezza") or 0
+        if f.exists() and w and h:
+            for b in json.loads(f.read_text(encoding="utf-8")).get("blocchi", []):
+                try:
+                    riquadri.append(
+                        [
+                            round(1000 * b["top_left_x"] / w),
+                            round(1000 * b["top_left_y"] / h),
+                            round(1000 * b["bottom_right_x"] / w),
+                            round(1000 * b["bottom_right_y"] / h),
+                        ]
+                    )
+                except (KeyError, TypeError):
+                    continue
+            origine = "ocr" if riquadri else ""
+    if len(riquadri) > MAX_PAROLE:
+        passo = len(riquadri) / MAX_PAROLE
+        riquadri = [riquadri[int(i * passo)] for i in range(MAX_PAROLE)]
+    return {"origine": origine, "riquadri": riquadri}
 
 
 @app.get("/api/ritagli/{nome}")

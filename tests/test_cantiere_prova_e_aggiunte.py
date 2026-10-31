@@ -219,3 +219,15 @@ def test_interruzione_segnala_lo_stato(monkeypatch):
     assert "riprendi" in agente.stop()["message"]
     assert agente.stato()["stopping"] and agente._cancel.is_set()
     agente._cancel.clear()
+
+
+def test_parole_della_pagina_per_l_animazione(radice):
+    client = _client()
+    lavoro = client.post(
+        "/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["DDT 1458 HEA 200"]), "application/pdf"))]
+    ).json()["lavoro"]
+    _attendi_preparazione(client, lavoro)
+    d = client.get(f"/api/lavori/{lavoro}/pagine/p0001/parole").json()
+    assert d["origine"] == "testo" and d["riquadri"]
+    assert all(len(r) == 4 and 0 <= r[0] <= r[2] <= 1000 and 0 <= r[1] <= r[3] <= 1000 for r in d["riquadri"])
+    assert client.get(f"/api/lavori/{lavoro}/pagine/p0099/parole").status_code == 404

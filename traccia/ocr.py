@@ -75,6 +75,11 @@ def _cache(impronta: str) -> Path:
     return percorsi.archivio() / "ocr" / f"{impronta}.json"
 
 
+def file_cache(impronta: str) -> Path:
+    """File dell'OCR già fatto per questa pagina (può non esistere)."""
+    return _cache(impronta)
+
+
 def _incerte(pagina: dict) -> list[str]:
     punteggi = (pagina.get("confidence_scores") or {}).get("word_confidence_scores") or []
     out = []
