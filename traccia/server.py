@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
+from . import agente, aggiornamenti, cestino, chatgpt, chiavi, configurazione, consumi, demo_cantiere, ocr, percorsi
 from . import lavoro as lv
 from .motore import COLONNE
 from .preparazione import info_pagina, prepara
@@ -161,6 +161,41 @@ def mistral_salva(value: ChiaveMistral):
 def mistral_rimuovi():
     _idle()
     return ocr.rimuovi()
+
+
+@app.get("/api/chiavi")
+def chiavi_stato():
+    return {s: chiavi.stato(s) for s in chiavi.SERVIZI}
+
+
+class Chiave(BaseModel):
+    chiave: str = Field(min_length=1, max_length=300)
+
+
+class Modello(BaseModel):
+    modello: str = Field(default="", max_length=100)
+
+
+@app.post("/api/chiavi/{servizio}")
+def chiave_salva(servizio: str, value: Chiave):
+    _idle()
+    return chiavi.salva(servizio, value.chiave)
+
+
+@app.delete("/api/chiavi/{servizio}")
+def chiave_rimuovi(servizio: str):
+    _idle()
+    return chiavi.rimuovi(servizio)
+
+
+@app.post("/api/chiavi/{servizio}/prova")
+def chiave_prova(servizio: str):
+    return chiavi.prova(servizio)
+
+
+@app.put("/api/chiavi/{servizio}/modello")
+def chiave_modello(servizio: str, value: Modello):
+    return chiavi.imposta_modello(servizio, value.modello)
 
 
 @app.get("/api/modelli")

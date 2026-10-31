@@ -10,32 +10,17 @@ import time
 from pathlib import Path
 
 import httpx
-import keyring
 
-from . import percorsi
+from . import chiavi, percorsi
 from .chatgpt import AgentError
 
-SERVICE = "tracciabilita-materiali.mistral"
 URL = "https://api.mistral.ai/v1"
-MODELLO = "mistral-ocr-latest"
 SOGLIA_INCERTA = 0.80  # parole sotto questa sicurezza vengono segnalate al modello
 _LOCK = threading.Lock()
 
 
-def _vault():
-    backend = keyring.get_keyring()
-    if not type(backend).__module__.startswith(
-        ("keyring.backends.Windows", "keyring.backends.macOS", "keyring.backends.SecretService")
-    ):
-        raise AgentError("Portachiavi sicuro non disponibile. Abilita il portachiavi del sistema e riprova.")
-    return backend
-
-
 def _chiave() -> str:
-    try:
-        return _vault().get_password(SERVICE, "api_key") or ""
-    except AgentError:
-        return ""
+    return chiavi.chiave("mistral")
 
 
 def configurato() -> bool:
@@ -43,31 +28,17 @@ def configurato() -> bool:
 
 
 def stato() -> dict:
-    return {"configurato": configurato()}
+    return chiavi.stato("mistral") | {"configurato": configurato()}
 
 
 def salva(chiave: str) -> dict:
     """Controlla la chiave con Mistral prima di salvarla: una chiave sbagliata non entra nel portachiavi."""
-    chiave = chiave.strip()
-    if not chiave:
-        raise AgentError("Inserisci la chiave Mistral.")
-    try:
-        r = httpx.get(URL + "/models", headers={"Authorization": "Bearer " + chiave}, timeout=20)
-    except httpx.HTTPError as exc:
-        raise AgentError("Mistral non raggiungibile: controlla la connessione e riprova.") from exc
-    if r.status_code in (401, 403):
-        raise AgentError("Mistral non accetta questa chiave. Controllala su console.mistral.ai.")
-    if r.status_code != 200:
-        raise AgentError(f"Mistral ha risposto con un errore ({r.status_code}). Riprova più tardi.")
-    _vault().set_password(SERVICE, "api_key", chiave)
+    chiavi.salva("mistral", chiave)
     return stato()
 
 
 def rimuovi() -> dict:
-    try:
-        _vault().delete_password(SERVICE, "api_key")
-    except keyring.errors.PasswordDeleteError:
-        pass
+    chiavi.rimuovi("mistral")
     return stato()
 
 
@@ -100,7 +71,8 @@ def leggi(png: Path, impronta: str, client: httpx.Client) -> dict:
         "type": "image_url",
         "image_url": "data:image/png;base64," + base64.b64encode(png.read_bytes()).decode(),
     }
-    corpo = {"model": MODELLO, "document": documento, "include_blocks": True, "confidence_scores_granularity": "word"}
+    modello = chiavi.modello("mistral")
+    corpo = {"model": modello, "document": documento, "include_blocks": True, "confidence_scores_granularity": "word"}
     inizio = time.perf_counter()
     for tentativo in range(3):
         try:
@@ -133,7 +105,7 @@ def leggi(png: Path, impronta: str, client: httpx.Client) -> dict:
             for b in pagina.get("blocks") or []
         ],
         "secondi": round(time.perf_counter() - inizio, 2),
-        "modello": MODELLO,
+        "modello": modello,
     }
     with _LOCK:
         file.parent.mkdir(parents=True, exist_ok=True)

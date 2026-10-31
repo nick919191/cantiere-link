@@ -11,9 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 def senza_chiave_mistral(monkeypatch):
     """I test non usano mai la chiave Mistral del portachiavi di questo computer: con la chiave
     l'agente passerebbe alla lettura veloce e farebbe chiamate vere a pagamento."""
-    from traccia import ocr
+    from traccia import chiavi, ocr
 
     monkeypatch.setattr(ocr, "_chiave", lambda: "")
+    monkeypatch.setattr(chiavi, "chiave", lambda servizio: "")
 
 
 @pytest.fixture

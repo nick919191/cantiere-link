@@ -38,13 +38,28 @@ def leggi() -> dict:
             value["host_id"] = "urn:uuid:" + str(uuid.uuid4())
             scrivi_json(path, value)
         # "low": sulle pagine semplici il risultato è lo stesso e si risparmiano i token di ragionamento
-        return {"model": "", "reasoning": "low", "theme": "system", **value}
+        return {
+            "model": "",
+            "reasoning": "low",
+            "theme": "system",
+            "modello_mistral": "",
+            "modello_deepseek": "",
+            **value,
+        }
 
 
 def aggiorna(value: dict) -> dict:
     with LOCK:
         current = leggi()
-        for name in ("model", "reasoning", "theme", "update_checks", "dismissed_update"):
+        for name in (
+            "model",
+            "reasoning",
+            "theme",
+            "modello_mistral",
+            "modello_deepseek",
+            "update_checks",
+            "dismissed_update",
+        ):
             if name in value:
                 current[name] = value[name]
         if current["theme"] not in ("system", "light", "dark"):
