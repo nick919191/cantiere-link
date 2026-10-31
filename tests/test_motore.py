@@ -62,9 +62,11 @@ def test_ricavato_da_profilo_piu_largo_al_massimo_dedotto():
     assert v["colonne"]["COLATA"]["v"] == "H5005"
 
 
-def test_timbro_a_penna_al_massimo_da_confermare():
+def test_timbro_a_penna_dedotto_con_avviso():
     _, r = _risultato()
-    assert _voce(r, "HEA 140")["stato"] == "DA CONFERMARE"
+    v = _voce(r, "HEA 140")
+    assert v["stato"] == "DEDOTTO"
+    assert any("penna" in a for a in v["avvisi"])
 
 
 def test_ogni_valore_ha_la_sua_fonte():
@@ -121,3 +123,13 @@ def test_packing_assente_al_massimo_dedotto():
     assert r["avviso_packing"]
     assert all(v["stato"] != "PROVATO" for v in r["voci"])
     assert any(v["voce"] == "HEB 180" and v["stato"] == "DEDOTTO" for v in r["voci"])
+
+
+def test_righe_packing_senza_materiale_ne_certificato_segnalate():
+    from fascicolo_inventato import V, riga_tabella, scheda
+
+    vuota = {**riga_tabella("", "", ""), "qualita": V("S275JR")}
+    tab = scheda("packing_costruttore", {"titolo": V("Telai")}, [riga_tabella("HEB 180", "777", "200"), vuota])
+    prove = costruisci([{"pid": "p1", "file": "t.pdf", "pagina": 1}], {"p1": tab})
+    assert len(prove["packing"]) == 1
+    assert prove["packing_scartate"] == [{"pid": "p1", "indice": 1}]

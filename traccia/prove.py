@@ -70,6 +70,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
     info = {p["pid"]: p for p in pagine}
     fonti = Fonti(info)
     packing, ddt, certificati, dop_costr, dop_prod, lettere, escluse = [], [], [], [], [], [], []
+    scartate = []  # righe della packing senza materiale né certificato
     ultimo: dict[tuple[str, str], dict] = {}  # (file, famiglia) -> ultimo documento, per le pagine di seguito
 
     for p in pagine:
@@ -100,6 +101,8 @@ def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
                 )
                 if riga.get("materiale") or riga.get("certificato"):
                     packing.append(riga)
+                else:  # non porta la catena: non si usa, ma si dice (avviso nell'Excel)
+                    scartate.append({"pid": pid, "indice": i})
 
         elif fam == "ddt":
             numero = _v(t.get("numero"))
@@ -274,6 +277,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
         ],
         "costruttore": costruttore,
         "packing": packing,
+        "packing_scartate": scartate,
         "ddt": ddt,
         "certificati": certificati,
         "dop_costruttore": dop_costr,

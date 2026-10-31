@@ -132,20 +132,30 @@ def componi(cartella: Path) -> dict:
             + ", ".join(_dove([pid], info) for pid in stato["non_lette"])
             + ". Lettura incompleta."
         )
+    scartate: dict[str, int] = {}
+    for r in prove.get("packing_scartate", []):
+        scartate[r["pid"]] = scartate.get(r["pid"], 0) + 1
+    for pid, n in sorted(scartate.items()):
+        avvisi.append(
+            f"{_dove([pid], info)}: {n} righe della tabella del costruttore senza materiale né certificato, non usate "
+            "(controllare la pagina)."
+        )
     for pid, s in sorted(schede.items()):
         for a in s.get("avvisi", []):
             avvisi.append(f"{_dove([pid], info)}: {a}")
 
     metodo = [
-        "Lettura: Claude con la visione, una volta per pagina, con le istruzioni della cartella (versione "
-        f"{percorsi.versione_lettura()}); ogni valore ha pagina, citazione e zona.",
+        "I dati sono estratti dai documenti con l'intelligenza artificiale e collegati da regole automatiche: il "
+        "risultato va sempre controllato sui documenti originali.",
+        f"Ogni valore ha pagina, citazione e zona (istruzioni di lettura versione {percorsi.versione_lettura()}).",
         "Controlli Python: citazione presente nella trascrizione, valore dentro la citazione, una colata per voce.",
         "A ritroso: tabella/packing del costruttore -> DDT del commerciante -> certificato 3.1 -> colata.",
         "Una voce = certificato dichiarato + DDT + profilo/spessore; senza dichiarazione: DDT + profilo.",
         "PROVATO: certificato e DDT presenti, timbro o lettera con il numero del DDT, una sola colata.",
-        "DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, nessun timbro.",
+        "DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, senza timbro o con il numero del DDT "
+        "scritto a penna sul timbro.",
         "DA CONFERMARE: più colate, legame incerto, pagine del certificato mancanti, timbro per un altro DDT, DDT "
-        "assente, numero del DDT scritto a penna, segni a mano.",
+        "assente, segni a mano.",
         "MANCANTE: certificato dichiarato non presente; nella colonna il numero dichiarato, da chiedere al fornitore.",
         "Ogni cella con una fonte ha un collegamento alla pagina del documento con il dato evidenziato.",
     ]

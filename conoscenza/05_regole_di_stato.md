@@ -14,13 +14,14 @@ L’agente legge le pagine ma non decide gli stati. Ogni cambio delle regole ric
 | Stato | Condizione |
 |---|---|
 | **PROVATO** | certificato (dichiarato, cercato per **numero**) e DDT presenti; **timbro o lettera con il numero del DDT** sul certificato; **una sola colata** per il profilo |
-| **DEDOTTO** | certificato e DDT presenti e coerenti, una sola colata, **nessun timbro** |
+| **DEDOTTO** | certificato e DDT presenti e coerenti, una sola colata, **nessun timbro**, oppure timbro con il numero del DDT **scritto a penna** |
 | **DA CONFERMARE** | più colate; legame incerto; pagine del certificato mancanti; certificato timbrato per un **altro** DDT; DDT non nel fascicolo; numero letto diverso tra copie |
 | **MANCANTE** | il certificato dichiarato non è nel fascicolo: nella colonna il **numero dichiarato**, nelle note il fornitore a cui chiederlo. **Mai** un altro certificato con lo stesso profilo |
 
 Tetti:
 - segno a mano sulla colata (freccia, evidenziatore) -> al massimo DA CONFERMARE;
-- numero del DDT scritto a penna sul timbro -> al massimo DA CONFERMARE (`PENNA_VALE_COME_PROVA` nel motore);
+- numero del DDT scritto a penna sul timbro -> al massimo DEDOTTO, con avviso (`PENNA_VALE_COME_PROVA` nel motore).
+  Dal motore 0.6.0 (31/10/2026, Nicola): prima era DA CONFERMARE, cioè sotto il certificato senza timbro;
 - voci prese dai DDT perché manca la packing -> al massimo DEDOTTO;
 - pezzo ricavato da un profilo più largo -> al massimo DEDOTTO.
 

@@ -1,4 +1,4 @@
-"""Motore di regole 0.5.0: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.6.0: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo;
@@ -8,9 +8,9 @@ Regole (conoscenza/05_regole_di_stato.md):
 - DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, nessun timbro;
 - DA CONFERMARE: più colate, legame incerto, pagine del certificato mancanti, certificato timbrato per un altro DDT,
   DDT non nel fascicolo;
-- tetti: segno a mano sulla colata -> al massimo DA CONFERMARE; timbro scritto a penna -> al massimo DA CONFERMARE
-  (impostazione PENNA_VALE_COME_PROVA); perimetro dai DDT (packing assente) -> al massimo DEDOTTO; pezzo ricavato
-  da un profilo più largo -> al massimo DEDOTTO.
+- tetti: segno a mano sulla colata -> al massimo DA CONFERMARE; timbro con il numero del DDT scritto a penna -> al
+  massimo DEDOTTO, mai sotto il certificato senza timbro (impostazione PENNA_VALE_COME_PROVA, 0.6.0); perimetro dai
+  DDT (packing assente) -> al massimo DEDOTTO; pezzo ricavato da un profilo più largo -> al massimo DEDOTTO.
 """
 
 import hashlib
@@ -18,7 +18,7 @@ import json
 
 from . import normalizza as nz
 
-VERSIONE = "0.5.0"
+VERSIONE = "0.6.0"
 PENNA_VALE_COME_PROVA = False
 
 STESSO = ("uguale", "serie")  # '5678' e '5678/1' sono lo stesso DDT (suffisso di serie), con avviso
@@ -380,8 +380,8 @@ class Motore:
                 f"timbro di {p['chi'] or 'commerciante'} sul certificato con il DDT {p.get('ddt_citato') or ''}"
             )
             if p["a_mano"] and not PENNA_VALE_COME_PROVA:
-                avvisi.append("numero del DDT scritto a penna sul timbro: da confermare")
-                stato = DA_CONFERMARE
+                avvisi.append("numero del DDT scritto a penna sul timbro: da controllare sull'originale")
+                stato = DEDOTTO
             else:
                 stato = PROVATO
         elif altrove:
