@@ -23,7 +23,20 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chatgpt, chiavi, configurazione, consumi, demo_cantiere, ocr, percorsi
+from . import (
+    agente,
+    aggiornamenti,
+    cestino,
+    chatgpt,
+    chiavi,
+    collegamento,
+    configurazione,
+    consumi,
+    demo_cantiere,
+    ocr,
+    percorsi,
+)
+from . import cerca as ricerca
 from . import lavoro as lv
 from .motore import COLONNE
 from .preparazione import info_pagina, prepara
@@ -681,6 +694,18 @@ def originale(id_lavoro: str, pid: str):
     f = _dentro(c / "ingresso", info["file"])
     tipo = "application/pdf" if f.suffix.lower() == ".pdf" else None
     return FileResponse(f, media_type=tipo, content_disposition_type="inline", filename=f.name)
+
+
+@app.get("/api/lavori/{id_lavoro}/cerca")
+def cerca_nelle_pagine(id_lavoro: str, q: str = ""):
+    """Pagine lette che contengono le parole cercate, con estratti (per il collegamento agenti)."""
+    return ricerca.cerca(_cartella(id_lavoro), q[:300])
+
+
+@app.get("/api/collegamento")
+def collegamento_config():
+    """Comando con cui un agente (Claude, ChatGPT...) avvia il collegamento MCP su questo computer."""
+    return collegamento.configurazione()
 
 
 MAX_PAROLE = 400  # riquadri mostrati sulla pagina: oltre non si vede differenza e la pagina si appesantisce

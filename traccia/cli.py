@@ -9,6 +9,9 @@ salva ID PID                   valida la scheda scritta dal lettore e la congela
 componi ID                     prove -> motore -> Excel, prove HTML, fascicolo ordinato
 prepara ID                     (manuale) prepara di nuovo le pagine di un lavoro
 
+Collegamento per agenti:
+  mcp                            collegamento MCP su stdin/stdout (Claude, ChatGPT...)
+
 Consultazione:
   cerca ID PAROLE...             pagine lette che contengono le parole, con estratti
   scheda ID PID                  scheda salvata della pagina (trascrizione e valori)
@@ -270,6 +273,7 @@ COMANDI = {
     "salva": salva,
     "componi": componi,
     "prepara": prepara_lavoro,
+    "mcp": lambda: __import__("traccia.collegamento", fromlist=["main"]).main(),
 }
 
 

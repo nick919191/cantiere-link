@@ -15,6 +15,10 @@ if __name__ == "__main__":
     import multiprocessing
 
     multiprocessing.freeze_support()
+    if "--mcp" in sys.argv:  # collegamento per agenti: stdin/stdout, nessuna finestra
+        from traccia.collegamento import main as collegamento
+
+        sys.exit(collegamento())
     if "--smoke-test" in sys.argv:
         import json
 
