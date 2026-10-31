@@ -15,17 +15,17 @@ PORTE_DI_RISERVA = 20
 
 
 def _stato_porta(porta: int) -> str:
-    """'libera', 'nostra' (l’app è già aperta su quella porta) o 'altra'."""
+    """'libera', 'nostra' (l’app è già aperta su quella porta) o 'altra'.
+
+    Prima si prova a occupare la porta: se riesce è libera, senza attese. Il tentativo di connessione su una porta
+    chiusa costa fino a mezzo secondo su Windows, e con 20 porte rallentava ogni avvio di circa 10 secondi.
+    """
     try:
-        with socket.create_connection(("127.0.0.1", porta), timeout=0.5):
-            pass
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", porta))
+        return "libera"
     except OSError:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(("127.0.0.1", porta))
-            return "libera"
-        except OSError:
-            return "altra"
+        pass
     try:
         identity = httpx.get(f"http://127.0.0.1:{porta}/api/salute", timeout=2).json()
     except (httpx.HTTPError, ValueError):
@@ -66,13 +66,13 @@ def _finestra():
 
 
 def _attendi(url: str) -> bool:
-    for _ in range(40):
+    for _ in range(200):
         try:
             if httpx.get(url + "/api/salute", timeout=1).is_success:
                 return True
         except httpx.HTTPError:
             pass
-        threading.Event().wait(0.5)
+        threading.Event().wait(0.1)
     return False
 
 

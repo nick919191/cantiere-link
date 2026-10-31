@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import time
 from pathlib import Path
 
 from .configurazione import directory
@@ -27,10 +28,30 @@ def lavoro(id_lavoro: str) -> Path:
     return lavori() / id_lavoro
 
 
+_VERSIONE: tuple[tuple, str] | None = None  # (firma dei file, versione): si ricalcola solo se un file cambia
+_VERSIONE_CONTROLLATA = 0.0
+_VERSIONE_OGNI = 1.0  # secondi tra un controllo dei file e il successivo
+
+
 def versione_lettura() -> str:
-    """Versione delle istruzioni: cambia da sola se cambia anche un solo carattere di istruzioni/."""
+    """Versione delle istruzioni: cambia da sola se cambia anche un solo carattere di istruzioni/.
+
+    Si chiama una volta per pagina a ogni aggiornamento dello stato: rileggere tutti i file ogni volta rendeva lenta
+    la home. Al massimo una volta al secondo si guarda se un file ha cambiato nome, data o dimensione; solo allora si
+    rileggono.
+    """
+    global _VERSIONE, _VERSIONE_CONTROLLATA
+    adesso = time.monotonic()
+    if _VERSIONE and adesso - _VERSIONE_CONTROLLATA < _VERSIONE_OGNI:
+        return _VERSIONE[1]
+    file = sorted(ISTRUZIONI.rglob("*.md"))
+    firma = tuple((f.as_posix(), (st := f.stat()).st_mtime_ns, st.st_size) for f in file)
+    _VERSIONE_CONTROLLATA = adesso
+    if _VERSIONE and _VERSIONE[0] == firma:
+        return _VERSIONE[1]
     h = hashlib.sha256()
-    for f in sorted(ISTRUZIONI.rglob("*.md")):
+    for f in file:
         h.update(f.relative_to(ISTRUZIONI).as_posix().encode())
         h.update(f.read_bytes().replace(b"\r\n", b"\n"))
-    return "lettura2-" + h.hexdigest()[:10]
+    _VERSIONE = (firma, "lettura2-" + h.hexdigest()[:10])
+    return _VERSIONE[1]

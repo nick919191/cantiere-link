@@ -107,16 +107,24 @@ def scheda_pagina(p: dict) -> dict | None:
     return leggi_lettura(p["impronta"])
 
 
-def stato(cartella: Path) -> dict:
+def _letta(p: dict) -> bool:
+    """Come `scheda_pagina(p) is not None`, ma senza aprire la lettura (la home e l'impronta non ne hanno bisogno)."""
+    return bool(p.get("bianca")) or file_lettura(p["impronta"]).exists()
+
+
+def stato(cartella: Path, leggero: bool = False) -> dict:
+    """Stato del lavoro. Con `leggero` non apre le letture: niente famiglie, ma conteggi e fase uguali e veloci."""
     info = _json(cartella / "info.json", {})
     elenco = pagine(cartella)
     t = tentativi(cartella)
     per_famiglia = {f: 0 for f in FAMIGLIE}
     lette, da_leggere, non_lette, dettagli = 0, [], [], []
     for p in elenco:
-        s = scheda_pagina(p)
         voce = {"pid": p["pid"], "file": p["file"], "pagina": p["pagina"]}
-        if s:
+        if leggero and _letta(p):
+            lette += 1
+            voce.update(stato="letta")
+        elif not leggero and (s := scheda_pagina(p)):
             lette += 1
             per_famiglia[s["famiglia"]] = per_famiglia.get(s["famiglia"], 0) + 1
             voce.update(famiglia=s["famiglia"], stato="letta", orientamento=s.get("orientamento", 0))
@@ -165,7 +173,7 @@ def impronta_letture(cartella: Path) -> str:
     h = hashlib.sha256((percorsi.versione_lettura() + VERSIONE).encode())
     t = tentativi(cartella)
     for p in pagine(cartella):
-        letta = scheda_pagina(p) is not None
+        letta = _letta(p)
         h.update(f"{p['pid']}:{p['impronta']}:{letta}:{t.get(p['pid'], 0) >= MAX_TENTATIVI}".encode())
     return h.hexdigest()[:16]
 

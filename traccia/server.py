@@ -360,7 +360,7 @@ def elenco():
         try:
             if not (c / "info.json").exists():
                 continue
-            s = lv.stato(c)
+            s = lv.stato(c, leggero=True)
         except OSError:
             # Una cartella non leggibile (permessi) non deve nascondere tutti gli altri cantieri.
             continue

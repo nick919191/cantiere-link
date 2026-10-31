@@ -133,10 +133,10 @@ def test_cartella_non_leggibile_non_blocca_gli_altri_cantieri(radice, monkeypatc
     (rotto / "info.json").write_text("{}", encoding="utf-8")
     stato_vero = lv.stato
 
-    def stato_finto(cartella):
+    def stato_finto(cartella, **opzioni):
         if cartella.name.endswith("rotto"):
             raise PermissionError("accesso negato")
-        return stato_vero(cartella)
+        return stato_vero(cartella, **opzioni)
 
     monkeypatch.setattr(server.lv, "stato", stato_finto)
     assert [j["lavoro"] for j in client.get("/api/lavori").json()] == [buono["lavoro"]]
