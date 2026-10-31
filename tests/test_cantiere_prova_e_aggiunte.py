@@ -76,14 +76,46 @@ def test_aggiunta_file_conserva_pid_e_letture(radice):
     assert json.loads((cartella / "info.json").read_text(encoding="utf-8"))["file"] == ["b.pdf", "a.pdf"]
 
 
-def test_aggiunta_file_rifiutata_mentre_agente_legge_quel_cantiere(radice, monkeypatch):
+def test_aggiunta_file_accettata_mentre_agente_legge_quel_cantiere(radice, monkeypatch):
     client = _client()
     r = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))])
     lavoro = r.json()["lavoro"]
     _attendi_preparazione(client, lavoro)
     monkeypatch.setattr(server.agente, "stato", lambda: {"busy": True, "job": lavoro})
     r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("a.pdf", pdf_con_testo(["y"]), "application/pdf"))])
-    assert r.status_code == 409 and "Interrompi" in r.json()["detail"]
+    assert r.status_code == 200 and r.json()["accettati"] == ["a.pdf"]
+    assert len(_attendi_preparazione(client, lavoro)["pagine"]) == 2  # in coda: la leggerà il giro successivo
+
+
+def test_file_identico_non_si_aggiunge_due_volte(radice):
+    client = _client()
+    pdf = pdf_con_testo(["stesso contenuto"])
+    lavoro = client.post("/api/lavori", files=[("file", ("b.pdf", pdf, "application/pdf"))]).json()["lavoro"]
+    _attendi_preparazione(client, lavoro)
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("copia di b.pdf", pdf, "application/pdf"))])
+    assert r.status_code == 200 and r.json()["accettati"] == [] and r.json()["doppi"] == ["copia di b.pdf"]
+    assert len(_attendi_preparazione(client, lavoro)["pagine"]) == 1
+
+
+def test_ferma_resta_fermo_e_riprendi_toglie_il_fermo(radice, monkeypatch):
+    client = _client()
+    lavoro = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))]).json()[
+        "lavoro"
+    ]
+    _attendi_preparazione(client, lavoro)
+    cartella = radice / "lavori" / lavoro
+    monkeypatch.setattr(server.agente, "stato", lambda: {"busy": True, "job": lavoro})
+    monkeypatch.setattr(server.agente, "stop", lambda: {"message": "ok"})
+    client.post("/api/agente/interrompi")
+    assert client.get(f"/api/lavori/{lavoro}/stato").json()["fermato"] is True
+    partiti = []
+    monkeypatch.setattr(server.agente, "stato", lambda: {"busy": False, "job": None})
+    monkeypatch.setattr(server.chatgpt, "status", lambda: {"plan_enabled": True})
+    monkeypatch.setattr(server.agente, "avvia", lambda c, poi=None: partiti.append(c.name))
+    server._avvia_se_serve(lavoro)
+    assert partiti == []  # fermato dall'utente: non riparte da solo
+    client.post(f"/api/lavori/{lavoro}/analizza")
+    assert partiti == [lavoro] and not (cartella / "fermato").exists()
 
 
 def test_token_dichiarati_dal_servizio_vengono_contati(radice, monkeypatch):

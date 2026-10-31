@@ -3,6 +3,7 @@
 Il servizio locale collega il browser all’agente ChatGPT e conserva originali e risultati sul computer.
 """
 
+import hashlib
 import io
 import json
 import os
@@ -47,6 +48,8 @@ async def lifecycle(_app):
 
 app = FastAPI(title="CantiereLink", docs_url=None, redoc_url=None, lifespan=lifecycle)
 _PREPARING = set()
+_ANCORA = set()  # cantieri con file arrivati mentre la preparazione era già in corso: si ripassa
+_PREPARAZIONE: dict[str, dict] = {}  # avanzamento della preparazione: {"n": file fatti, "totale": file da fare}
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
@@ -171,16 +174,60 @@ def stato_agente():
 
 @app.post("/api/agente/interrompi")
 def interrompi():
+    job = agente.stato().get("job")
+    if agente.stato()["busy"] and job and percorsi.lavoro(job).is_dir():
+        _segna_fermato(percorsi.lavoro(job), True)  # fermato dall'utente: non ripartire da solo
     return agente.stop()
 
 
 @app.post("/api/lavori/{id_lavoro}/analizza")
 def analizza(id_lavoro: str):
+    """Riprendi: toglie il fermo e riparte dalle pagine rimaste (quelle già lette non si rileggono)."""
     _idle()
+    cartella = _cartella(id_lavoro)
+    _segna_fermato(cartella, False)
     if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
-    agente.avvia(_cartella(id_lavoro))
+        return {"started": False, "attesa": "preparazione"}  # partirà da solo a preparazione finita
+    agente.avvia(cartella, poi=lambda riuscita: _ancora_da_fare(id_lavoro, riuscita))
     return {"started": True}
+
+
+# ---------- analisi automatica ----------
+def _segna_fermato(cartella: Path, fermo: bool) -> None:
+    segno = cartella / "fermato"
+    if fermo:
+        segno.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
+        lv.evento(cartella, tipo="fermata", testo="Analisi fermata: le pagine già lette restano salvate")
+    elif segno.exists():
+        segno.unlink()
+        lv.evento(cartella, tipo="ripresa", testo="Analisi ripresa dalle pagine rimaste")
+
+
+def _fermato(cartella: Path) -> bool:
+    return (cartella / "fermato").exists()
+
+
+def _avvia_se_serve(id_lavoro: str) -> None:
+    """Parte da sola se ci sono pagine da leggere o un Excel da rifare, ChatGPT è collegato e il cantiere non è
+    stato fermato. Si chiama a fine preparazione e a fine analisi (pagine aggiunte nel frattempo)."""
+    try:
+        cartella = percorsi.lavoro(id_lavoro)
+        if id_lavoro in _PREPARING or _fermato(cartella) or agente.stato()["busy"]:
+            return
+        if aggiornamenti.status()["busy"] or not chatgpt.status().get("plan_enabled"):
+            return
+        if lv.stato(cartella, leggero=True)["fase"] not in ("lettura", "composizione"):
+            return
+        agente.avvia(cartella, poi=lambda riuscita: _ancora_da_fare(id_lavoro, riuscita))
+    except Exception:  # l'avvio automatico non deve mai rompere caricamento o preparazione
+        pass
+
+
+def _ancora_da_fare(id_lavoro: str, riuscita: bool) -> None:
+    """Fine analisi: se è andata bene e nel frattempo sono arrivate pagine nuove, riparte su quelle sole.
+    Dopo un errore non riparte da sola, per non ripetere all'infinito una chiamata che fallisce."""
+    if riuscita:
+        _avvia_se_serve(id_lavoro)
 
 
 @app.exception_handler(aggiornamenti.UpdateError)
@@ -399,17 +446,35 @@ async def _ricevi(file: list[UploadFile], ingresso: Path) -> tuple[list[str], li
 
 
 def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
+    """Prepara le pagine in un thread, poi avvia l'analisi da sola. File arrivati durante la preparazione: si ripassa
+    alla fine (prepara salta i file già fatti)."""
+    if id_lavoro in _PREPARING:
+        _ANCORA.add(id_lavoro)
+        return
     _PREPARING.add(id_lavoro)
+
+    def avviso(**d):
+        if d.get("tipo") == "file":
+            _PREPARAZIONE[id_lavoro] = {"n": d["n"], "totale": d["totale"]}
+        lv.evento(cartella, **d)
 
     def prepare_job():
         try:
-            prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
+            while True:
+                _ANCORA.discard(id_lavoro)
+                _PREPARAZIONE[id_lavoro] = {"n": 0, "totale": 0}
+                prepara(cartella, avviso=avviso)
+                if id_lavoro not in _ANCORA:
+                    break
+            lv.evento(cartella, tipo="preparate", testo=f"{len(lv.pagine(cartella))} pagine pronte")
         except Exception:
             lv.evento(
                 cartella, tipo="errore", testo="Preparazione non riuscita: controlla formato e dimensioni dei file."
             )
         finally:
             _PREPARING.discard(id_lavoro)
+            _PREPARAZIONE.pop(id_lavoro, None)
+        _avvia_se_serve(id_lavoro)
 
     threading.Thread(target=prepare_job, daemon=True).start()
 
@@ -458,18 +523,27 @@ def crea_prova():
 
 @app.post("/api/lavori/{id_lavoro}/file")
 async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
-    """Aggiunge documenti a un cantiere esistente: le pagine già lette non si rileggono."""
+    """Aggiunge documenti a un cantiere esistente, anche mentre l'analisi è in corso: i nuovi entrano in coda.
+
+    Un file identico a uno già caricato (stesso contenuto, anche con un altro nome) non si aggiunge. Le pagine già
+    lette non si rileggono comunque: la lettura è in archivio per impronta della pagina.
+    """
     cartella = _cartella(id_lavoro)
-    if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
-    agent = agente.stato()
-    if agent["busy"] and agent.get("job") == id_lavoro:
-        raise chatgpt.AgentError(
-            "L’agente sta analizzando questo cantiere: premi «Interrompi» prima di aggiungere file."
-        )
     ingresso = cartella / "ingresso"
     ingresso.mkdir(exist_ok=True)
+    gia = {_impronta_file(f) for f in ingresso.rglob("*") if f.is_file()}
     accettati, scartati = await _ricevi(file, ingresso)
+    doppi = []
+    for nome_file in list(accettati):
+        f = ingresso / nome_file
+        impronta = _impronta_file(f)
+        if impronta in gia:
+            f.unlink()
+            accettati.remove(nome_file)
+            doppi.append(nome_file)
+        gia.add(impronta)
+    if not accettati:
+        return {"lavoro": id_lavoro, "accettati": [], "scartati": scartati, "doppi": doppi}
     info_file = cartella / "info.json"
     info = json.loads(info_file.read_text(encoding="utf-8"))
     info["file"] = info.get("file", []) + accettati
@@ -477,12 +551,25 @@ async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
     info_file.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
     _prepara_in_sfondo(id_lavoro, cartella)
-    return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}
+    return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati, "doppi": doppi}
+
+
+def _impronta_file(f: Path) -> str:
+    h = hashlib.sha256()
+    with f.open("rb") as fh:
+        while blocco := fh.read(1024 * 1024):
+            h.update(blocco)
+    return h.hexdigest()
 
 
 @app.get("/api/lavori/{id_lavoro}/stato")
 def stato(id_lavoro: str):
-    return lv.stato(_cartella(id_lavoro)) | {"preparing": id_lavoro in _PREPARING}
+    cartella = _cartella(id_lavoro)
+    return lv.stato(cartella) | {
+        "preparing": id_lavoro in _PREPARING,
+        "preparazione": _PREPARAZIONE.get(id_lavoro),
+        "fermato": _fermato(cartella),
+    }
 
 
 @app.get("/api/lavori/{id_lavoro}/eventi")

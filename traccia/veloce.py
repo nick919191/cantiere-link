@@ -395,6 +395,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         _leggi(cartella, da_leggere, model, effort)
     agente._check()
     _messaggio("Composizione delle prove e dell’Excel…")
+    agente.avanzamento("excel")
     agente.componi(cartella)
     _impara(cartella, pagine)
     rimaste = [p for p in pagine if not lv.scheda_pagina(p)]
@@ -403,8 +404,8 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         elenco = ", ".join(file[:3]) + (f" e altri {len(file) - 3}" if len(file) > 3 else "")
         raise AgentError(
             f"Lette {len(pagine) - len(rimaste)} pagine su {len(pagine)}; Excel pronto con queste. "
-            f"{len(rimaste)} da rileggere ({elenco}): il controllo non ha accettato la scheda. Premi «Analizza / "
-            "riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
+            f"{len(rimaste)} da rileggere ({elenco}): il controllo non ha accettato la scheda. Premi «Riprendi» per "
+            "ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
 
 
@@ -421,6 +422,7 @@ def _testi(cartella: Path, pagine: list[dict]) -> dict[str, dict]:
             scansioni.append(p)
     if scansioni:
         _messaggio(f"Lettura del testo di {len(scansioni)} pagine scansionate…")
+        agente.avanzamento("testo", 0, len(scansioni))
         fatte = 0
         with ocr.client() as client, ThreadPoolExecutor(OCR_IN_PARALLELO, thread_name_prefix="ocr") as pool:
             futures = {
@@ -431,6 +433,7 @@ def _testi(cartella: Path, pagine: list[dict]) -> dict[str, dict]:
                 p = futures[f]
                 esito[p["pid"]] = {**f.result(), "nativo": False, "info": info[p["pid"]]}
                 fatte += 1
+                agente.avanzamento("testo", fatte, len(scansioni))
                 _messaggio(f"Testo letto: {fatte} di {len(scansioni)} pagine scansionate")
                 agente._check()
     return esito
@@ -451,11 +454,13 @@ def _leggi(cartella: Path, pagine: list[dict], model: str, effort: str) -> None:
         (f, ps[i : i + PAGINE_PER_LOTTO]) for f, ps in gruppi.items() for i in range(0, len(ps), PAGINE_PER_LOTTO)
     ]
     fatte = 0
+    agente.avanzamento("lettura", 0, len(pagine))
     with ThreadPoolExecutor(LOTTI_IN_PARALLELO, thread_name_prefix="lettura") as pool:
         futures = [pool.submit(_lotto, cartella, f, lotto, testi, tagli, model, effort) for f, lotto in richieste]
         try:
             for future in as_completed(futures):
                 fatte += future.result()
+                agente.avanzamento("lettura", fatte, len(pagine))
                 _messaggio(f"Lette {fatte} di {len(pagine)} pagine")
         except BaseException:
             agente._cancel.set()

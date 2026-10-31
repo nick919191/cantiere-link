@@ -73,6 +73,17 @@ input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px va
 @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
 .bin.flash{animation:flash .7s}@keyframes flash{30%{box-shadow:0 0 0 4px var(--accent-bg)}}
 .sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:4px}
+.fasi{padding:14px 18px;margin-bottom:16px;display:grid;gap:9px}
+.fase{display:grid;grid-template-columns:22px 200px minmax(0,1fr) 150px;align-items:center;gap:12px;font-size:13px;color:var(--muted)}
+.fase .fi{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;background:var(--fill);color:var(--soft)}
+.fase .fn{color:var(--ink)}.fase .fb{height:6px;background:var(--fill);border-radius:3px;overflow:hidden}
+.fase .fb i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px;transition:width .5s}
+.fase .fm{font-size:12px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fase.fatto .fi{background:var(--green);color:#fff}.fase.fatto .fb i{background:var(--green)}
+.fase.ora .fi{background:var(--accent);color:#fff;animation:pulse 1.2s infinite}.fase.ora .fn{font-weight:600}
+.fase.ferma .fi{background:var(--orange);color:#fff}.fase.ferma .fb i{background:var(--orange)}
+@media(max-width:800px){.fase{grid-template-columns:22px minmax(0,1fr) auto}.fase .fb{grid-column:2/-1}}
+.ev.live{border-top:0;color:var(--ink)}.ev.live .pill{animation:pulse 1.2s infinite}
 .feed{padding:14px 16px;margin-top:16px}.feed h4{margin:0 0 8px;font-size:13px}
 .ev{display:flex;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line);animation:in .35s;align-items:flex-start}
 .ev time{color:var(--soft);font-size:12px;width:58px;flex:none}
@@ -206,7 +217,7 @@ td.src:hover{background:var(--accent-bg)}
   </section>
 
   <!-- LAVORO -->
-  <section id="lavoro" class="hidden"><div class="agent-banner"><span class="pill n" id="agent-pill">Agente</span><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><input type="file" id="add-files" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden" onchange="safe(()=>addFiles([...this.files]))"><button id="add-button" class="btn s" onclick="$('add-files').click()" title="Le pagine già lette non vengono rilette">Aggiungi file</button><button id="stop-button" class="btn s hidden" onclick="safe(stopAgent)">Interrompi</button><button id="analyze-button" class="btn" onclick="safe(analyze)">Analizza / riprendi</button></div>
+  <section id="lavoro" class="hidden"><div class="agent-banner"><span class="pill n" id="agent-pill">Agente</span><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><input type="file" id="add-files" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden" onchange="safe(()=>addFiles([...this.files]))"><button id="add-button" class="btn s" onclick="$('add-files').click()" title="Le pagine già lette non vengono rilette">Aggiungi file</button><button id="stop-button" class="btn s hidden" onclick="safe(stopAgent)" title="Ferma l’analisi per non consumare token: le pagine già lette restano salvate">⏸ Ferma</button><button id="analyze-button" class="btn hidden" onclick="safe(analyze)" title="Continua dalle pagine rimaste">▶ Riprendi</button></div>
     <div class="card prog">
       <svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--fill)" stroke-width="7"/>
         <circle id="ringv" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"
@@ -216,9 +227,10 @@ td.src:hover{background:var(--accent-bg)}
         <div style="font-weight:600" id="titolo">…</div>
         <div class="t"><i id="barv"></i></div>
         <div class="meta"><span id="bart"></span><span id="bare"></span><span id="bartok" title="Token usati con ChatGPT per questo cantiere"></span></div>
-        <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi Analizza / riprendi.</div>
+        <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi «Riprendi».</div>
       </div>
     </div>
+    <div class="card fasi" id="fasi" aria-label="Fasi del lavoro"></div>
     <div class="avviso hidden" id="vecchio"></div>
     <div class="job">
       <nav class="passi" id="passi" aria-label="Passi del lavoro"></nav>
@@ -237,7 +249,7 @@ td.src:hover{background:var(--accent-bg)}
           </div>
           <div>
             <div class="bins" id="bins"></div>
-            <div class="card feed"><h4>Diario del lavoro</h4><div id="feed"></div></div>
+            <div class="card feed"><h4>Diario del lavoro</h4><div class="ev live hidden" id="feed-live"></div><div id="feed"></div></div>
           </div>
         </div></div>
 
@@ -332,7 +344,7 @@ function filtra(q){q=(q||"").trim().toLowerCase();document.querySelectorAll("#la
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
- $("feed").innerHTML="";$("crops").innerHTML="";ris=null;passoScelto=null;passoAttuale=-1;firmaOrdine="";stato=null;$("ordine").innerHTML="";$("vecchio").classList.add("hidden");
+ $("feed").innerHTML="";$("feed-live").classList.add("hidden");$("crops").innerHTML="";ris=null;passoScelto=null;passoAttuale=-1;firmaOrdine="";stato=null;$("ordine").innerHTML="";$("vecchio").classList.add("hidden");
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
  aggiorna();timer=setInterval(aggiorna,1500)}
@@ -347,10 +359,10 @@ async function aggiorna(){if(!L)return;
  $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
  $("bartok").textContent=tokens(stato.consumo);
  const ord=["preparazione","lettura","composizione","pronto"],i=ord.indexOf(stato.fase);
- passi();ricevuti();ordine();
+ passi();ricevuti();ordine();fasi();
  const vecchio=!!(stato.riepilogo&&stato.fase!=="pronto"&&ris);
  $("vecchio").classList.toggle("hidden",!vecchio);
- if(vecchio)$("vecchio").textContent="Ci sono pagine nuove o non ancora lette: il risultato e l'Excel che vedi sono della versione precedente. Premi «Analizza / riprendi» per aggiornarli.";
+ if(vecchio)$("vecchio").textContent="Ci sono pagine nuove o non ancora lette: il risultato e l'Excel che vedi sono della versione precedente. Si aggiornano da soli alla fine dell'analisi.";
  $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
  $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
  // pagine nei contenitori
@@ -370,16 +382,24 @@ function vola(x){if(!$("lookpage").offsetParent){metti(x);return}const bin=$("bi
  const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
-const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["Sta guardando","b"],
- scheda:["Letta","g"],ritaglio:["Ritaglio","o"],nota:["Agente","b"],correzione:["Correzione","o"],errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+const TIPI={ricevuti:["Ricevuti","n"],preparate:["Preparazione","g"],fermata:["Fermata","o"],ripresa:["Ripresa","b"],
+ errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+// eventi di avanzamento: aggiornano sempre la stessa riga invece di aggiungerne una per file o per pagina
+const VIVI={file:"Preparazione",pagina:"Preparazione",lettura:"Lettura",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
+function rigaViva(e){let testo=e.testo||"";
+ if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
+ if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
+ $("feed-live").innerHTML=`<time>${esc(e.ora)}</time><span class="pill b">${VIVI[e.tipo]}</span><span>${esc(testo)}</span>`;
+ $("feed-live").classList.remove("hidden")}
 function evento(e){
  if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace("Claude guarda ","");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
  if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
  if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
  if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" onclick="apri('/api/ritagli/${encodeURIComponent(e.ritaglio)}','Ritaglio: ${esc(e.testo)}')">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
+ if(VIVI[e.tipo]){rigaViva(e);return}
  const t=TIPI[e.tipo];if(!t)return;
- let testo=e.testo||"";if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
- if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
+ const testo=e.testo||"";
+ if(["preparate","componi","pronto","errore","fermata"].includes(e.tipo))$("feed-live").classList.add("hidden");
  $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
  while($("feed").children.length>8)$("feed").lastChild.remove()}
 let pagMostrata=null;
@@ -392,6 +412,27 @@ async function mostraPagina(pid,conZone){const box=$("lookpage");
   box.querySelectorAll(".box").forEach(b=>b.remove());
   zone.slice(0,12).forEach(([x0,y0,x1,y1],k)=>setTimeout(()=>box.insertAdjacentHTML("beforeend",`<div class="box" style="left:${x0/10}%;top:${y0/10}%;width:${(x1-x0)/10}%;height:${(y1-y0)/10}%"></div>`),k*120))}catch(e){}}
 
+
+/* ---------- fasi del lavoro: una riga per fase, con barra e conteggio ---------- */
+function fasi(){if(!stato)return;
+ const g=(typeof agentState!=="undefined"&&agentState.busy&&agentState.job===L)?agentState:null,a=g&&g.avanzamento;
+ const tot=stato.pagine_totali,fatte=stato.lette+stato.non_lette.length,pronto=stato.fase==="pronto",fermo=stato.fermato&&!g;
+ const riga=(n,st,quanto,testo)=>`<div class="fase ${st}"><span class="fi">${st==="fatto"?"✓":st==="ferma"?"⏸":n}</span><span class="fn">${["","Ricevuti","Preparazione","Lettura e smistamento","Collegamento dei documenti","Excel e prove"][n]}</span><span class="fb"><i style="width:${quanto}%"></i></span><span class="fm">${esc(testo)}</span></div>`;
+ const pr=stato.preparazione,perc=(x,y)=>y?Math.round(100*x/y):0;
+ const r=[riga(1,stato.file?"fatto":"ora",stato.file?100:30,stato.file?`${stato.file} file`:"Arrivano i file…")];
+ r.push(stato.preparing?riga(2,"ora",pr&&pr.totale?perc(pr.n,pr.totale):8,pr&&pr.totale?`File ${pr.n} di ${pr.totale}`:"Preparo le pagine…")
+  :riga(2,tot?"fatto":"",tot?100:0,tot?`${tot} pagine pronte`:"In attesa"));
+ let lst,lq,lt;
+ if(a&&a.passo==="testo"){lst="ora";lq=perc(a.n,a.totale);lt=`Testo scansioni ${a.n} di ${a.totale}`}
+ else if(a&&a.passo==="lettura"){lst="ora";lq=perc(fatte,tot);lt=`${fatte} di ${tot} pagine`}
+ else if(tot&&fatte>=tot){lst="fatto";lq=100;lt=`${fatte} di ${tot} pagine`}
+ else{lst=fermo&&tot?"ferma":g&&tot?"ora":"";lq=perc(fatte,tot);lt=tot?`${fatte} di ${tot} pagine`+(fermo?" · ferma":""):"In attesa"}
+ r.push(riga(3,lst,lq,lt));
+ const ex=a&&a.passo==="excel";
+ r.push(riga(4,pronto?"fatto":ex?"ora":"",pronto?100:ex?60:0,pronto?"Fatto":ex?"In corso…":"In attesa"));
+ r.push(riga(5,pronto?"fatto":ex?"ora":"",pronto?100:ex?40:0,pronto?"Pronti da scaricare":ex?"In corso…":"In attesa"));
+ $("fasi").innerHTML=r.join("");
+ if(pronto&&!g)$("feed-live").classList.add("hidden")}
 
 /* ---------- passi ---------- */
 const PASSI=[

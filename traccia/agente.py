@@ -32,7 +32,20 @@ ISTRUZIONI_LOTTO = (
     "ciascuna nella forma descritta sopra. Le pagine sono in ordine: usa le precedenti dello stesso file per "
     "continua_pagina_prima."
 )
-_state = {"busy": False, "job": None, "message": "", "error": False, "stopping": False, "stopped": False}
+_state = {
+    "busy": False,
+    "job": None,
+    "message": "",
+    "error": False,
+    "stopping": False,
+    "stopped": False,
+    "avanzamento": None,  # {"passo": "testo" | "lettura" | "excel", "n": int, "totale": int}: per le barre delle fasi
+}
+
+
+def avanzamento(passo: str, n: int = 0, totale: int = 0) -> None:
+    """Fase in corso con il suo conteggio, letta dalla piattaforma per le barre di avanzamento."""
+    _state.update(avanzamento={"passo": passo, "n": n, "totale": totale})
 
 
 def stato() -> dict:
@@ -82,7 +95,9 @@ def _options() -> tuple[str, str]:
     return model["slug"], effort
 
 
-def avvia(cartella: Path) -> None:
+def avvia(cartella: Path, poi=None) -> None:
+    """Analisi in un thread. `poi(riuscita)` si chiama alla fine: la piattaforma la usa per ripartire da sola
+    quando nel frattempo sono arrivate pagine nuove."""
     with _lock:
         if _state["busy"]:
             raise chatgpt.AgentError("L’agente sta lavorando. Attendi o interrompi l’operazione in corso.")
@@ -90,14 +105,22 @@ def avvia(cartella: Path) -> None:
             raise chatgpt.AgentError("Collega ChatGPT e abilita l’utilizzo del piano nelle impostazioni.")
         _cancel.clear()
         _state.update(
-            busy=True, job=cartella.name, message="Avvio dell’agente…", error=False, stopping=False, stopped=False
+            busy=True,
+            job=cartella.name,
+            message="Avvio dell’agente…",
+            error=False,
+            stopping=False,
+            stopped=False,
+            avanzamento=None,
         )
 
     def run():
+        riuscita = False
         try:
             model, effort = _options()
             analizza(cartella, model, effort)
             _state.update(message="Operazione completata.")
+            riuscita = True
         except Exception as exc:
             message = (
                 str(exc) if isinstance(exc, chatgpt.AgentError) else "Operazione non completata. Riprova dal cantiere."
@@ -106,14 +129,16 @@ def avvia(cartella: Path) -> None:
             lv.evento(cartella, tipo="errore", testo=message)
         finally:
             with _lock:
-                _state.update(busy=False, stopping=False)
+                _state.update(busy=False, stopping=False, avanzamento=None)
+            if poi:
+                poi(riuscita)
 
     threading.Thread(target=run, name="agente-cantiere", daemon=True).start()
 
 
 def _check():
     if _cancel.is_set():
-        raise chatgpt.AgentError("Analisi interrotta. Premi «Analizza / riprendi» per continuare dalle pagine rimaste.")
+        raise chatgpt.AgentError("Analisi interrotta. Premi «Riprendi» per continuare dalle pagine rimaste.")
 
 
 def analizza(cartella: Path, model: str, effort: str) -> None:
@@ -141,6 +166,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         _leggi_tutte(cartella, da_leggere, instructions, model, effort, giro)
     _check()
     _state.update(message="Composizione delle prove e dell’Excel…")
+    avanzamento("excel")
     componi(cartella)
     rimaste = [p for p in pages if not lv.scheda_pagina(p)]
     if rimaste:
@@ -150,7 +176,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
             f"Lette {len(pages) - len(rimaste)} pagine su {len(pages)}; Excel pronto con queste. "
             f"{len(rimaste)} da rileggere ({elenco}): anche al secondo tentativo il controllo ha trovato citazioni "
             "che non corrispondono al testo della pagina, quindi la scheda non è stata accettata. Premi "
-            "«Analizza / riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
+            "«Riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
 
 
@@ -161,12 +187,14 @@ def _esaurita(cartella: Path, page: dict) -> bool:
 def _leggi_tutte(cartella: Path, da_leggere: list[dict], instructions: str, model: str, effort: str, giro: int):
     lotti = [da_leggere[i : i + PAGINE_PER_LOTTO] for i in range(0, len(da_leggere), PAGINE_PER_LOTTO)]
     fatte = 0
+    avanzamento("lettura", 0, len(da_leggere))
     with ThreadPoolExecutor(max_workers=PAGINE_IN_PARALLELO, thread_name_prefix="lettura") as pool:
         futures = {pool.submit(_leggi_lotto, cartella, lotto, instructions, model, effort): lotto for lotto in lotti}
         try:
             for future in as_completed(futures):
                 future.result()  # rilancia l'errore del lotto (interruzione compresa)
                 fatte += len(futures[future])
+                avanzamento("lettura", fatte, len(da_leggere))
                 _state.update(
                     message=f"Lette {fatte} di {len(da_leggere)} pagine "
                     f"(lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta"
