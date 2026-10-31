@@ -3,7 +3,6 @@
     "allow": [
       "Bash(python -m traccia *)",
       "Write(./lavori/*/risposte/**)",
-      "Write(./lavori/*/chat/**)",
       "Read(./lavori/**)",
       "Read(./archivio/**)",
       "Read(./istruzioni/**)",

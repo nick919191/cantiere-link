@@ -9,12 +9,10 @@ salva ID PID                   valida la scheda scritta dal lettore e la congela
 componi ID                     prove -> motore -> Excel, prove HTML, fascicolo ordinato
 prepara ID                     (manuale) prepara di nuovo le pagine di un lavoro
 
-Chat con la documentazione (sottoagente assistente):
-  domanda ID QID                 testo della domanda e file dove scrivere la risposta
+Consultazione:
   cerca ID PAROLE...             pagine lette che contengono le parole, con estratti
   scheda ID PID                  scheda salvata della pagina (trascrizione e valori)
   voci ID                        voci dell'Excel con stato e note (se l'uscita è pronta)
-  rispondi ID QID                valida la risposta (citazioni nelle pagine) e la registra
 """
 
 import json
@@ -24,8 +22,9 @@ import time
 import urllib.request
 import webbrowser
 
-from . import chat, percorsi
+from . import cerca as ricerca
 from . import lavoro as lv
+from . import percorsi
 from .controlli import aggiungi_zone_esatte, valida
 from .preparazione import info_pagina, prepara, ritaglio
 
@@ -80,22 +79,11 @@ def avvia() -> int:
     return 0
 
 
-def _prossima_domanda() -> dict | None:
-    radice = percorsi.lavori()
-    if not radice.exists():
-        return None
-    for cartella in sorted((c for c in radice.iterdir() if c.is_dir()), key=lambda c: c.name):
-        attesa = chat.in_attesa(cartella)
-        if attesa:
-            return {"lavoro": cartella.name, "domanda": attesa[0]["id"], "testo": attesa[0]["testo"]}
-    return None
-
-
 def attendi() -> int:
-    """Le domande della chat hanno la precedenza: si risponde tra un lotto di lettura e l'altro."""
+    """Aspetta un lotto di pagine da leggere o un'uscita da comporre."""
     fine = time.monotonic() + ATTESA_MASSIMA_S
     while time.monotonic() < fine:
-        lavoro = _prossima_domanda() or lv.prossimo_lavoro()
+        lavoro = lv.prossimo_lavoro()
         if lavoro:
             _stampa(lavoro)
             return 0
@@ -213,37 +201,8 @@ def prepara_lavoro(id_lavoro: str) -> int:
     return 0
 
 
-def _file_chat(id_lavoro: str, qid: str):
-    if not qid.isalnum():
-        raise ValueError("identificativo della domanda non valido")
-    return percorsi.lavoro(id_lavoro) / "chat" / f"{qid}.json"
-
-
-def domanda(id_lavoro: str, qid: str) -> int:
-    cartella = percorsi.lavoro(id_lavoro)
-    d = next((m for m in chat.messaggi(cartella) if m["ruolo"] == "utente" and m["id"] == qid), None)
-    if not d:
-        raise ValueError(f"domanda {qid} non trovata")
-    f = _file_chat(id_lavoro, qid)
-    f.parent.mkdir(exist_ok=True)
-    stato = lv.stato(cartella)
-    precedenti = [m for m in chat.messaggi(cartella) if m["ruolo"] == "claude"][-3:]
-    lv.evento(cartella, tipo="nota", testo="Claude cerca la risposta nei documenti")
-    _stampa(
-        {
-            "domanda": d["testo"],
-            "scrivi_la_risposta_in": str(f),
-            "pagine_lette": stato["lette"],
-            "pagine_totali": stato["pagine_totali"],
-            "uscita_pronta": stato["fase"] == "pronto",
-            "ultime_risposte": [m["testo"][:300] for m in precedenti],
-        }
-    )
-    return 0
-
-
 def cerca(id_lavoro: str, *parole: str) -> int:
-    _stampa(chat.cerca(percorsi.lavoro(id_lavoro), " ".join(parole)))
+    _stampa(ricerca.cerca(percorsi.lavoro(id_lavoro), " ".join(parole)))
     return 0
 
 
@@ -299,24 +258,10 @@ def voci(id_lavoro: str) -> int:
     return 0
 
 
-def rispondi(id_lavoro: str, qid: str) -> int:
-    cartella = percorsi.lavoro(id_lavoro)
-    try:
-        risposta = json.loads(_file_chat(id_lavoro, qid).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        _stampa({"ok": False, "errori": [f"risposta non leggibile come JSON ({type(e).__name__})"]})
-        return 1
-    errori = chat.rispondi(cartella, qid, risposta)
-    _stampa({"ok": not errori, "errori": errori} if errori else {"ok": True})
-    return 1 if errori else 0
-
-
 COMANDI = {
-    "domanda": domanda,
     "cerca": cerca,
     "scheda": scheda,
     "voci": voci,
-    "rispondi": rispondi,
     "avvia": avvia,
     "attendi": attendi,
     "pagina": pagina,

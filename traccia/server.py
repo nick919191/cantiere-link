@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
+from . import agente, aggiornamenti, cestino, chatgpt, configurazione, consumi, demo_cantiere, ocr, percorsi
 from . import lavoro as lv
 from .preparazione import prepara
 
@@ -40,11 +40,6 @@ async def lifecycle(_app):
             stop_checks.wait(3600)
 
     threading.Thread(target=update_checks, daemon=True).start()
-    if percorsi.lavori().exists():
-        for directory in percorsi.lavori().iterdir():
-            if directory.is_dir() and not directory.name.startswith("."):
-                for question in chat.in_attesa(directory):
-                    chat.fallita(directory, question["id"], "Sessione interrotta. Puoi inviare di nuovo la domanda.")
     yield
     stop_checks.set()
     agente.stop()
@@ -90,14 +85,13 @@ def sessione():
 @app.get("/api/impostazioni")
 def impostazioni():
     prefs = configurazione.leggi()
-    return {k: prefs[k] for k in ("model", "reasoning", "theme", "chat_width")} | {"cartella": str(percorsi.RADICE)}
+    return {k: prefs[k] for k in ("model", "reasoning", "theme")} | {"cartella": str(percorsi.RADICE)}
 
 
 class Preferenze(BaseModel):
     model: str = Field(default="", max_length=150)
     reasoning: str = "low"
     theme: str = "system"
-    chat_width: int = Field(default=390, ge=310, le=600)
 
 
 @app.put("/api/impostazioni")
@@ -576,49 +570,3 @@ def fascicolo_ordinato(id_lavoro: str):
     risposta = _zip(uscita, solo="fascicolo_ordinato")
     risposta.headers["Content-Disposition"] = f'attachment; filename="tracciabilita_{id_lavoro}_fascicolo_ordinato.zip"'
     return risposta
-
-
-class Domanda(BaseModel):
-    testo: str = Field(min_length=1, max_length=2000)
-    conversazione: str = Field(default="principale", pattern=r"^[a-zA-Z0-9_-]{1,80}$")
-    voce: int | None = Field(default=None, ge=1)
-    pagine: list[str] = Field(default_factory=list, max_length=8)
-
-
-@app.get("/api/lavori/{id_lavoro}/chat")
-def leggi_chat(id_lavoro: str, conversazione: str = "principale"):
-    c = _cartella(id_lavoro)
-    return {
-        "messaggi": [m for m in chat.messaggi(c) if m.get("conversazione", "principale") == conversazione],
-        "in_attesa": [m["id"] for m in chat.in_attesa(c) if m.get("conversazione", "principale") == conversazione],
-    }
-
-
-@app.get("/api/lavori/{id_lavoro}/conversazioni")
-def conversazioni(id_lavoro: str):
-    found = {}
-    for m in chat.messaggi(_cartella(id_lavoro)):
-        if m["ruolo"] == "utente":
-            found.setdefault(m.get("conversazione", "principale"), m["testo"][:70])
-    return [{"id": k, "title": v} for k, v in reversed(list(found.items()))]
-
-
-@app.post("/api/lavori/{id_lavoro}/chat")
-def scrivi_chat(id_lavoro: str, domanda: Domanda):
-    try:
-        _idle()
-        if not chatgpt.status().get("plan_enabled"):
-            raise chatgpt.AgentError("Collega ChatGPT nelle impostazioni prima di inviare una domanda.")
-        c = _cartella(id_lavoro)
-        pids = {p["pid"] for p in lv.pagine(c)}
-        if any(pid not in pids for pid in domanda.pagine):
-            raise HTTPException(400, "Fonte non appartenente a questo cantiere")
-        question = chat.chiedi(c, domanda.testo, domanda.conversazione, domanda.voce, domanda.pagine)
-        try:
-            agente.avvia(c, question["id"])
-        except chatgpt.AgentError as exc:
-            chat.fallita(c, question["id"], str(exc))
-            raise
-        return question
-    except ValueError as e:
-        raise HTTPException(400, "domanda vuota") from e

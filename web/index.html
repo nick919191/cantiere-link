@@ -84,19 +84,9 @@ input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px va
 .stati{padding:20px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .stato{border-radius:12px;padding:14px}.stato .v{font-size:28px;font-weight:700}.stato .l{font-size:12px}
 .note{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;margin-top:14px;line-height:1.45}
-.chain{padding:18px;overflow-x:auto;margin-bottom:16px}
-.cols,.vrow{display:grid;grid-template-columns:1.3fr 1.1fr 1.2fr .8fr 1.1fr;gap:10px;min-width:900px}
-.cols{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:8px}
-.vrow{align-items:center;margin-bottom:10px;animation:in .45s both}
-.node{border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12.5px;background:var(--card);position:relative;transition:.2s}
-.node.click{cursor:pointer}.node.click:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
-.node small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-.node.miss{border-style:dashed;border-color:var(--red);color:var(--red);background:var(--red-bg)}.node.warn{border-color:var(--orange)}
-.why{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.35}
 .tabwrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1900px}
 td{min-width:120px}td:first-child{min-width:40px}td.nota{min-width:380px}
-.why{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .fermo .scan{display:none}
 th{text-align:left;font-weight:600;color:var(--muted);font-size:11px;padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -110,19 +100,6 @@ td.src:hover{background:var(--accent-bg)}
 .pg{cursor:pointer}.pg img{width:100%;border-radius:6px;border:1px solid var(--line);background:#fff}.pg div{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
 .err{color:var(--red);font-size:14px;margin-top:10px}
 .fab{position:fixed;right:20px;bottom:20px;z-index:15;box-shadow:0 8px 24px rgba(0,0,0,.18);height:48px;padding:0 20px}
-.chat{position:fixed;right:20px;bottom:80px;z-index:16;width:min(420px,calc(100vw - 32px));height:min(620px,calc(100vh - 120px));display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.2);overflow:hidden}
-.chat .hd{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
-.chat .hd small{display:block;color:var(--muted);font-size:12px;font-weight:400}
-.chat .msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
-.msg{max-width:88%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-wrap;animation:in .3s}
-.msg.u{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
-.msg.c{align-self:flex-start;background:var(--fill);border-bottom-left-radius:4px}
-.msg .fonti{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.msg .fonte{font-size:11px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 8px;cursor:pointer;color:var(--accent)}
-.msg.attesa{color:var(--muted);font-style:italic}
-.chat form{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
-.chat textarea{flex:1;resize:none;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 12px;font:14px Inter,sans-serif}
-.chat textarea:focus{outline:none;border-color:var(--accent)}
 /* home a schede */
 .hhead{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap;margin-bottom:18px}
 .cerca{height:40px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:0 16px;font:14px Inter,sans-serif;min-width:200px}
@@ -167,25 +144,13 @@ td.src:hover{background:var(--accent-bg)}
 .fogli img{width:34px;aspect-ratio:.72;object-fit:cover;object-position:top;border-radius:3px;border:1px solid var(--line);background:#fff;cursor:pointer;animation:pop .4s both}
 .fogli img.girata{outline:2px solid var(--hl);outline-offset:1px}
 .freccia{align-self:center;color:var(--soft);font-size:20px}
-.anelli{position:relative;display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-.anelli .filo{position:absolute;left:8%;right:8%;top:26px;height:3px;background:var(--line)}
-.anello{position:relative;text-align:center;cursor:pointer;border-radius:12px;padding:4px 2px 10px}
-.anello:hover,.anello.sel{background:var(--fill)}
-.anello .c{width:46px;height:46px;margin:0 auto;border-radius:50%;background:var(--card);border:3px solid var(--c);display:grid;place-items:center;font-weight:700;color:var(--c);position:relative}
-.anello .nm{font-size:12px;font-weight:600;margin:6px 0}
-.anello .pila{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;padding:0 4px;min-height:12px}
-.anello .pila i{width:9px;height:9px;border-radius:50%;background:var(--c);animation:pop .35s both}
-.anello .mt{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.3}
-.anello .mt b{display:block;font-size:20px;color:var(--c)}
-.elenco{margin-top:14px;max-height:360px;overflow:auto;border-top:1px solid var(--line)}
-table.corta{min-width:0}table.corta td{min-width:0}
 .esito .pill{font-size:12px}
 #p-risultato .stati{grid-template-columns:repeat(4,1fr);margin:14px 0 22px}
 .fornitori{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:22px}
 .fornitore{padding:16px}.fornitore h3{margin:0 0 6px;font-size:15px}
 .fornitore ul{margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5}
 @media (max-width:960px){.flow,.ready{grid-template-columns:1fr}.bins{grid-template-columns:repeat(2,1fr)}.look{position:static}
- .job{grid-template-columns:1fr}.passi{position:static;flex-direction:row;overflow-x:auto}.passi button .t{display:none}.come{grid-template-columns:1fr}.anelli{grid-template-columns:repeat(3,1fr)}}
+ .job{grid-template-columns:1fr}.passi{position:static;flex-direction:row;overflow-x:auto}.passi button .t{display:none}.come{grid-template-columns:1fr}}
 </style>
 <link href="/web/app.css" rel="stylesheet">
 </head>
@@ -196,7 +161,7 @@ table.corta{min-width:0}table.corta td{min-width:0}
 <symbol id="down" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></symbol>
 <symbol id="fold" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
 <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
-<symbol id="ic-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z"/></symbol>
+
 <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </defs></svg>
@@ -204,7 +169,7 @@ table.corta{min-width:0}table.corta td{min-width:0}
 <div class="desktop" id="desktop"><main class="workspace" id="workspace"><div class="app">
   <div class="top">
     <div class="logo" onclick="vai('')">T</div><div class="brand" onclick="vai('')">CantiereLink</div>
-    <div class="crumb" id="crumb"></div><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings())" aria-label="Impostazioni">⚙</button><button class="icon-button" onclick="toggleChat()" aria-label="Apri o chiudi chat"><svg class="ic"><use href="#ic-chat"/></svg></button>
+    <div class="crumb" id="crumb"></div><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings())" aria-label="Impostazioni">⚙</button>
   </div>
 
   <!-- HOME -->
@@ -235,7 +200,7 @@ table.corta{min-width:0}table.corta td{min-width:0}
     </div>
     <div class="come">
       <div><span>1</span><b>Carichi i file</b>Tutti i PDF insieme, anche in disordine o girati.</div>
-      <div><span>2</span><b>Guardi la catena</b>Per ogni materiale: DDT, certificato 3.1, colata e timbro. Vedi subito cosa manca.</div>
+      <div><span>2</span><b>Guardi il risultato</b>Per ogni materiale: stato, documenti e cosa manca, in una tabella che rimanda alle pagine.</div>
       <div><span>3</span><b>Scarichi e chiedi</b>Excel di tracciabilità, ZIP ordinato e richiesta pronta per ogni fornitore.</div>
     </div>
   </section>
@@ -278,11 +243,6 @@ table.corta{min-width:0}table.corta td{min-width:0}
 
         <div class="pv" id="p-ordine"><div id="ordine"></div></div>
 
-        <div class="pv" id="p-catena"><div class="card" style="padding:18px">
-          <div class="anelli" id="anelli"></div>
-          <div class="elenco tabwrap"><table class="corta" id="elenco"></table></div>
-        </div></div>
-
         <div class="pv" id="p-risultato">
           <div class="card hero esito" id="esito">
             <span class="pill" id="esito-pill"></span>
@@ -298,35 +258,14 @@ table.corta{min-width:0}table.corta td{min-width:0}
           <div class="card stati" id="stati"></div>
           <h2>Da chiedere ai fornitori</h2>
           <div class="fornitori" id="fornitori"></div>
-          <h2>Collegamenti a ritroso</h2>
-          <p class="sub">Tabella del costruttore → DDT del commerciante → certificato 3.1 → colata. Le caselle si aprono sul documento, con il dato evidenziato.</p>
-          <div class="card chain"><div class="cols"><div>Voce</div><div>DDT</div><div>Certificato 3.1</div><div>Colata</div><div>Esito</div></div><div id="chain"></div></div>
-          <h2>Tracciabilità</h2>
-          <div class="card tabwrap"><table id="tab"></table></div>
         </div>
       </div>
     </div>
   </section>
 </div>
 
-</main><div class="splitter" id="splitter" role="separator" aria-label="Larghezza chat" aria-orientation="vertical" aria-valuemin="310" aria-valuemax="600" aria-valuenow="390" tabindex="0"></div>
-<aside class="sidechat" id="sidechat" aria-label="Chat del cantiere">
-  <header class="chat-toolbar"><button class="conversation-title" id="conversation-title" onclick="safe(showHistory)">Chat del cantiere <span>⌄</span></button><button class="icon-button" onclick="newConversation()" aria-label="Nuova conversazione">＋</button><button class="icon-button" onclick="safe(showHistory)" aria-label="Cronologia">↶</button><button class="icon-button" onclick="toggleChat()" aria-label="Chiudi chat">×</button></header>
-  <div class="chat-scope"><span></span><span id="chat-scope-name">Nessun cantiere</span></div>
-  <div class="history-popover hidden" id="history"><div class="popover-label">CONVERSAZIONI DEL CANTIERE</div><div id="history-list"></div></div>
-  <div class="conversation" id="conversation" role="log" aria-live="polite" aria-label="Messaggi"></div>
-  <div class="composer-area">
-    <div class="suggestions"><button onclick="safe(()=>ask('Quali documenti mancano?'))">Cosa manca?</button><button onclick="safe(()=>ask('Quali voci sono da confermare?'))">Da confermare</button></div>
-    <div class="composer-card">
-      <div class="context-chips" id="context-chips"></div>
-      <label class="sr-only" for="question">Domanda sul cantiere</label><textarea id="question" placeholder="Chiedi qualcosa sul cantiere. Usa @ per una fonte…" rows="2" maxlength="2000"></textarea>
-      <div class="composer-footer"><button class="icon-button" onclick="pickContext()" aria-label="Aggiungi fonte al contesto">＋</button><div class="sp"></div><button class="send-button" id="send-question" onclick="safe(()=>ask())" aria-label="Invia domanda">↑</button></div>
-    </div>
-    <div class="agent-toolbar"><button class="agent-icon" onclick="safe(()=>openSettings('account'))" aria-label="Account e agente">◎</button><label class="sr-only" for="model">Modello</label><select id="model" onchange="updateModel(this.value)"><option value="">Automatico</option></select><label class="sr-only" for="effort">Ragionamento</label><select id="effort" onchange="updateEffort(this.value)"><option value="">Predefinito</option><option value="low">Basso</option><option value="medium">Medio</option><option value="high">Alto</option></select><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings('models'))" aria-label="Impostazioni modello">⚙</button></div>
-    <div class="demo-caption"><span id="chat-plan">ChatGPT non collegato</span> <button id="stop-agent" class="text-button hidden" onclick="safe(stopAgent)">Interrompi</button></div>
-  </div>
-</aside></div>
-<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><div class="settings-header"><h2 id="settings-title">Impostazioni</h2><div class="sp"></div><button class="icon-button" onclick="closeSettings()" aria-label="Chiudi impostazioni">×</button></div><div class="settings-layout"><nav class="settings-nav" aria-label="Sezioni impostazioni"><label class="sr-only" for="settings-search">Cerca impostazioni</label><input id="settings-search" type="search" placeholder="Cerca impostazioni…" oninput="filterSettings(this.value)"><button data-section="general" onclick="settingsSection('general')"><span>◐</span>Generali</button><button data-section="account" onclick="settingsSection('account')"><span>◎</span>Account e agente</button><button data-section="models" onclick="settingsSection('models')"><span>✧</span>Modelli</button><button data-section="storage" onclick="settingsSection('storage')"><svg class="ic"><use href="#fold"/></svg>Documenti e dati</button><button data-section="shortcuts" onclick="settingsSection('shortcuts')"><span>⌘</span>Scorciatoie</button><button data-section="diagnostics" onclick="settingsSection('diagnostics')"><span>⌁</span>Diagnostica</button><button data-section="updates" onclick="settingsSection('updates')"><span>↻</span>Aggiornamenti</button><a class="guide-nav" href="/guida/" target="_blank" rel="noopener">Guida interattiva ↗</a><button onclick="safe(closeApp)"><span>⏻</span>Chiudi applicazione</button><div class="settings-nav-foot">CantiereLink<br><span>App locale · Mac e Windows</span></div></nav><section id="settings-content" class="settings-content"></section></div><footer class="settings-foot">Credenziali nel portachiavi del sistema.<div class="sp"></div><button class="text-button" onclick="closeSettings()">Fine</button></footer></dialog>
+</main></div>
+<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><div class="settings-header"><h2 id="settings-title">Impostazioni</h2><div class="sp"></div><button class="icon-button" onclick="closeSettings()" aria-label="Chiudi impostazioni">×</button></div><div class="settings-layout"><nav class="settings-nav" aria-label="Sezioni impostazioni"><label class="sr-only" for="settings-search">Cerca impostazioni</label><input id="settings-search" type="search" placeholder="Cerca impostazioni…" oninput="filterSettings(this.value)"><button data-section="general" onclick="settingsSection('general')"><span>◐</span>Generali</button><button data-section="account" onclick="settingsSection('account')"><span>◎</span>Account e agente</button><button data-section="models" onclick="settingsSection('models')"><span>✧</span>Modelli</button><button data-section="storage" onclick="settingsSection('storage')"><svg class="ic"><use href="#fold"/></svg>Documenti e dati</button><button data-section="diagnostics" onclick="settingsSection('diagnostics')"><span>⌁</span>Diagnostica</button><button data-section="updates" onclick="settingsSection('updates')"><span>↻</span>Aggiornamenti</button><a class="guide-nav" href="/guida/" target="_blank" rel="noopener">Guida interattiva ↗</a><button onclick="safe(closeApp)"><span>⏻</span>Chiudi applicazione</button><div class="settings-nav-foot">CantiereLink<br><span>App locale · Mac e Windows</span></div></nav><section id="settings-content" class="settings-content"></section></div><footer class="settings-foot">Credenziali nel portachiavi del sistema.<div class="sp"></div><button class="text-button" onclick="closeSettings()">Fine</button></footer></dialog>
 <aside id="update-notice" class="update-notice hidden" role="status"><span id="update-notice-text"></span><button class="btn s" onclick="safe(()=>openSettings('updates'))">Vedi novità</button><button class="text-button" onclick="safe(dismissUpdate)">Più tardi</button></aside>
 <dialog id="trash-dialog" class="trash-dialog"><h2 id="trash-title">Cestino</h2><div id="trash-body"></div><div class="acts"><button class="btn s" onclick="$('trash-dialog').close()">Chiudi</button><button class="btn hidden" id="trash-confirm" onclick="safe(moveToTrash)">Sposta nel cestino</button></div></dialog>
 <div id="toast" class="toast hidden" role="status"></div>
@@ -347,7 +286,7 @@ const COL=["PRODUTTORE","COLATA","TIPO DI ACCIAIO","CE/DoP ACCIAIERIA","CERT 3.1
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const api=async(p,o)=>{const r=await fetch(p,o);const d=await r.json();if(!r.ok)throw new Error(d.detail||"Operazione non riuscita");return d;};
-let ris=null,passoScelto=null,passoAttuale=-1,firmaOrdine="",anelloScelto=null;
+let ris=null,passoScelto=null,passoAttuale=-1,firmaOrdine="";
 let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),timer=null,risultatoCaricato=false,inizio=true;
 
 function vai(id){location.hash=id?"#/"+id:"";}
@@ -373,12 +312,12 @@ $("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.
  x.onload=()=>{$("invia").disabled=false;if(x.status===200){const r=JSON.parse(x.responseText);scelti=[];mostraFile();vai(r.lavoro)}
   else $("uperr").textContent="Invio non riuscito. Riprova; se il problema resta, i file potrebbero essere troppo grandi."};
  x.onerror=()=>{$("invia").disabled=false;$("uperr").textContent="La piattaforma non risponde: controlla che l’app sia aperta."};x.send(fd)};
-const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
+const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Preparazione dell'Excel",pronto:"Completato"};
 function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
 function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
 const voci=n=>n+(n===1?" voce":" voci");
 function esitoLavoro(l){const c=l.conteggio;
- if(l.fase!=="pronto")return [{preparazione:"Preparo le pagine",lettura:"Sto leggendo · "+l.percentuale+"%",composizione:"Collego la catena"}[l.fase]||l.fase,"b"];
+ if(l.fase!=="pronto")return [{preparazione:"Preparo le pagine",lettura:"Sto leggendo · "+l.percentuale+"%",composizione:"Preparo l'Excel"}[l.fase]||l.fase,"b"];
  const tot=c?Object.values(c).reduce((a,x)=>a+x,0):0;
  if(!tot)return ["Nessuna voce trovata","o"];
  if(c.MANCANTE)return [`Mancano documenti per ${voci(c.MANCANTE)}`,"r"];
@@ -393,7 +332,7 @@ function filtra(q){q=(q||"").trim().toLowerCase();document.querySelectorAll("#la
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
- $("feed").innerHTML="";$("crops").innerHTML="";ris=null;passoScelto=null;passoAttuale=-1;firmaOrdine="";anelloScelto=null;stato=null;$("ordine").innerHTML="";$("vecchio").classList.add("hidden");
+ $("feed").innerHTML="";$("crops").innerHTML="";ris=null;passoScelto=null;passoAttuale=-1;firmaOrdine="";stato=null;$("ordine").innerHTML="";$("vecchio").classList.add("hidden");
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
  aggiorna();timer=setInterval(aggiorna,1500)}
@@ -402,7 +341,7 @@ async function aggiorna(){if(!L)return;
  $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
  const p=stato.fase==="pronto"?100:stato.percentuale;
  $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
- $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Smisto e leggo le pagine",composizione:"Collego la catena e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
+ $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Smisto e leggo le pagine",composizione:"Collego i documenti e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
  const fatte=stato.lette+stato.non_lette.length;
  $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
  $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
@@ -411,7 +350,7 @@ async function aggiorna(){if(!L)return;
  passi();ricevuti();ordine();
  const vecchio=!!(stato.riepilogo&&stato.fase!=="pronto"&&ris);
  $("vecchio").classList.toggle("hidden",!vecchio);
- if(vecchio)$("vecchio").textContent="Ci sono pagine nuove o non ancora lette: la catena e l'Excel che vedi sono della versione precedente. Premi «Analizza / riprendi» per aggiornarli.";
+ if(vecchio)$("vecchio").textContent="Ci sono pagine nuove o non ancora lette: il risultato e l'Excel che vedi sono della versione precedente. Premi «Analizza / riprendi» per aggiornarli.";
  $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
  $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
  // pagine nei contenitori
@@ -459,10 +398,9 @@ const PASSI=[
  {k:"carica",n:"Ricevo i file",t:"I file sono arrivati: li divido in pagine singole. Gli originali restano invariati."},
  {k:"smisto",n:"Smisto e leggo",t:"Guardo ogni pagina, la leggo e la metto nella sua famiglia. Clicca un contenitore per vedere le sue pagine."},
  {k:"ordine",n:"Metto in ordine",t:"Le pagine in fila nell'ordine della catena, come nello ZIP finale. Quelle evidenziate erano girate e le raddrizzo."},
- {k:"catena",n:"Collego la catena",t:"Ogni pallino è una voce: cammina lungo la catena e si ferma dove manca un pezzo. Clicca un anello per vedere chi è fermo lì e perché."},
  {k:"risultato",n:"Risultato",t:"Lo stato del cantiere, l'Excel, lo ZIP ordinato e cosa chiedere a ogni fornitore."}];
-function passoDaFase(){return {preparazione:0,lettura:1,composizione:3,pronto:4}[stato.fase]??0}
-function passoAperto(i){return i===0||(i<=2&&stato.fase!=="preparazione")||(i>=3&&!!ris)}
+function passoDaFase(){return {preparazione:0,lettura:1,composizione:2,pronto:3}[stato.fase]??0}
+function passoAperto(i){return i===0||(i<=2&&stato.fase!=="preparazione")||(i===3&&!!ris)}
 function passi(){const cur=passoDaFase();
  if(cur!==passoAttuale){passoAttuale=cur;passoScelto=null}
  let vis=passoScelto??cur;if(!passoAperto(vis))vis=Math.min(cur,1);
@@ -490,31 +428,6 @@ function ordine(){if(!stato||!$("p-ordine").classList.contains("on"))return;
   ${via.length?`<div class="card gruppo via" style="--c:var(--soft);margin-top:12px"><div class="gt"><span>99 · Non usati (fuori dalla catena)</span><span>${via.length}</span></div>${fogli(via)}</div>`:""}
   <div class="acts" style="margin-top:14px;align-items:center">${girate?`<span class="pill o">↻ ${girate} pagine girate: nello ZIP sono raddrizzate</span>`:""}
   ${stato.fase==="pronto"?`<button class="btn s" onclick="safe(()=>scaricaFile('fascicolo-ordinato'))"><svg class="ic"><use href="#fold"/></svg>Scarica lo ZIP in questo ordine</button>`:`<span class="note" style="margin:0">Lo ZIP ordinato sarà pronto alla fine.</span>`}</div>`}
-
-/* ---------- catena ---------- */
-const ANELLI=[["tabella","Tabella costruttore","var(--violet)"],["ddt","DDT","var(--accent)"],["cert","Certificato 3.1","var(--orange)"],["colata","Colata","var(--orange)"],["prove","Timbro e DoP","var(--teal)"],["ok","Completa","var(--green)"]];
-function anello(v){if(v.stato==="PROVATO")return "ok";
- const ms=(v.motivi||[]).concat(v.richieste||[]).map(m=>m.toLowerCase());
- // DEDOTTO: certificato e DDT ci sono, si ferma solo se manca il timbro giusto.
- if(v.stato==="DEDOTTO")return ms.some(m=>/(senza|nessun|manca)\b.*timbr|timbr.*(altro|divers)/.test(m))?"prove":"ok";
- for(const m of ms){
-  if(/\bddt\b/.test(m)&&/non |manca|assente|senza/.test(m))return "ddt";
-  if(/timbr|\bdop\b|\bce\b|marcatura/.test(m))return "prove";
-  if(/colat/.test(m))return "colata";
-  if(/certificat/.test(m))return "cert"}
- return "prove"}
-function motivo(v){return (v.motivi&&v.motivi[0])||(v.richieste&&v.richieste[0]&&"manca: "+v.richieste[0])||(v.note&&v.note[0])||"da verificare"}
-function catena(){if(!ris)return;const voci=ris.voci.map(v=>({...v,anello:anello(v)}));
- $("anelli").innerHTML='<div class="filo"></div>'+ANELLI.map(([k,nome,c],i)=>{const vv=voci.filter(v=>v.anello===k);
-  const ded=vv.filter(v=>v.stato==="DEDOTTO").length;
-  const mt=k==="ok"?`<b>${vv.length}</b>a posto${ded?` (${ded} ${ded===1?"dedotta":"dedotte"})`:""}`
-   :k==="tabella"?(ris.avviso_packing?`<b style="color:var(--orange)">!</b>manca: voci prese dai DDT`:`<b>0</b>tutte passano`)
-   :vv.length?`<b>${vv.length}</b>${esc(motivo(vv[0]))}`:`<b>0</b>tutte passano`;
-  return `<div class="anello ${anelloScelto===k?"sel":""}" style="--c:${c}" onclick="scegliAnello('${k}')"><div class="c">${i+1}</div><div class="nm">${nome}</div><div class="pila">${vv.map((v,j)=>`<i style="animation-delay:${j*30}ms;${v.stato==="DEDOTTO"?"opacity:.55":""}" title="${esc(v.voce)} · ${v.stato}"></i>`).join("")}</div><div class="mt">${mt}</div></div>`}).join("");
- const vv=voci.filter(v=>anelloScelto?v.anello===anelloScelto:v.anello!=="ok");
- $("elenco").innerHTML=`<tr><th>N</th><th>Voce</th><th>Stato</th><th>Perché</th><th>DDT</th><th>Fornitore</th><th></th></tr>`+(vv.length?vv.map(v=>`<tr><td>${v.n}</td><td>${esc(v.voce)}</td><td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td>${esc(motivo(v))}</td><td>${esc(v.ddt||"—")}</td><td>${esc(v.fornitore||"—")}</td><td><button class="row-ask" onclick="selectVoice(${v.n})">Chiedi in chat ↗</button></td></tr>`).join("")
-  :`<tr><td colspan="7" class="note">${anelloScelto?"Nessuna voce ferma qui.":"Nessuna voce ferma: tutte le voci hanno la catena completa."}</td></tr>`)}
-function scegliAnello(k){anelloScelto=anelloScelto===k?null:k;catena()}
 
 /* ---------- download con errori leggibili ---------- */
 async function scaricaFile(tipo){const r=await fetch(`/api/lavori/${L}/${tipo}`);
@@ -556,18 +469,8 @@ function fornitori(r){const per={};
   :`<div class="note">Nessun documento da chiedere.</div>`}
 function copiaRichiesta(i){navigator.clipboard.writeText(window._richieste[i]).then(()=>notify("Richiesta copiata: incollala in una mail al fornitore."),()=>notify("Copia non riuscita: seleziona il testo dall'Excel, foglio «Richieste ai fornitori»."))}
 async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
- ris=r;esito(r);fornitori(r);catena();if(stato)passi();
- $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("");
- const prova=(v,c)=>v.colonne[c].fonti.length?`/api/lavori/${L}/uscita/prove/v${String(v.n).padStart(3,"0")}_c${String(COL.indexOf(c)+1).padStart(2,"0")}.html`:null;
- const manca=s=>/non nel fascicolo|Non presente/i.test(s||"");
- const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
- $("chain").innerHTML=r.voci.map((v,i)=>{const C=v.colonne;const cert=C["CERT 3.1 ACCIAIERIA"].v,ddt=C["DDT COMMERCIANTE"].v,col=C["COLATA"].v;
-  return `<div class="vrow" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" onclick="selectVoice(${v.n})">Chiedi in chat ↗</button></div>
-  ${nodo(v,"DDT COMMERCIANTE",ddt.replace(/^DDT n\. /,"DDT "),C["COMMERCIANTE / CENTRO TRASF."].v,manca(ddt)?"miss":"")}
-  ${nodo(v,"CERT 3.1 ACCIAIERIA",cert,C["PRODUTTORE"].v,manca(cert)?"miss":(v.stato==="DA CONFERMARE"?"warn":""))}
-  ${nodo(v,"COLATA",col||(v.colate_possibili.length?v.colate_possibili.length+" colate":"—"),v.colate_possibili.join(" / "),v.stato==="MANCANTE"?"miss":(!col?"warn":""))}
-  <div><span class="pill ${STATI[v.stato]}">${v.stato}</span><div class="why">${esc(v.note.slice(0,2).join(" "))}</div></div></div>`}).join("");
- $("tab").innerHTML=`<tr><th>N</th>${COL.map(c=>`<th>${esc(c)}</th>`).join("")}<th>STATO</th><th>NOTE</th></tr>`+r.voci.map(v=>`<tr><td>${v.n}</td>${COL.map(c=>{const u=prova(v,c);return `<td class="${u?"src":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(v.colonne[c].v)}</td>`}).join("")}<td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td class="nota" style="color:var(--muted)">${esc(v.note.join(" "))}</td></tr>`).join("")}
+ ris=r;esito(r);fornitori(r);if(stato)passi();
+ $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("")}
 </script>
 <script src="/web/app.js"></script>
 </body>

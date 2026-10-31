@@ -8,9 +8,9 @@ import pytest
 from fascicolo_inventato import fascicolo, scheda, timbro
 from fastapi.testclient import TestClient
 from pdf_minimo import pdf_con_testo
-from test_flusso import _crea_lavoro, _leggi_tutto
+from test_flusso import _crea_lavoro
 
-from traccia import agente, chat, chatgpt, normalizza, server
+from traccia import agente, chatgpt, normalizza, server
 from traccia import lavoro as lv
 from traccia.controlli import valida
 from traccia.motore import elabora
@@ -37,26 +37,6 @@ def test_lettura_incompleta_non_dichiara_assenze():
     del schemas[missing]
     result = elabora(costruisci(pages, schemas))
     assert result["voci"] and all(v["stato"] == "DA CONFERMARE" for v in result["voci"])
-
-
-def test_citazione_vuota_rifiutata(radice):
-    directory, schemas = _crea_lavoro(radice)
-    pages = _leggi_tutto(directory, schemas)
-    question = chat.chiedi(directory, "Colata?")
-    assert chat.rispondi(
-        directory, question["id"], {"testo": "Inventato", "fonti": [{"pid": pages[0]["pid"], "cit": ""}]}
-    )
-
-
-def test_chat_separa_conversazioni(radice):
-    directory, _ = _crea_lavoro(radice)
-    q1 = chat.chiedi(directory, "prima", conversazione="one")
-    q2 = chat.chiedi(directory, "seconda", conversazione="two")
-    chat.fallita(directory, q1["id"], "interrotto")
-    assert [m["id"] for m in chat.in_attesa(directory)] == [q2["id"]]
-    client = TestClient(server.app)
-    messages = client.get("/api/lavori/prova/chat?conversazione=one").json()["messaggi"]
-    assert len(messages) == 2 and all(m["conversazione"] == "one" for m in messages)
 
 
 def test_origine_e_token_locale_obbligatori(radice):

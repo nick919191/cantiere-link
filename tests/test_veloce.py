@@ -147,7 +147,7 @@ def test_flusso_veloce_con_servizi_finti(radice, monkeypatch):
     scheda = lv.scheda_pagina(lv.pagine(cartella)[0])
     assert scheda and scheda["testata"]["numero"]["v"] == "4563"
     assert len(chiamate) == 1  # nessun dubbio: nessuna verifica con immagine
-    assert "DOCUMENTO DI TRASPORTO" in scheda["trascrizione"]  # la chat ritrova il testo della pagina
+    assert "DOCUMENTO DI TRASPORTO" in scheda["trascrizione"]  # la ricerca ritrova il testo della pagina
 
 
 class _Nulla:
