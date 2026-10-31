@@ -408,9 +408,9 @@ function vola(x){if(!$("lookpage").offsetParent){metti(x);return}const bin=$("bi
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
 const TIPI={ricevuti:["Ricevuti","n"],preparate:["Preparazione","g"],fermata:["Fermata","o"],ripresa:["Ripresa","b"],
- errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+ errore:["Errore","r"],avviso:["Avviso","o"],mappa:["Riconoscimento","g"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
 // eventi di avanzamento: aggiornano sempre la stessa riga invece di aggiungerne una per file o per pagina
-const VIVI={file:"Preparazione",pagina:"Preparazione",lettura:"Lettura",testo_pagina:"Lettura del testo",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
+const VIVI={file:"Preparazione",pagina:"Preparazione",mappa_pagina:"Riconoscimento",lettura:"Lettura",testo_pagina:"Lettura del testo",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
 function rigaViva(e){let testo=e.testo||"";
  if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
  if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
@@ -422,15 +422,16 @@ function evento(e){
  if(VIVI[e.tipo]){rigaViva(e);return}
  const t=TIPI[e.tipo];if(!t)return;
  const testo=e.testo||"";
- if(["preparate","componi","pronto","errore","fermata"].includes(e.tipo))$("feed-live").classList.add("hidden");
+ if(["preparate","mappa","componi","pronto","errore","fermata"].includes(e.tipo))$("feed-live").classList.add("hidden");
  $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
  while($("feed").children.length>8)$("feed").lastChild.remove()}
 let pagMostrata=null;
 // che cosa sta facendo l'app sulla pagina: testo sotto l'immagine
 const FASE_PAGINA={pagina:["Preparazione","Divido il file in pagine e controllo il verso…"],
+ mappa_pagina:["Riconoscimento","DeepSeek guarda la pagina: che documento è, se c'è un timbro…"],
  testo_pagina:["Lettura del testo","Riconosco parole e tabelle della scansione…"],
  lettura_pagina:["Lettura","Capisco che documento è e cerco i dati: DDT, certificato, colata…"],scheda:null};
-function inEsame(e){const nome=(e.testo||"").replace(/^(Lettura|Testo): /,"");$("lookfile").textContent=nome;
+function inEsame(e){const nome=(e.testo||"").replace(/^(Lettura|Testo|Riconosco): /,"");$("lookfile").textContent=nome;
  if(e.tipo==="scheda"){const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${esc(f?f.n:e.famiglia)}.</b> ${esc(e.testo)}`;mostraPagina(e.pid,true);return}
  const [t,d]=FASE_PAGINA[e.tipo];$("thought").innerHTML=`<b>${t}.</b> ${d}`;mostraPagina(e.pid,false)}
 const SCANSIONE_MS=2400; // un passaggio della linea di scansione (come l'animazione CSS "scan")
@@ -459,7 +460,8 @@ function fasi(){if(!stato)return;
  r.push(stato.preparing?riga(2,"ora",pr&&pr.totale?perc(pr.n,pr.totale):8,pr&&pr.totale?`File ${pr.n} di ${pr.totale}`:"Preparo le pagine…")
   :riga(2,tot?"fatto":"",tot?100:0,tot?`${tot} pagine pronte`:"In attesa"));
  let lst,lq,lt;
- if(a&&a.passo==="testo"){lst="ora";lq=perc(a.n,a.totale);lt=`Testo scansioni ${a.n} di ${a.totale}`}
+ if(a&&a.passo==="mappa"){lst="ora";lq=perc(a.n,a.totale);lt=`Riconosco i tipi ${a.n} di ${a.totale}`}
+ else if(a&&a.passo==="testo"){lst="ora";lq=perc(a.n,a.totale);lt=`Testo scansioni ${a.n} di ${a.totale}`}
  else if(a&&a.passo==="lettura"){lst="ora";lq=perc(fatte,tot);lt=`${fatte} di ${tot} pagine`}
  else if(tot&&fatte>=tot){lst="fatto";lq=100;lt=`${fatte} di ${tot} pagine`}
  else{lst=fermo&&tot?"ferma":g&&tot?"ora":"";lq=perc(fatte,tot);lt=tot?`${fatte} di ${tot} pagine`+(fermo?" · ferma":""):"In attesa"}
