@@ -38,6 +38,7 @@ FILES = {
     ".nojekyll",
     "tools/package_release.py",
     "avvia.py",
+    "mcp_cantierelink.py",
     "release.json",
 }
 
