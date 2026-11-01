@@ -175,8 +175,8 @@ def _componi(cartella: Path, uscita: Path) -> dict:
         "PROVATO: certificato e DDT presenti, timbro o lettera con il numero del DDT, una sola colata.",
         "DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, senza timbro o con il numero del DDT "
         "scritto a penna sul timbro.",
-        "DA CONFERMARE: più colate, legame incerto, pagine del certificato mancanti, timbro per un altro DDT, DDT "
-        "assente, segni a mano.",
+        "DA CONFERMARE: più colate (salvo il segno a mano su una sola), legame incerto, pagine del certificato "
+        "mancanti, timbro per un altro DDT, DDT assente, documento letto a metà, pagine della catena non lette.",
         "MANCANTE: certificato dichiarato non presente; nella colonna il numero dichiarato, da chiedere al fornitore.",
         "Ogni cella con una fonte ha un collegamento alla pagina del documento con il dato evidenziato.",
     ]

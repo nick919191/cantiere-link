@@ -1,16 +1,19 @@
-"""Motore di regole 0.6.0: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.0: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
-- voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo;
+- voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
+  voce per colata quando il DDT dichiara le colate placca per placca (VOCE_PER_COLATA);
 - il certificato dichiarato si cerca per NUMERO; se manca: MANCANTE con il numero dichiarato e il fornitore, mai un
-  altro certificato con lo stesso profilo;
-- PROVATO: certificato e DDT presenti, timbro (o lettera) con il numero del DDT, una sola colata;
+  altro certificato con lo stesso profilo; senza dichiarazione: prima la colata dichiarata sul DDT o dalla lista del
+  commerciante, poi i certificati con il ponte (timbro o lettera con il numero del DDT), poi il profilo;
+- PROVATO: certificato e DDT presenti, timbro (o lettera) con il numero del DDT, una sola colata (anche scelta dal
+  segno a mano su una sola colata, con avviso);
 - DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, nessun timbro;
 - DA CONFERMARE: più colate, legame incerto, pagine del certificato mancanti, certificato timbrato per un altro DDT,
-  DDT non nel fascicolo;
-- tetti: segno a mano sulla colata -> al massimo DA CONFERMARE; timbro con il numero del DDT scritto a penna -> al
-  massimo DEDOTTO, mai sotto il certificato senza timbro (impostazione PENNA_VALE_COME_PROVA, 0.6.0); perimetro dai
-  DDT (packing assente) -> al massimo DEDOTTO; pezzo ricavato da un profilo più largo -> al massimo DEDOTTO.
+  DDT non nel fascicolo, documento letto a metà, pagine della catena non lette nello stesso file;
+- tetti: timbro con il numero del DDT scritto a penna -> al massimo DEDOTTO, mai sotto il certificato senza timbro
+  (impostazione PENNA_VALE_COME_PROVA, 0.6.0); pezzo ricavato da un profilo più largo -> al massimo DEDOTTO. Dalla
+  0.7.0 la packing assente non abbassa più lo stato (resta l'avviso e la dicitura "(dai DDT)").
 """
 
 import hashlib
@@ -19,7 +22,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.6.1"
+VERSIONE = "0.7.0"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 

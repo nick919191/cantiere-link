@@ -1,3 +1,66 @@
+# Correzioni tracciabilità 2026-11 (motore 0.7.0)
+
+Branch `fix/tracciabilita-codogno` da `integrazione/0.5-correzioni` (0.5.1, motore 0.6.1). Base: `REPORT_miglioramenti_cantierelink.md`
+(13 correzioni C1-C13 dal cantiere Codogno, 138 pagine) e le 5 decisioni prese da Nicola il 01/11/2026. Un commit per
+punto; `pytest -q` (200 test, da 165) e `ruff check traccia tests` verdi a ogni commit. Misura a costo zero: le letture
+di Codogno già in archivio ricomposte con il codice nuovo (senza rileggere nulla).
+
+| Punto | Correzioni | File toccati | Commit | Test |
+|---|---|---|---|---|
+| 1 | C1 ragioni sociali per nucleo, sigla e P.IVA; C8 copie dei DDT unite, seconda pagina con numero letto diverso | `traccia/normalizza.py` (`nuclei`, `stessa_azienda`, `piva`), `traccia/prove.py` (`Aziende`, `_stesso_ddt`, `_costruttore`), `traccia/motore.py` (`_stessa`), `istruzioni/famiglie/ddt.md` (`piva_emittente`, `piva_destinatario`), `istruzioni/famiglie/dop_costruttore.md` (`piva`) | `c4fcb28` | `test_normalizza.py::test_nucleo_…`, `::test_partita_iva`; `test_prove.py` (4 test: indirizzo, P.IVA, copie, seconda pagina) |
+| 2 | C2 lamiere scritte come misure | `traccia/normalizza.py` (`profilo`, `_forma_lamiera`) | `74a082a` | `test_normalizza.py::test_lamiere_scritte_come_misure_non_sono_tubi` (stringhe reali + inventate) |
+| 3 | C3 validatore tollerante, `altro`, scheda parziale, terzo tentativo con pagina intera; C4 tetto "non letto" mirato | `traccia/controlli.py` (`valida(correggi=…)`), `traccia/famiglie.py`, `traccia/veloce.py` (`_lotto`, `parziale`), `traccia/lavoro.py` (letture `.parziale.json`, `completa`), `traccia/prove.py` (`non_lette_dettagli`, `parziali`), `traccia/mappa.py` (`famiglia_in_archivio`), `traccia/motore.py` (`non_lette_vicine`), `traccia/uscita.py`, `istruzioni/lettura.md` (`altro`) | `58b2b46` | `test_controlli.py` (nuovo, 4 test); `test_veloce.py` (tipo sconosciuto, citazione scartata, terzo tentativo, parziale); `test_motore.py` (tetto mirato, lettura a metà) |
+| 4 | C5 colata sul DDT (decisione 3: una voce per colata); C6 ponte prima del profilo; C13 lista del commerciante (decisione 5) | `traccia/normalizza.py` (`colata_normale`, `stessa_colata`, `colate_dichiarate`, `cita_ddt`), `traccia/prove.py` (righe DDT `colate`/`placche`/`certificato`, righe della lettera), `traccia/motore.py` (`VOCE_PER_COLATA`, `_cerca_per_colata`, `_cerca_per_ponte`, `_affine`, `colate_dichiarate`, `ponti`), `istruzioni/famiglie/ddt.md`, `istruzioni/famiglie/lettera_accompagnamento.md` | `9636457` | `test_normalizza.py::test_colata_…`; `test_prove.py` (righe con colate, lettera); `test_motore.py` (colata sul DDT, una voce per colata, ponte prima del profilo, lista del commerciante) |
+| 5 | C9 ruoli terzista (conto lavorazione, reso); C11 DoP EN 1090 del fornitore intermedio | `traccia/prove.py` (`_tipi`, `dop_fornitore_intermedio`), `traccia/motore.py` (`_cantiere`, `_dop_intermedia`, CE/DoP CENTRO), `traccia/controlli.py`, `traccia/uscita.py`, `istruzioni/famiglie/ddt.md` (`causale`, tipi), `istruzioni/famiglie/dop_costruttore.md` (`ddt_citato`) | `af91cf9` | `test_prove.py` (terzista e reso, reso dal riferimento, DoP intermedia) |
+| 6 | C7 segno a mano (decisione 1) e dubbio «segni» con pagina intera, `segno_a_mano` nel riconoscimento; decisione 2 (nessun tetto dai DDT); C10 DoP P3 fabbricante + organismo; C12 certificato con DDT citato assente | `traccia/motore.py` (`_scegli_segnata`, `_dop_del_certificato`, `_voci_dai_certificati`), `traccia/veloce.py` (`piu_colate_per_profilo`, correzione `segni`), `traccia/mappa.py`, `traccia/uscita.py`, `istruzioni/famiglie/certificato_31.md` | `a3aac0d` | `test_motore.py` (segno, packing assente, P3, certificato con DDT assente); `test_veloce.py::test_piu_colate_…`; `test_mappa.py::test_riconoscimento_…` |
+| 7 | Regressione sul fascicolo reale anonimizzato | `tests/dati/codogno.json`, `tests/test_regressioni.py` | `31adec0` | `test_codogno_ruoli_e_perimetro_dei_ddt`, `test_codogno_voci_con_certificato_e_colata`, `test_codogno_tetto_non_letto_…` |
+| 8 | Conoscenza, istruzioni, motore 0.7.0, questo file | `conoscenza/01_famiglie.md`, `02_catena.md`, `05_regole_di_stato.md`, `traccia/motore.py` (docstring, `VERSIONE`), `traccia/uscita.py` (Metodo), `CORREZIONI.md` | questo commit | suite intera |
+
+## Codogno, letture 0.5.1 ricomposte con il motore 0.7.0 (costo zero)
+
+| | Motore 0.6.1 (app) | Motore 0.7.0 (ricomposizione) |
+|---|---|---|
+| DDT commerciante -> costruttore riconosciuti | 2 su 6 (8027 senza la pag. 2, 2902 ×2 copie) + De Lucchi sbagliato | 4 (8027 con la pag. 2, 602, 2902 unito, G02/51159); 587 costruttore -> terzista, 5.877 reso |
+| Voci | 11, tutte DA CONFERMARE | 25 (3 travi, 5 lamiere SETAL per colata, 13 lamiere Mondialsteel per colata, 1 Gabrielli 51159, 1 Arvedi da certificato, 2 De Lucchi tolte) |
+| Voci con certificato / con colata | 3 / 0 | 24 / 20 |
+| Voci "TUBO 12x2450" | 2 | 0 |
+| DDT COSTRUTTORE | Non presente | DDT 587 (tramite De Lucchi); DDT 5.877 (reso al cantiere) |
+| CE/DoP CENTRO | Non presente | DoP EN 1090 FVS 9588.25 sulle 3 voci del DDT 8027 |
+| Stati | 0/0/11/0 | 0/0/25/0 con le 10 pagine non lette; senza di esse 18 PROVATO (test di regressione) |
+
+Gli stati restano DA CONFERMARE finché il DDT Gabrielli 3332 (p. 40) e la lista 51159 (p. 122) non vengono letti: sono
+nello stesso file delle voci, quindi il tetto mirato (C4) li conta. Mancano ancora dalle letture 0.5.1 i segni a
+mano sui certificati FVS (p. 7, 11, 15) e la lista Gabrielli (p. 42 letta come certificato, p. 122 non letta): con la
+rilettura 0.7.0 (istruzioni cambiate) le travi FVS prendono la colata dal segno e il DDT 51159 si divide per placca.
+
+## Scelte e note
+
+- **Decisioni applicate**: 1 segno a mano sceglie la colata (PROVATO con avviso); 2 nessun tetto per la packing
+  assente (il test della 0.6 `test_packing_assente_al_massimo_dedotto` codificava il tetto: riscritto per la nuova
+  regola, non per farlo passare); 3 una voce per colata dichiarata (`VOCE_PER_COLATA = True` in `motore.py`: con
+  `False` una voce per DDT + profilo con le colate elencate); 4 `PENNA_VALE_COME_PROVA = False` invariato; 5 lista
+  del commerciante come `lettera_accompagnamento` con righe `placca, colata, certificato`.
+- **Mondialsteel 602**: dichiara 13 colate placca per placca per la lamiera 10 mm: con la decisione 3 sono 13 voci
+  (nell'analisi a vista era una voce con 13 colate). Per questo le voci sono 25 e non 10-12.
+- **P.IVA**: due campi sul DDT (`piva_emittente`, `piva_destinatario`) invece di uno, perché un DDT stampa la P.IVA
+  di entrambe le parti; `piva` sulla DoP EN 1090. Le letture 0.5.1 non li hanno: l'alias per P.IVA agisce dopo la
+  rilettura.
+- **Scheda parziale**: con il validatore tollerante gli errori bloccanti restano solo forma, famiglia, testata e
+  righe malformate; dal percorso della lettura veloce (`espandi`) sono rari. La scheda parziale (`<chiave>.parziale.json`)
+  vale finché arriva una lettura completa, e la pagina resta "da leggere" fino a `MAX_TENTATIVI`.
+- **Riconoscimento DeepSeek**: `mappa.prompt_tipo()` chiede ora `segno_a_mano`, quindi cambia `mappa.versione()`:
+  alla prossima analisi tutte le pagine vengono riconosciute di nuovo da DeepSeek (costo basso, ~0,2 $ su 224 pagine,
+  stimato dal prezzo in `mappa.py`). L'OCR Mistral resta in cache.
+- **Istruzioni cambiate** (`ddt.md`, `dop_costruttore.md`, `lettera_accompagnamento.md`, `certificato_31.md`,
+  `lettura.md`): cambia `versione_lettura`, quindi la prossima analisi rilegge con ChatGPT tutte le pagine utili
+  (Codogno: circa 75). Le 10 pagine non lette vanno sbloccate azzerando `tentativi.json` del lavoro.
+- **Formato prove**: resta `prove/2`; aggiunte solo chiavi (`aziende`, `non_lette_dettagli`, `parziali`,
+  `dop_fornitore_intermedio`, righe DDT `colate`/`placche`/`certificato`, DDT `causale`/`tramite`/`riferimenti`/`copie`).
+  Le 12 colonne dell'Excel sono invariate; PARTE D'OPERA porta "(dai DDT)" o "(da un certificato)".
+- **Non fatto**: il tubo 76,1x5 che compare solo nei DDT del costruttore (587/595) non genera una voce MANCANTE
+  (i DDT al terzista non alimentano le voci, come chiesto); l'analisi a vista lo elencava. Una regola "materiale
+  consegnato dal costruttore senza DDT di fornitura" è una scelta da prendere a parte.
+
 # Correzioni della review 2026-10
 
 > **Integrazione con la 0.5 (versione 0.5.1).** Le correzioni qui sotto sono nate sul branch `fix/review-2026-10`, su base
