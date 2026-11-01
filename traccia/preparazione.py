@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 import pypdfium2 as pdfium
-from PIL import Image
+from PIL import Image, ImageSequence
 
 DPI = 150
 DPI_RITAGLIO = 300
@@ -39,12 +39,14 @@ def _estrai_zip(zip_path: Path, destinazione: Path, budget=None, profondita=0) -
             nome = Path(m.filename.replace("\\", "/"))
             if nome.is_absolute() or ".." in nome.parts or nome.name.startswith(".") or ":" in str(nome):
                 continue
+            base, n = nome, 1
+            while str(nome).casefold() in nomi:  # A.pdf e a.pdf sono lo stesso file su Windows: si rinomina il secondo
+                n += 1
+                nome = base.with_name(f"{base.stem} ({n}){base.suffix}")
+            nomi.add(str(nome).casefold())
             uscita = destinazione / zip_path.stem / nome
             if not uscita.resolve().is_relative_to(destinazione.resolve()):
                 raise ValueError("percorso non valido nell’archivio")
-            if str(nome).casefold() in nomi:
-                raise ValueError("nomi duplicati nell’archivio")
-            nomi.add(str(nome).casefold())
             uscita.parent.mkdir(parents=True, exist_ok=True)
             with z.open(m) as src, uscita.open("wb") as dst:
                 copiati = 0
@@ -57,16 +59,27 @@ def _estrai_zip(zip_path: Path, destinazione: Path, budget=None, profondita=0) -
                 _estrai_zip(uscita, uscita.parent, budget, profondita + 1)
 
 
-def file_sorgente(ingresso: Path) -> list[Path]:
-    """PDF e immagini da leggere, in ordine fisso (percorso relativo, senza maiuscole)."""
+def file_sorgente(ingresso: Path, falliti: dict[str, str] | None = None) -> list[Path]:
+    """PDF e immagini da leggere, in ordine fisso (percorso relativo, senza maiuscole).
+
+    Un archivio corrotto o oltre i limiti si estrae per quanto possibile, viene segnato in `falliti`
+    (percorso relativo -> motivo) e non ferma gli altri file; non si ritenta a ogni preparazione.
+    """
     estratti = ingresso / "estratti"
     budget = {"file": 0, "byte": 0}
     for z in sorted(ingresso.glob("*.zip")):
-        complete = estratti / z.stem / ".complete"
+        cartella = estratti / z.stem
+        complete, fallito = cartella / ".complete", cartella / ".fallito"
         if not complete.exists():
-            _estrai_zip(z, estratti, budget)
-            complete.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                _estrai_zip(z, estratti, budget)
+            except (zipfile.BadZipFile, ValueError, OSError) as e:
+                cartella.mkdir(parents=True, exist_ok=True)
+                fallito.write_text(f"{type(e).__name__}: {e}"[:200], encoding="utf-8")
+            cartella.mkdir(parents=True, exist_ok=True)
             complete.touch()
+        if fallito.exists() and falliti is not None:
+            falliti[z.relative_to(ingresso).as_posix()] = fallito.read_text(encoding="utf-8")
     validi = ESTENSIONI_PDF | ESTENSIONI_IMMAGINE
     tutti = [p for p in ingresso.rglob("*") if p.is_file() and p.suffix.lower() in validi]
     return sorted(tutti, key=lambda p: p.relative_to(ingresso).as_posix().casefold())
@@ -150,11 +163,13 @@ def _pagine_di(sorgente: Path):
             doc.close()
     else:
         with Image.open(sorgente) as img:
-            img = img.convert("RGB")
-            img.thumbnail((1754, 1754))
-            buf = io.BytesIO()
-            img.save(buf, format="PNG", optimize=False)
-            yield 1, buf.getvalue(), "", [], 1
+            totale = getattr(img, "n_frames", 1)  # TIFF multipagina: una pagina per fotogramma
+            for numero, fotogramma in enumerate(ImageSequence.Iterator(img), 1):
+                pagina = fotogramma.convert("RGB")
+                pagina.thumbnail((1754, 1754))
+                buf = io.BytesIO()
+                pagina.save(buf, format="PNG", optimize=False)
+                yield numero, buf.getvalue(), "", [], totale
 
 
 def prepara(cartella_lavoro: Path, avviso=lambda **_: None) -> list[dict]:
@@ -171,7 +186,8 @@ def prepara(cartella_lavoro: Path, avviso=lambda **_: None) -> list[dict]:
     gia_fatti = {v["file"] for v in precedenti if v.get("pid")}
     elenco = [v for v in precedenti if v.get("pid")]
     prossimo = max((int(v["pid"][1:]) for v in elenco), default=0) + 1
-    sorgenti = [s for s in file_sorgente(ingresso) if s.relative_to(ingresso).as_posix() not in gia_fatti]
+    falliti: dict[str, str] = {}
+    sorgenti = [s for s in file_sorgente(ingresso, falliti) if s.relative_to(ingresso).as_posix() not in gia_fatti]
     for indice_file, sorgente in enumerate(sorgenti):
         relativo = sorgente.relative_to(ingresso).as_posix()
         try:
@@ -199,9 +215,20 @@ def prepara(cartella_lavoro: Path, avviso=lambda **_: None) -> list[dict]:
                 elenco.append({k: info[k] for k in ("pid", "file", "pagina", "pagine_file", "impronta", "bianca")})
                 avviso(tipo="pagina", pid=pid, testo=f"{relativo} · pagina {numero} di {totale}")
         except Exception as e:  # file rotto: si dichiara, non si ferma il lavoro
-            elenco.append({"pid": None, "file": relativo, "errore": type(e).__name__})
-            avviso(tipo="errore", testo=f"{relativo}: file non leggibile ({type(e).__name__})")
+            # Le pagine già preparate di questo file si tolgono: alla prossima preparazione si ritenta da capo e,
+            # se fallisce ancora, il file resta "non letto" per il motore (fascicolo incompleto -> DA CONFERMARE).
+            parziali = [v for v in elenco if v.get("pid") and v["file"] == relativo]
+            for v in parziali:
+                elenco.remove(v)
+                for suffisso in (".png", ".json"):
+                    (pagine_dir / f"{v['pid']}{suffisso}").unlink(missing_ok=True)
+            elenco.append({"pid": None, "file": relativo, "errore": type(e).__name__, "pagine_parziali": len(parziali)})
+            dopo = f", dopo {len(parziali)} pagine" if parziali else ""
+            avviso(tipo="errore", testo=f"{relativo}: file non leggibile ({type(e).__name__}{dopo})")
         avviso(tipo="file", testo=relativo, n=indice_file + 1, totale=len(sorgenti))
+    for relativo, motivo in sorted(falliti.items()):  # in coda, così l'ordine non cambia tra una preparazione e l'altra
+        elenco.append({"pid": None, "file": relativo, "errore": motivo})
+        avviso(tipo="errore", testo=f"{relativo}: archivio non leggibile ({motivo})")
     temporaneo = indice.with_suffix(".tmp")
     temporaneo.write_text(json.dumps(elenco, ensure_ascii=False, indent=1), encoding="utf-8")
     temporaneo.replace(indice)
@@ -223,7 +250,9 @@ def ritaglio(cartella_lavoro: Path, info: dict, zona: list[int]) -> bytes:
         finally:
             doc.close()
     else:
-        img = Image.open(sorgente).convert("RGB")
+        with Image.open(sorgente) as originale:
+            originale.seek(info["pagina"] - 1)
+            img = originale.convert("RGB")
     w, h = img.size
     taglio = img.crop((int(x0 * w), int(y0 * h), max(int(x1 * w), int(x0 * w) + 1), max(int(y1 * h), int(y0 * h) + 1)))
     buf = io.BytesIO()
