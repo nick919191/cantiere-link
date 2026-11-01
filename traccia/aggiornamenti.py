@@ -84,7 +84,16 @@ def status():
         result = dict(_state)
     native = package_kind() == "installer"
     saved = {} if native else pointer()
-    active = _installed(saved["active"])[1] if saved.get("active") else None
+    active = None
+    if saved.get("active"):
+        try:
+            active = _installed(saved["active"])[1]
+        except UpdateError:
+            # Cartella della versione cancellata a mano: avvia.py usa la copia originale; qui non si blocca nulla.
+            result["message"] = result["message"] or (
+                "La versione installata non è più presente: è in uso la copia originale. "
+                "Puoi installare di nuovo l’aggiornamento o tornare alla precedente."
+            )
     result.update(
         version=VERSIONE_APP,
         repository=metadata()["repository"],
@@ -409,7 +418,10 @@ def rollback():
         if not saved.get("active") and not saved.get("previous"):
             raise UpdateError("Nessuna versione precedente disponibile.")
         if saved.get("previous"):
-            _installed(saved["previous"])
+            try:
+                _installed(saved["previous"])
+            except UpdateError:
+                saved["previous"] = None  # anche la precedente è sparita: si torna alla copia originale
         configurazione.scrivi_json(
             directory() / "attiva.json",
             {

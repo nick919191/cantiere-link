@@ -5,6 +5,7 @@ Stesse letture, stessa uscita. Nessun orologio nei contenuti: l'ora sta solo neg
 
 import json
 import shutil
+import time
 import uuid
 from pathlib import Path
 
@@ -18,6 +19,11 @@ from .provenienza import immagine_dritta, pagina_cella
 from .riordino import crea
 
 NOME_EXCEL = "tracciabilita.xlsx"
+VERSIONI_CONSERVATE = 10  # uscite precedenti tenute in versioni/: le più vecchie si cancellano
+
+
+class ExcelAperto(Exception):
+    """L'uscita precedente non si può sostituire: un file (di solito l'Excel) è aperto in un altro programma."""
 
 
 def _schede(cartella: Path) -> tuple[list[dict], dict[str, dict]]:
@@ -31,13 +37,21 @@ def _schede(cartella: Path) -> tuple[list[dict], dict[str, dict]]:
 
 
 def componi(cartella: Path) -> dict:
+    """Compone l'uscita in una cartella provvisoria `.uscita-*` e la mette al posto di `uscita/` solo alla fine."""
+    uscita = cartella / (".uscita-" + uuid.uuid4().hex)
+    try:
+        return _componi(cartella, uscita)
+    finally:
+        shutil.rmtree(uscita, ignore_errors=True)  # resta solo se qualcosa è andato storto prima del rename
+
+
+def _componi(cartella: Path, uscita: Path) -> dict:
     lv.evento(cartella, tipo="componi", testo="Collego a ritroso: tabella -> DDT -> certificato -> colata")
     pagine, schede = _schede(cartella)
     prove = costruisci(pagine, schede)
     indice = json.loads((cartella / "pagine.json").read_text(encoding="utf-8"))
     prove["file_non_letti"] = [p["file"] for p in indice if not p.get("pid")]
     risultato = elabora(prove)
-    uscita = cartella / (".uscita-" + uuid.uuid4().hex)
     (uscita / "prove" / "img").mkdir(parents=True)
     (uscita / "prove" / "ritagli").mkdir(parents=True)
     info = {p["pid"]: p for p in pagine}
@@ -176,11 +190,18 @@ def componi(cartella: Path) -> dict:
     }
     (uscita / "riepilogo.json").write_text(json.dumps(riepilogo, ensure_ascii=False, indent=1), encoding="utf-8")
     finale = cartella / "uscita"
-    if finale.exists():
-        versioni = cartella / "versioni"
-        versioni.mkdir(exist_ok=True)
-        finale.rename(versioni / uuid.uuid4().hex)
-    uscita.rename(finale)
+    try:
+        if finale.exists():
+            versioni = cartella / "versioni"
+            versioni.mkdir(exist_ok=True)
+            finale.rename(versioni / (time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:8]))
+            for vecchia in sorted(p for p in versioni.iterdir() if p.is_dir())[:-VERSIONI_CONSERVATE]:
+                shutil.rmtree(vecchia, ignore_errors=True)
+        uscita.rename(finale)
+    except PermissionError as exc:
+        raise ExcelAperto(
+            f"Chiudi l’Excel aperto ({NOME_EXCEL}) o la cartella dei risultati e premi di nuovo «Analizza / riprendi»."
+        ) from exc
     lv.evento(cartella, tipo="pronto", testo="Excel pronto", conteggio=risultato["conteggio"])
     return riepilogo
 

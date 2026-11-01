@@ -15,7 +15,7 @@ from . import chat, chatgpt, configurazione, consumi, percorsi
 from . import lavoro as lv
 from .controlli import aggiungi_zone_esatte, valida
 from .preparazione import info_pagina, prepara
-from .uscita import componi
+from .uscita import ExcelAperto, componi
 
 log = logging.getLogger(__name__)
 _lock = threading.RLock()
@@ -108,7 +108,7 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
             _state.update(message="Operazione completata.")
         except Exception as exc:
             interrotta = _stop_richiesto.is_set()
-            if isinstance(exc, chatgpt.AgentError):
+            if isinstance(exc, chatgpt.AgentError | ExcelAperto):
                 message = str(exc)
             else:
                 message = "Operazione non completata. Riprova dal cantiere."

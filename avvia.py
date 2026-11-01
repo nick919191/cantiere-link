@@ -35,6 +35,10 @@ def selected(base=BASE, folder=None):
     target = (parent / key).resolve()
     if target.parent != parent:
         raise ValueError("Cartella della versione non valida.")
+    if not (target / ".installata.json").is_file():
+        # Cartella della versione cancellata a mano: si usa la copia originale invece di non partire.
+        print(f"Versione installata {key} non trovata: avvio della copia originale.", flush=True)
+        return base
     marker = json.loads((target / ".installata.json").read_text(encoding="utf-8"))
     trusted = json.loads((base / "release.json").read_text(encoding="utf-8"))
     if marker["repository"] != trusted["repository"]:

@@ -276,3 +276,17 @@ def test_native_download_never_runs_installer_without_second_action(updates, tmp
     with pytest.raises(upd.UpdateError):
         upd.open_installer()
     assert len(calls) == 1
+
+
+def test_versione_installata_cancellata_a_mano_non_blocca_l_app(updates):
+    """M4: puntatore a una cartella sparita -> copia originale, stato leggibile, rollback possibile."""
+    configurazione.scrivi_json(updates / "attiva.json", {"active": "v0.4.0-aaaaaaaaaaaa", "previous": None})
+    assert avvia.selected(folder=configurazione.directory()) == avvia.BASE
+    stato = upd.status()
+    assert "copia originale" in stato["message"] and stato["can_rollback"] and not stato["restart"]
+    client = TestClient(server.app)
+    client.headers["X-Traccia-Token"] = client.get("/api/sessione").json()["token"]
+    assert client.get("/api/aggiornamenti").status_code == 200
+    assert client.post("/api/agente/interrompi").status_code == 200  # _idle() non lancia 409
+    upd.rollback()
+    assert upd.pointer()["active"] is None
