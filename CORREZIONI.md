@@ -14,9 +14,29 @@ di Codogno già in archivio ricomposte con il codice nuovo (senza rileggere null
 | 5 | C9 ruoli terzista (conto lavorazione, reso); C11 DoP EN 1090 del fornitore intermedio | `traccia/prove.py` (`_tipi`, `dop_fornitore_intermedio`), `traccia/motore.py` (`_cantiere`, `_dop_intermedia`, CE/DoP CENTRO), `traccia/controlli.py`, `traccia/uscita.py`, `istruzioni/famiglie/ddt.md` (`causale`, tipi), `istruzioni/famiglie/dop_costruttore.md` (`ddt_citato`) | `af91cf9` | `test_prove.py` (terzista e reso, reso dal riferimento, DoP intermedia) |
 | 6 | C7 segno a mano (decisione 1) e dubbio «segni» con pagina intera, `segno_a_mano` nel riconoscimento; decisione 2 (nessun tetto dai DDT); C10 DoP P3 fabbricante + organismo; C12 certificato con DDT citato assente | `traccia/motore.py` (`_scegli_segnata`, `_dop_del_certificato`, `_voci_dai_certificati`), `traccia/veloce.py` (`piu_colate_per_profilo`, correzione `segni`), `traccia/mappa.py`, `traccia/uscita.py`, `istruzioni/famiglie/certificato_31.md` | `a3aac0d` | `test_motore.py` (segno, packing assente, P3, certificato con DDT assente); `test_veloce.py::test_piu_colate_…`; `test_mappa.py::test_riconoscimento_…` |
 | 7 | Regressione sul fascicolo reale anonimizzato | `tests/dati/codogno.json`, `tests/test_regressioni.py` | `31adec0` | `test_codogno_ruoli_e_perimetro_dei_ddt`, `test_codogno_voci_con_certificato_e_colata`, `test_codogno_tetto_non_letto_…` |
-| 8 | Conoscenza, istruzioni, motore 0.7.0, questo file | `conoscenza/01_famiglie.md`, `02_catena.md`, `05_regole_di_stato.md`, `traccia/motore.py` (docstring, `VERSIONE`), `traccia/uscita.py` (Metodo), `CORREZIONI.md` | questo commit | suite intera |
+| 8 | Conoscenza, istruzioni, motore 0.7.0, questo file | `conoscenza/01_famiglie.md`, `02_catena.md`, `05_regole_di_stato.md`, `traccia/motore.py` (docstring, `VERSIONE`), `traccia/uscita.py` (Metodo), `CORREZIONI.md` | `118c60d` | suite intera |
+| 9 | Dalla 1ª rilettura vera: campi a elenco (`a; b`) scartati dal controllo, profilo senza misura, righe di sole colate, lista letta come DDT o come certificato, croce come segno, emittente = destinatario | `traccia/controlli.py` (`CAMPI_ELENCO`), `traccia/prove.py` (`_chiave_riga`, `_liste_lette_come_ddt`, `_liste_lette_come_certificati`), `traccia/motore.py` (`SEGNI_CHE_SCELGONO`), `traccia/normalizza.py` (`contiene_numero`, `progressivo`) | `e644aa9` | `test_controlli`, `test_normalizza`, `test_prove`, `test_motore` |
+| 10 | Dalla 2ª rilettura: elenco anche nella citazione, colate dalle liste del commerciante una voce per colata (il preciso vince sul generico), misure con spazi senza parola, evento di diagnostica per la scheda mancante | `traccia/controlli.py`, `traccia/motore.py` (`_colate_da_lettere`), `traccia/normalizza.py`, `traccia/veloce.py` | `dd57044` | idem |
+| 11 | Dalla 3ª rilettura: schede recuperate da JSON non valido (causa delle "schede mancanti"), DDT letto male (emittente = destinatario) non vale come presente per C12 | `traccia/veloce.py` (`schede_dalla_risposta`), `traccia/prove.py` (`incoerente`), `traccia/motore.py` | `9e2552d` | `test_veloce`, `test_motore` |
 
-## Codogno, letture 0.5.1 ricomposte con il motore 0.7.0 (costo zero)
+## Codogno riletto con la 0.7.0 (01/11/2026, tre passate, 101 chiamate ChatGPT in più)
+
+| | App 0.6.1 | 0.7.0 dopo la rilettura |
+|---|---|---|
+| Pagine lette | 214 su 224 (10 non lette) | 224 su 224 |
+| Voci | 11, tutte DA CONFERMARE | 26: 25 PROVATO, 1 DA CONFERMARE (Arvedi, DDT 6559 di Molteni da chiedere) |
+| Voci con certificato / con colata | 3 / 0 | 26 / 26 |
+| DDT commerciante -> costruttore | 2 + De Lucchi sbagliato | 8027, 602, 2902, G01/3332, G02/51159; 587 e 595 al zincatore, 5.877 reso |
+| Travi FVS | senza colata (due colate) | colata dalla freccia a mano, PROVATO con avviso |
+| Lamiere SETAL / Mondialsteel / Gabrielli | "TUBO", senza certificato | una voce per colata, certificato per colata e timbro |
+
+Differenze rispetto all'analisi a vista (12 voci): Mondialsteel è in 13 voci (una per colata, decisione 3) invece di una;
+il tubo 76,1x5 MANCANTE non c'è (i DDT al terzista non fanno voci); CE/DoP ACCIAIERIA delle travi CELSA resta "Non
+presente" perché il lettore non ha messo la sigla "CE 0099 CELSA01BCN" nei riferimenti; il certificato della
+lamiera 12 è letto "16524497899" (a vista 16524497809). Il DDT 6559 (p. 20) è letto con emittente SACIF e
+destinatario con la P.IVA di SACIF: segnalato come incoerente e tenuto fuori perimetro.
+
+## Codogno, letture 0.5.1 ricomposte con il motore 0.7.0 (costo zero, prima della rilettura)
 
 | | Motore 0.6.1 (app) | Motore 0.7.0 (ricomposizione) |
 |---|---|---|
