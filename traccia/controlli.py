@@ -34,6 +34,8 @@ VALORI_ENUM = {
         "commerciante_costruttore",
         "acciaieria_commerciante",
         "costruttore_cliente",
+        "costruttore_terzista",
+        "terzista_cantiere",
         "non_determinabile",
     },
     "tipo_materiale": {"", "profilati_lamiere_tubi", "bulloneria", "materia_prima"},

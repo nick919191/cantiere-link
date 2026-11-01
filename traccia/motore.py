@@ -241,7 +241,7 @@ FAMIGLIE_DELLA_CATENA = {"ddt", "certificato_31", "packing_costruttore", "letter
 class Motore:
     def __init__(self, prove: dict):
         self.p = prove
-        self.ddt_noti = [d for d in prove["ddt"] if d["tipo"] not in ("costruttore_cliente", "fuori_perimetro")]
+        self.ddt_noti = [d for d in prove["ddt"] if d["tipo"] == "commerciante_costruttore"]
         self.pid_file = {f["pid"]: f["file"] for f in prove["fonti"].values()}
         self.parziali = set(prove.get("parziali", []))
 
@@ -617,14 +617,21 @@ def _cantiere(prove: dict) -> dict:
         )
     else:
         ce = _c(NON_PRESENTE, perche="Nel fascicolo non c'è una DoP del costruttore.")
-    ddt_costr = [d for d in prove["ddt"] if d["tipo"] == "costruttore_cliente"]
+    ddt_costr = [d for d in prove["ddt"] if d["tipo"] in ("costruttore_cliente", "costruttore_terzista")]
+    ddt_resi = [d for d in prove["ddt"] if d["tipo"] == "terzista_cantiere"]
+    pezzi = [
+        f"DDT n. {d['numero']} del {d['data']}" + (f" (tramite {d['tramite']})" if d.get("tramite") else "")
+        for d in ddt_costr
+    ]
+    pezzi += [f"DDT n. {d['numero']} del {d['data']} di {d['emittente']} (reso al cantiere)" for d in ddt_resi]
     ddt_c = (
         _c(
-            "; ".join(f"DDT n. {d['numero']} del {d['data']}" for d in ddt_costr),
-            *[d["fonti"].get("numero") for d in ddt_costr],
-            perche="DDT con cui il costruttore ha consegnato il materiale al cliente, trovati nel fascicolo.",
+            "; ".join(pezzi),
+            *[d["fonti"].get("numero") for d in ddt_costr + ddt_resi],
+            perche="DDT con cui il costruttore ha consegnato il materiale al cliente, trovati nel fascicolo"
+            + (" (anche tramite un terzista, es. zincatore)." if any(d.get("tramite") for d in ddt_costr) else "."),
         )
-        if ddt_costr
+        if pezzi
         else _c(NON_PRESENTE, perche="Nel fascicolo non ci sono DDT del costruttore al cliente.")
     )
     fonti_costr = [fid for fid, f in prove["fonti"].items() if costr and _stessa(prove, f["valore"], costr)]
@@ -636,6 +643,24 @@ def _cantiere(prove: dict) -> dict:
         else "Nessun documento indica con sicurezza il costruttore.",
     )
     return {"costruttore": costruttore, "ce": ce, "ddt": ddt_c}
+
+
+def _dop_intermedia(prove: dict, commerciante: str, doc: dict | None) -> tuple[dict, bool] | None:
+    """DoP EN 1090 del fornitore intermedio per la voce: stesso emittente del DDT della voce; se più d'una, quella
+    che cita il numero del DDT (campo ddt_citato o riferimento di tipo ddt). (dop, cita_il_ddt)."""
+    if not commerciante:
+        return None
+    candidate = [
+        d for d in prove.get("dop_fornitore_intermedio", []) if _stessa(prove, d.get("fabbricante", ""), commerciante)
+    ]
+    if not candidate:
+        return None
+    numero = (doc or {}).get("numero", "")
+    for d in candidate:
+        citati = [d.get("ddt_citato", "")] + [v for tipo, v in d.get("riferimenti", []) if tipo == "ddt"]
+        if numero and any(nz.cita_ddt(numero, c) or nz.cita_ddt(c, numero) for c in citati if c):
+            return d, True
+    return candidate[0], False
 
 
 def _dop_del_certificato(prove: dict, cert: dict) -> list[dict]:
@@ -761,6 +786,26 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
         ),
         None,
     )
+    intermedia = _dop_intermedia(prove, commerciante["v"], doc)
+    if centro:
+        dop_centro = _c(
+            f"DoP {centro.get('numero_dop', '')}",
+            centro["fonti"].get("numero_dop"),
+            perche="DoP di prodotto emessa dallo stesso commerciante o centro di trasformazione.",
+        )
+    elif intermedia:
+        d, cita = intermedia
+        testo = "DoP EN 1090 " + (d.get("numero_dop") or "") + (f" del {d['data']}" if d.get("data") else "")
+        testo += f", {d['norma']}" if d.get("norma") else ""
+        dop_centro = _c(
+            testo.strip(),
+            d["fonti"].get("numero_dop"),
+            d["fonti"].get("fabbricante"),
+            perche="DoP EN 1090 del fornitore intermedio (commerciante che taglia o fora), "
+            + ("che cita il DDT della voce." if cita else "emessa dal commerciante del DDT della voce."),
+        )
+    else:
+        dop_centro = _c(NON_PRESENTE, perche="Nessuna DoP del commerciante nel fascicolo.")
     titolo = voce["parte_opera"]
     return {
         "PRODUTTORE": produttore,
@@ -780,13 +825,7 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
         "CE/DoP ACCIAIERIA": ce,
         "CERT 3.1 ACCIAIERIA": numero,
         "COMMERCIANTE / CENTRO TRASF.": commerciante,
-        "CE/DoP CENTRO": _c(
-            f"DoP {centro.get('numero_dop', '')}",
-            centro["fonti"].get("numero_dop"),
-            perche="DoP di prodotto emessa dallo stesso commerciante o centro di trasformazione.",
-        )
-        if centro
-        else _c(NON_PRESENTE, perche="Nessuna DoP del commerciante nel fascicolo."),
+        "CE/DoP CENTRO": dop_centro,
         "DDT COMMERCIANTE": ddt,
         "COSTRUTTORE": cantiere["costruttore"],
         "CE/DoP COSTRUTTORE": cantiere["ce"],

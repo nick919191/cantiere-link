@@ -117,6 +117,10 @@ def _componi(cartella: Path, uscita: Path) -> dict:
         if d["id"] not in usati:
             motivo = {
                 "costruttore_cliente": "DDT del costruttore al cliente: non porta la catena dei materiali",
+                "costruttore_terzista": "DDT del costruttore a un terzista (conto lavorazione): alimenta DDT "
+                "COSTRUTTORE, non le voci",
+                "terzista_cantiere": "reso del terzista al costruttore o al cantiere: materiale del costruttore, "
+                "non una fornitura",
                 "fuori_perimetro": "DDT non diretto al costruttore (es. acciaieria -> commerciante)",
             }.get(
                 d["tipo"],

@@ -210,6 +210,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                     "copie": 1,
                     "righe": [],
                     "riferimenti": [],
+                    "servizi": [],
                     "avvisi": [],
                     "fonti": {k: fonti.aggiungi(pid, k, t.get(k)) for k in ("numero", "data", "emittente")},
                 }
@@ -220,6 +221,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
             ultimo[(p["file"], fam)] = doc
             for i, r in enumerate(s.get("righe", [])):
                 if _v(r.get("servizio")).lower() == "si":
+                    doc.setdefault("servizi", []).append(_v(r.get("descrizione")))
                     continue
                 descr = _v(r.get("profilo")) or _v(r.get("descrizione"))
                 colate = _colate_riga(r)
@@ -329,6 +331,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 {
                     "pid": pid,
                     **{k: _v(v) for k, v in t.items()},
+                    "riferimenti": [(r.get("tipo", ""), r["v"]) for r in s.get("riferimenti", []) if r.get("v")],
                     "fonti": {k: fonti.aggiungi(pid, k, v) for k, v in t.items()},
                 }
             )
@@ -371,13 +374,16 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
         c["pagine_di_testo"] = ", ".join(f"{i}/{n}" for i, n in sorted(set(c["pagine_di"])))
 
     costruttore = _costruttore(ddt, dop_costr, packing, stessa)
-    for d in ddt:
-        if costruttore and stessa(d["emittente"], costruttore):
-            d["tipo"] = "costruttore_cliente"
-        elif costruttore and stessa(d["destinatario"], costruttore):
-            d["tipo"] = "commerciante_costruttore"
-        else:
-            d["tipo"] = "fuori_perimetro"
+    _tipi(ddt, costruttore, stessa)
+    commercianti = [d["emittente"] for d in ddt if d["tipo"] == "commerciante_costruttore" and d["emittente"]]
+    dop_intermedi = [
+        d
+        for d in dop_costr
+        if d.get("fabbricante")
+        and not (costruttore and stessa(d["fabbricante"], costruttore))
+        and any(stessa(d["fabbricante"], c) for c in commercianti)
+    ]
+    dop_costr = [d for d in dop_costr if d not in dop_intermedi]
     non_lette = [p for p in pagine if p["pid"] not in schede or schede[p["pid"]].get("famiglia") == "illeggibile"]
     return {
         "formato": FORMATO,
@@ -394,11 +400,48 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
         "ddt": ddt,
         "certificati": certificati,
         "dop_costruttore": dop_costr,
+        "dop_fornitore_intermedio": dop_intermedi,
         "dop_prodotto": dop_prod,
         "lettere": lettere,
         "escluse": escluse,
         "fonti": fonti.tutte,
     }
+
+
+CONTO_LAVORAZIONE = re.compile(r"conto\s*lavor|c/\s*lavor|lavorazione\s+per\s+conto|in\s+conto\s+terzi", re.I)
+RESO = re.compile(r"\breso\b|\bresi\b|\brestituzione\b|\britorno\b", re.I)
+
+
+def _tipi(ddt: list[dict], costruttore: str, stessa) -> None:
+    """Tipo di ogni DDT dal fascicolo (conoscenza 02): emesso dal costruttore -> costruttore_cliente, oppure
+    costruttore_terzista se la causale dice conto lavorazione o se un DDT del terzista lo cita come reso; ricevuto
+    dal costruttore -> commerciante_costruttore, oppure terzista_cantiere se è un reso (causale, righe che citano
+    il reso del DDT N, riferimento a un DDT emesso dal costruttore). Il resto è fuori perimetro."""
+    emessi = [d for d in ddt if costruttore and stessa(d["emittente"], costruttore)]
+    ricevuti = [d for d in ddt if d not in emessi and costruttore and stessa(d["destinatario"], costruttore)]
+    for d in ddt:
+        d["tipo"] = "fuori_perimetro"
+        d["tramite"] = ""
+    for d in emessi:
+        d["tipo"] = "costruttore_terzista" if CONTO_LAVORAZIONE.search(_testo_ddt(d)) else "costruttore_cliente"
+    for d in ricevuti:
+        citati = [v for tipo, v in d.get("riferimenti", []) if tipo == "ddt"]
+        resi = [e for e in emessi if any(nz.stesso_numero(v, e["numero"]) in ("uguale", "serie") for v in citati)]
+        testo = _testo_ddt(d)
+        if resi or (RESO.search(testo) and re.search(r"\bddt\b|\bd\.d\.t\b|documento di trasporto", testo, re.I)):
+            d["tipo"] = "terzista_cantiere"
+            for e in resi:
+                e["tipo"] = "costruttore_terzista"
+                e["tramite"] = e["destinatario"] or d["emittente"]
+        else:
+            d["tipo"] = "commerciante_costruttore"
+    for e in emessi:
+        if e["tipo"] == "costruttore_terzista" and not e["tramite"]:
+            e["tramite"] = e["destinatario"]
+
+
+def _testo_ddt(d: dict) -> str:
+    return " ".join([d.get("causale", "")] + [r.get("descrizione", "") for r in d["righe"]] + d.get("servizi", []))
 
 
 def _raggruppa(nomi: list[str], stessa) -> list[list[str]]:

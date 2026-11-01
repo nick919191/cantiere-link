@@ -138,3 +138,127 @@ def test_lettera_con_righe_placca_colata_certificato():
     lt = prove["lettere"][0]
     assert lt["ddt_citato"] == "300" and lt["certificati"] == ["5503", "5503"]
     assert [(r["placca"], r["colata"]) for r in lt["righe"]] == [("P1", "H3003"), ("P2", "H3004")]
+
+
+def test_terzista_conto_lavorazione_e_reso_non_sono_fornitori():
+    """C9: costruttore -> zincatore (conto lavorazione) e reso del zincatore al cantiere alimentano DDT COSTRUTTORE,
+    mai le voci. Reale (anonimo): reso che cita 'Reso Vs. ddt n.'; inventato: causale conto lavorazione."""
+    from traccia.motore import elabora
+
+    fogli = [
+        ("a.pdf", 1, ddt("10", ["HEA 160"], emittente="FORNITORE 001 SRL", destinatario="COSTRUTTORE 001 SRL")),
+        ("b.pdf", 1, ddt("20", ["IPE 200"], emittente="FORNITORE 002 SRL", destinatario="COSTRUTTORE 001 SRL")),
+    ]
+    uscita = ddt(
+        "587",
+        ["N. 14 Travi HEA 160", "N. 57 TUBO 76,1X5 L. 1320 mm"],
+        emittente="Costruttore 001 S.r.l.",
+        destinatario="ZINCATURA NORD SPA",
+    )
+    uscita["testata"]["causale"] = V("CONTO LAVORAZIONE")
+    reso = ddt(
+        "5.877",
+        ["Ns. IC n. 6058/Z Reso Vs. ddt. n. 0000587 del 30/09/2025 TUBO 76,1x5"],
+        emittente="zincatura nord spa",
+        destinatario="COSTRUTTORE 001 SRL",
+    )
+    reso["riferimenti"] = [{"tipo": "ddt", "v": "0000587", "cit": "Reso Vs. ddt. n. 0000587", "zona": []}]
+    reso["trascrizione"] += "\nReso Vs. ddt. n. 0000587"
+    altro = ddt("99", ["UPN 100"], emittente="COSTRUTTORE 001 SRL", destinatario="CLIENTE FINALE SRL")
+    prove = _prove(fogli + [("c.pdf", 1, uscita), ("d.pdf", 1, reso), ("e.pdf", 1, altro)])
+    tipi = {d["numero"]: d["tipo"] for d in prove["ddt"]}
+    assert tipi == {
+        "10": "commerciante_costruttore",
+        "20": "commerciante_costruttore",
+        "587": "costruttore_terzista",
+        "5.877": "terzista_cantiere",
+        "99": "costruttore_cliente",
+    }
+    assert next(d for d in prove["ddt"] if d["numero"] == "587")["tramite"] == "ZINCATURA NORD SPA"
+    r = elabora(prove)
+    assert {v["voce"] for v in r["voci"]} == {"HEA 160", "IPE 200"}  # niente voci dal terzista
+    colonna = r["voci"][0]["colonne"]["DDT COSTRUTTORE"]["v"]
+    assert "DDT n. 587" in colonna and "tramite ZINCATURA NORD SPA" in colonna and "DDT n. 99" in colonna
+    assert "5.877" in colonna and "reso al cantiere" in colonna
+
+
+def test_reso_senza_causale_riconosciuto_dal_riferimento_al_ddt_del_costruttore():
+    fogli = [
+        ("a.pdf", 1, ddt("10", ["HEA 160"], emittente="FORNITORE 001 SRL", destinatario="COSTRUTTORE 001 SRL")),
+        ("b.pdf", 1, ddt("20", ["IPE 200"], emittente="FORNITORE 002 SRL", destinatario="COSTRUTTORE 001 SRL")),
+        (
+            "c.pdf",
+            1,
+            ddt("300", ["N. 3 TRAVI HEA 160"], emittente="COSTRUTTORE 001 SRL", destinatario="VERNICIATURA SUD SRL"),
+        ),
+    ]
+    reso = ddt("77", ["TRAVI HEA 160 verniciate"], emittente="VERNICIATURA SUD SRL", destinatario="COSTRUTTORE 001 SRL")
+    reso["riferimenti"] = [{"tipo": "ddt", "v": "300", "cit": "300", "zona": []}]
+    reso["trascrizione"] += "\n300"
+    prove = _prove(fogli + [("d.pdf", 1, reso)])
+    tipi = {d["numero"]: d["tipo"] for d in prove["ddt"]}
+    assert tipi["300"] == "costruttore_terzista" and tipi["77"] == "terzista_cantiere"
+
+
+def test_dop_en_1090_del_fornitore_intermedio_non_e_del_costruttore():
+    """C11: la DoP EN 1090 del commerciante che taglia va in CE/DoP CENTRO della voce, non in CE/DoP COSTRUTTORE."""
+    from traccia.motore import elabora
+
+    fogli = [
+        (
+            "a.pdf",
+            1,
+            ddt(
+                "8027",
+                ["HEA 160"],
+                emittente="FERRAMENTA VILLAFRANCA SIDERURGICA S.p.A.",
+                destinatario="S.A.C.I.F. SRL",
+            ),
+        ),
+        ("b.pdf", 1, ddt("20", ["IPE 200"], emittente="FORNITORE 002 SRL", destinatario="SACIF SRL")),
+        (
+            "c.pdf",
+            1,
+            scheda(
+                "dop_costruttore",
+                {
+                    "fabbricante": V("FVS S.p.A."),
+                    "numero_dop": V("9588.25"),
+                    "norma": V("EN 1090-1:2009"),
+                    "ddt_citato": V("8027"),
+                },
+            ),
+        ),
+        (
+            "d.pdf",
+            1,
+            scheda(
+                "dop_costruttore",
+                {"fabbricante": V("FVS S.p.A."), "numero_dop": V("9000.25"), "norma": V("EN 1090-1:2009")},
+            ),
+        ),
+        (
+            "e.pdf",
+            1,
+            scheda(
+                "dop_costruttore",
+                {
+                    "fabbricante": V("SACIF SRL"),
+                    "numero_dop": V("D-7"),
+                    "norma": V("EN 1090-1"),
+                    "classe_esecuzione": V("EXC3"),
+                },
+            ),
+        ),
+    ]
+    prove = _prove(fogli)
+    assert prove["costruttore"] == "SACIF SRL"
+    assert [d["numero_dop"] for d in prove["dop_costruttore"]] == ["D-7"]
+    assert [d["numero_dop"] for d in prove["dop_fornitore_intermedio"]] == ["9588.25", "9000.25"]
+    r = elabora(prove)
+    v = next(v for v in r["voci"] if v["voce"] == "HEA 160")
+    assert v["colonne"]["CE/DoP COSTRUTTORE"]["v"].startswith("DoP n. D-7")
+    assert v["colonne"]["CE/DoP CENTRO"]["v"].startswith("DoP EN 1090 9588.25")  # quella che cita il DDT 8027
+    assert "cita il DDT" in v["colonne"]["CE/DoP CENTRO"]["perche"]
+    v = next(v for v in r["voci"] if v["voce"] == "IPE 200")
+    assert v["colonne"]["CE/DoP CENTRO"]["v"] == "Non presente nel fascicolo"
