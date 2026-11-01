@@ -8,6 +8,7 @@ Gli originali non si toccano: gli ZIP si aprono in ingresso/estratti/.
 import hashlib
 import io
 import json
+import math
 import zipfile
 from pathlib import Path
 
@@ -20,6 +21,8 @@ ESTENSIONI_PDF = {".pdf"}
 ESTENSIONI_IMMAGINE = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 SOGLIA_INCHIOSTRO = 0.0005  # quota di pixel scuri sotto cui una pagina senza testo è bianca
 MAX_FILE_ZIP = 2000
+MAX_PIXEL_PAGINA = 50_000_000  # oltre, la scala si riduce: una pagina 14400x14400 pt a 150 dpi sarebbe 3,6 GB
+MAX_PAGINE_FILE = 1000  # un file con più pagine viene dichiarato non leggibile
 MAX_BYTE_ZIP = 1_000_000_000
 MAX_PROFONDITA_ZIP = 3
 
@@ -147,15 +150,25 @@ def _parole(pagina: pdfium.PdfPage) -> tuple[str, list[list]]:
     return testo.replace("\r\n", "\n").strip(), parole
 
 
+def _scala(pagina: pdfium.PdfPage, dpi: int) -> float:
+    """Scala di resa: quella dei dpi richiesti, ridotta se la pagina dichiara più pixel di MAX_PIXEL_PAGINA."""
+    w, h = pagina.get_size()
+    scala = dpi / 72
+    pixel = w * h * scala * scala
+    return scala * math.sqrt(MAX_PIXEL_PAGINA / pixel) if pixel > MAX_PIXEL_PAGINA else scala
+
+
 def _pagine_di(sorgente: Path):
     """(numero pagina, png, testo nativo, parole, totale pagine)."""
     if sorgente.suffix.lower() in ESTENSIONI_PDF:
         doc = pdfium.PdfDocument(sorgente)
         try:
+            if len(doc) > MAX_PAGINE_FILE:
+                raise ValueError(f"troppe pagine ({len(doc)}, massimo {MAX_PAGINE_FILE})")
             for i in range(len(doc)):
                 pagina = doc[i]
                 buf = io.BytesIO()
-                pagina.render(scale=DPI / 72).to_pil().convert("RGB").save(buf, format="PNG")
+                pagina.render(scale=_scala(pagina, DPI)).to_pil().convert("RGB").save(buf, format="PNG")
                 testo, parole = _parole(pagina)
                 pagina.close()
                 yield i + 1, buf.getvalue(), testo, parole, len(doc)
@@ -246,7 +259,8 @@ def ritaglio(cartella_lavoro: Path, info: dict, zona: list[int]) -> bytes:
     if sorgente.suffix.lower() in ESTENSIONI_PDF:
         doc = pdfium.PdfDocument(sorgente)
         try:
-            img = doc[info["pagina"] - 1].render(scale=DPI_RITAGLIO / 72).to_pil().convert("RGB")
+            pagina = doc[info["pagina"] - 1]
+            img = pagina.render(scale=_scala(pagina, DPI_RITAGLIO)).to_pil().convert("RGB")
         finally:
             doc.close()
     else:

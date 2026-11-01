@@ -3,6 +3,7 @@
 Il servizio locale collega il browser all’agente ChatGPT e conserva originali e risultati sul computer.
 """
 
+import hashlib
 import json
 import logging
 import os
@@ -67,6 +68,20 @@ _PREPARING = set()
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
+_TOKEN_DALLA_FINESTRA = False  # True quando desktop.py ha generato il token e lo consegna nel frammento dell'URL
+
+
+def imposta_token(token: str) -> None:
+    """Token scelto da desktop.py prima dell'avvio: /api/sessione si spegne e nessun altro processo locale lo legge."""
+    global _TOKEN, _TOKEN_DALLA_FINESTRA
+    _TOKEN, _TOKEN_DALLA_FINESTRA = token, True
+
+
+def impronta_istanza() -> str:
+    """Identifica questa istanza in /api/salute senza esporre il token."""
+    return hashlib.sha256(_TOKEN.encode()).hexdigest()[:16]
+
+
 # Nessuno script o handler inline nell'app: la CSP fa da rete di sicurezza all'escaping. Gli stili inline restano
 # (attributi style nell'interfaccia e nelle pagine di prova). La demo statica in demo/ ha ancora script inline.
 _CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
@@ -111,6 +126,8 @@ async def agent_error(_request: Request, exc: chatgpt.AgentError):
 
 @app.get("/api/sessione")
 def sessione():
+    if _TOKEN_DALLA_FINESTRA:
+        raise HTTPException(404, "La sessione si apre soltanto dalla finestra dell’app.")
     return {"token": _TOKEN}
 
 
@@ -344,7 +361,7 @@ def _dentro(base: Path, relativo: str) -> Path:
 
 @app.get("/api/salute")
 def salute():
-    return {"ok": True, "application": "tracciabilita-materiali"}
+    return {"ok": True, "application": "tracciabilita-materiali", "istanza": impronta_istanza()}
 
 
 @app.get("/", response_class=HTMLResponse)

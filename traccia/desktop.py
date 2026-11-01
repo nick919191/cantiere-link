@@ -1,6 +1,9 @@
 """Avvio locale su Windows e macOS; nessun eseguibile esterno dell’agente richiesto."""
 
+import hashlib
+import json
 import os
+import secrets
 import socket
 import threading
 import webbrowser
@@ -14,8 +17,30 @@ from . import configurazione, percorsi
 PORTE_DI_RISERVA = 20
 
 
-def _stato_porta(porta: int) -> str:
-    """'libera', 'nostra' (l’app è già aperta su quella porta) o 'altra'."""
+def _sessione_file():
+    return configurazione.directory() / "sessione.json"
+
+
+def _sessione_salvata() -> dict:
+    """Porta e token dell'istanza avviata da questo utente (file leggibile solo da lui); {} se assente o rotto."""
+    try:
+        valore = json.loads(_sessione_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return valore if isinstance(valore, dict) and isinstance(valore.get("token"), str) else {}
+
+
+def _impronta(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
+
+
+def _url_finestra(porta: int, token: str) -> str:
+    """Il token viaggia nel frammento: non arriva al server nella richiesta e non resta nei log."""
+    return f"http://127.0.0.1:{porta}/#t={token}"
+
+
+def _stato_porta(porta: int, istanza: str | None = None) -> str:
+    """'libera', 'nostra' (l’app è già aperta su quella porta, con l'impronta attesa) o 'altra'."""
     try:
         with socket.create_connection(("127.0.0.1", porta), timeout=0.5):
             pass
@@ -30,12 +55,17 @@ def _stato_porta(porta: int) -> str:
         identity = httpx.get(f"http://127.0.0.1:{porta}/api/salute", timeout=2).json()
     except (httpx.HTTPError, ValueError):
         return "altra"
-    if isinstance(identity, dict) and identity.get("application") == "tracciabilita-materiali":
+    if (
+        isinstance(identity, dict)
+        and identity.get("application") == "tracciabilita-materiali"
+        and istanza is not None
+        and identity.get("istanza") == istanza
+    ):
         return "nostra"
-    return "altra"
+    return "altra"  # anche chi dichiara di essere l'app ma non ha l'impronta di questo utente
 
 
-def _scegli_porta() -> tuple[int, bool]:
+def _scegli_porta(istanza: str | None = None) -> tuple[int, bool]:
     """Porta da usare e se l’app vi è già aperta. Con TRACCIA_PORTA si usa solo quella."""
     if os.environ.get("TRACCIA_PORTA"):
         candidate = [percorsi.PORTA]
@@ -43,7 +73,7 @@ def _scegli_porta() -> tuple[int, bool]:
         candidate = list(range(percorsi.PORTA, percorsi.PORTA + PORTE_DI_RISERVA))
     stati = {}
     for porta in candidate:
-        stati[porta] = _stato_porta(porta)
+        stati[porta] = _stato_porta(porta, istanza)
         if stati[porta] == "nostra":
             return porta, True
     for porta in candidate:
@@ -88,17 +118,23 @@ def _apri(url: str, webview) -> None:
 
 
 def main():
-    porta, gia_aperta = _scegli_porta()
+    precedente = _sessione_salvata()
+    porta, gia_aperta = _scegli_porta(_impronta(precedente["token"]) if precedente else None)
     url = f"http://127.0.0.1:{porta}"
     webview = _finestra()
     if gia_aperta:
-        _apri(url, webview)
+        _apri(_url_finestra(porta, precedente["token"]), webview)
         return
     configurazione.directory().mkdir(parents=True, exist_ok=True)
     try:
         with FileLock(configurazione.directory() / "app.lock", timeout=0):
+            from . import server
             from .server import app
 
+            token = secrets.token_urlsafe(32)
+            server.imposta_token(token)
+            configurazione.scrivi_json(_sessione_file(), {"porta": porta, "token": token})
+            url_finestra = _url_finestra(porta, token)
             instance = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=porta, access_log=False))
 
             def shutdown():
@@ -109,7 +145,7 @@ def main():
 
             app.state.shutdown = shutdown
             if webview is None:
-                threading.Thread(target=lambda: _attendi(url) and _apri(url, None), daemon=True).start()
+                threading.Thread(target=lambda: _attendi(url) and _apri(url_finestra, None), daemon=True).start()
                 instance.run()
                 return
             # Con la finestra propria il server gira in un thread: la finestra deve stare nel thread principale.
@@ -117,7 +153,7 @@ def main():
             server_thread.start()
             if not _attendi(url):
                 raise RuntimeError("Il servizio locale non è partito. Consulta la cartella dati dell’app.")
-            _apri(url, webview)  # ritorna alla chiusura della finestra
+            _apri(url_finestra, webview)  # ritorna alla chiusura della finestra
             instance.should_exit = True
             server_thread.join(timeout=10)
     except Timeout as exc:

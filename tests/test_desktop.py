@@ -36,7 +36,7 @@ def _porta_libera() -> int:
 def test_porta_occupata_da_altra_app_passa_alla_successiva(altra_app, monkeypatch):
     monkeypatch.delenv("TRACCIA_PORTA", raising=False)
     monkeypatch.setattr(percorsi, "PORTA", altra_app)
-    monkeypatch.setattr(desktop, "_stato_porta", lambda p: "altra" if p == altra_app else "libera")
+    monkeypatch.setattr(desktop, "_stato_porta", lambda p, *_: "altra" if p == altra_app else "libera")
     assert desktop._scegli_porta() == (altra_app + 1, False)
 
 
@@ -49,7 +49,7 @@ def test_app_gia_aperta_su_porta_di_riserva_viene_riusata(monkeypatch):
     monkeypatch.delenv("TRACCIA_PORTA", raising=False)
     monkeypatch.setattr(percorsi, "PORTA", 9000)
     monkeypatch.setattr(
-        desktop, "_stato_porta", lambda p: {9000: "altra", 9001: "libera", 9003: "nostra"}.get(p, "libera")
+        desktop, "_stato_porta", lambda p, *_: {9000: "altra", 9001: "libera", 9003: "nostra"}.get(p, "libera")
     )
     assert desktop._scegli_porta() == (9003, True)
 
@@ -57,6 +57,6 @@ def test_app_gia_aperta_su_porta_di_riserva_viene_riusata(monkeypatch):
 def test_porta_esplicita_non_cerca_alternative(monkeypatch):
     monkeypatch.setenv("TRACCIA_PORTA", "9000")
     monkeypatch.setattr(percorsi, "PORTA", 9000)
-    monkeypatch.setattr(desktop, "_stato_porta", lambda p: "altra")
+    monkeypatch.setattr(desktop, "_stato_porta", lambda p, *_: "altra")
     with pytest.raises(RuntimeError, match="9000"):
         desktop._scegli_porta()

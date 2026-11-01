@@ -81,7 +81,7 @@ let pollTimer=null,pollInCorso=false;
 function intervalloPoll(){if(document.hidden)return 15000;const attivo=!!agentState.busy||!!(L&&stato&&(stato.preparing||!['pronto','errore'].includes(stato.fase)));return attivo?2000:5000;}
 async function ciclo(){if(pollInCorso)return;pollInCorso=true;clearTimeout(pollTimer);try{if(L)await aggiorna();await poll();}finally{pollInCorso=false;pollTimer=setTimeout(ciclo,intervalloPoll());}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)ciclo();});
-async function init(){try{localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();if(innerWidth<=800)toggleChat(false);await ciclo();}catch(e){notify('Avvio non riuscito: '+e.message);}}
+async function init(){try{const consegnato=location.hash.match(/^#t=([\w-]+)$/);if(consegnato){localToken=consegnato[1];history.replaceState(null,'',location.pathname);}else localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();if(innerWidth<=800)toggleChat(false);await ciclo();}catch(e){notify('Avvio non riuscito: '+e.message);}}
 init();
 
 function updatesContent(){
