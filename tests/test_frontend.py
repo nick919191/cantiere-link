@@ -58,3 +58,14 @@ def test_un_solo_timer_di_poll_con_backoff():
     app, cantiere = _testo("app.js"), _testo("cantiere.js")
     assert "setInterval(" not in app and "setInterval(" not in cantiere
     assert "visibilitychange" in app and "document.hidden" in app
+
+
+def test_u1_a_lavoro_finito_i_risultati_salgono_e_la_lettura_si_ripiega():
+    """U1: a fase "pronto" la vista di lettura si nasconde/ripiega sotto i risultati, niente residui di animazione."""
+    html, cantiere = _testo("index.html"), _testo("cantiere.js")
+    assert '<details class="flow-details" id="dettagli"' in html
+    assert ".finito .look{display:none}" in html and ".finito .flow-details{order:3}" in html
+    assert 'classList.toggle("finito",' in cantiere and '$("dettagli").open=false' in cantiere
+    assert "Rileggi pagine mancanti" in cantiere and 'ab.classList.toggle("s",finito)' in cantiere
+    assert 'querySelectorAll(".flyer").forEach(f=>f.remove())' in cantiere
+    assert 'stato.fase==="pronto"||document.hidden){metti(x);return}' in cantiere

@@ -77,6 +77,13 @@ input.nome:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px va
 .ev{display:flex;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line);animation:in .35s;align-items:flex-start}
 .ev time{color:var(--soft);font-size:12px;width:58px;flex:none}
 .flyer{position:fixed;z-index:9;width:28px;pointer-events:none;border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+/* U1: a lavoro finito i risultati salgono sotto la barra di avanzamento; lettura e diario si ripiegano sotto */
+.flow-details>summary{display:none}
+#lavoro.finito{display:flex;flex-direction:column}.finito .flow-details{order:3}.finito .res{margin-top:0}
+.finito .flow-details>summary{display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:15px;padding:14px 0 6px;color:var(--muted);list-style:none}
+.finito .flow-details>summary::-webkit-details-marker{display:none}
+.finito .flow-details>summary::before{content:"›";display:inline-block;width:14px;transition:transform .2s}.finito .flow-details[open]>summary::before{transform:rotate(90deg)}
+.finito .look{display:none}.finito .flow{grid-template-columns:1fr;margin-top:8px}
 
 .res{margin-top:22px}
 .ready{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:16px}
@@ -183,6 +190,7 @@ td.src:hover{background:var(--accent-bg)}
         <div class="idle hidden" id="idle">Nessuna attività da qualche minuto: controlla lo stato dell’agente o premi Analizza / riprendi.</div>
       </div>
     </div>
+    <details class="flow-details" id="dettagli" open><summary>Lettura e smistamento delle pagine</summary>
     <div class="flow">
       <div class="card look">
         <h3>Il documento in esame</h3>
@@ -195,7 +203,7 @@ td.src:hover{background:var(--accent-bg)}
         <div class="bins" id="bins"></div>
         <div class="card feed"><h4>Diario del lavoro</h4><div id="feed"></div></div>
       </div>
-    </div>
+    </div></details>
 
     <div class="res hidden" id="res">
       <div class="ready">

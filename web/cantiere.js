@@ -11,7 +11,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const api=async(p,o)=>{const r=await fetch(p,o);const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
  if(!r.ok)throw new Error(d&&typeof d.detail==="string"?d.detail:`Operazione non riuscita (HTTP ${r.status})`);
  if(d===null)throw new Error(`Risposta non valida dalla piattaforma (HTTP ${r.status})`);return d;};
-let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),risultatoCaricato=false,inizio=true;
+let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),risultatoCaricato=false,inizio=true,eraFinito=false;
 
 function vai(id){location.hash=id?"#/"+id:"";}
 window.onhashchange=route;
@@ -43,8 +43,8 @@ function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)}
 function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":l.fase==="errore"?"r":"b"}" title="${esc(l.motivo||"")}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"||l.fase==="errore"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
 
 /* ---------- lavoro ---------- */
-function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
- $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
+function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;eraFinito=false;
+ $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");$("lavoro").classList.remove("finito");$("dettagli").open=true;togliFlyer();
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" data-act="family" data-family="${k}"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
  aggiorna()}  // poi è il ciclo di poll in app.js a tenerlo aggiornato
@@ -62,6 +62,10 @@ async function aggiorna(){if(!L)return;
  $("phase").innerHTML=["Ricevuti","Preparazione","Lettura e smistamento","Collegamento a ritroso","Excel"].map((t,j)=>`<span class="${j<=i||stato.fase==="pronto"?"ok":""} ${j===i+1&&stato.fase!=="pronto"?"on":""}">${t}</span>`).join("");
  $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
  $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
+ // U1: a lavoro finito i risultati vengono prima; lettura e diario restano sotto, ripiegati (una volta sola, poi decide l'utente)
+ const finito=stato.fase==="pronto";$("lavoro").classList.toggle("finito",finito);
+ if(finito&&!eraFinito){eraFinito=true;$("dettagli").open=false;togliFlyer()}if(!finito)eraFinito=false;
+ const ab=$("analyze-button");ab.classList.toggle("s",finito);ab.classList.toggle("hidden",finito&&!stato.non_lette.length);ab.textContent=finito?"Rileggi pagine mancanti":"Analizza / riprendi";
  // pagine nei contenitori
  const nuove=stato.pagine.filter(x=>x.famiglia&&!giaVisti.has(x.pid));
  nuove.forEach((x,k)=>{giaVisti.add(x.pid);if(inizio)metti(x);else setTimeout(()=>vola(x),k*180)});
@@ -75,7 +79,8 @@ async function aggiorna(){if(!L)return;
  if(stato.fase==="pronto"&&!risultatoCaricato){risultatoCaricato=true;risultato()}}
 function img(pid){return `/api/lavori/${L}/miniature/${pid}.png`}
 function metti(x){const st=$("bin-"+x.famiglia).querySelector(".stack");if(st.children.length<18)st.insertAdjacentHTML("beforeend",`<img src="${img(x.pid)}" alt="">`)}
-function vola(x){const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
+function togliFlyer(){document.querySelectorAll(".flyer").forEach(f=>f.remove())}
+function vola(x){if(!stato||stato.fase==="pronto"||document.hidden){metti(x);return}const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
  const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
