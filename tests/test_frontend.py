@@ -94,3 +94,70 @@ def test_u6_chat_chiusa_all_avvio_a_ogni_larghezza():
     app = _testo("app.js")
     assert "innerWidth<=800)toggleChat(false)" not in app
     assert re.search(r"route\(\);toggleChat\(false\);", app)
+
+
+def test_u7_anteprima_nome_file_e_scheda_si_riferiscono_alla_stessa_pagina():
+    cantiere = _testo("cantiere.js")
+    assert "function nomePagina(pid,testo)" in cantiere
+    scheda = re.search(r'if\(e\.tipo==="scheda"&&e\.pid\)\{(.*?)\}\n', cantiere).group(1)
+    assert "mostraPagina(e.pid,true)" in scheda and '$("lookfile").textContent="Letta: "+nomePagina(e.pid)' in scheda
+    assert 'if(finito)$("lookfile").textContent=`Lettura completata' in cantiere
+    assert "guarda /" not in cantiere and "Sta guardando" not in cantiere
+
+
+def test_u8_etichette_agente_e_bottone_di_lettura():
+    app, cantiere, html = _testo("app.js"), _testo("cantiere.js"), _testo("index.html")
+    assert "'Agente fermo'" in app and "'Da verificare'" not in app and "'Ferma'" not in app
+    assert 'stato.lette?"Riprendi lettura":"Avvia lettura"' in cantiere
+    for nome in ("index.html", "app.js", "cantiere.js"):
+        assert "Analizza / riprendi" not in _testo(nome), nome
+    assert ">Avvia lettura</button>" in html
+    from traccia import agente, uscita
+
+    for modulo in (agente, uscita):
+        assert "Analizza / riprendi" not in (
+            percorsi.CODICE / "traccia" / f"{modulo.__name__.split('.')[-1]}.py"
+        ).read_text(encoding="utf-8")
+
+
+def test_u11_icone_svg_al_posto_dei_glifi_unicode():
+    html, app = _testo("index.html"), _testo("app.js")
+    for glifo in "◐◎✧⌘⌁↻⏻⚙＋↶⌄":
+        assert glifo not in html, glifo
+        assert glifo not in app, glifo
+    assert 'data-act="home">T</div>' not in html and 'href="#ic-link"' in html
+    for icona in (
+        "ic-gear",
+        "ic-plus",
+        "ic-history",
+        "ic-chevron",
+        "ic-send",
+        "ic-general",
+        "ic-account",
+        "ic-models",
+        "ic-keys",
+        "ic-diag",
+        "ic-update",
+        "ic-power",
+    ):
+        assert f'<symbol id="{icona}"' in html and f'href="#{icona}"' in html + app, icona
+
+
+def test_u12_tastiera_progressbar_e_dialog_nativo():
+    html, cantiere, app = _testo("index.html"), _testo("cantiere.js"), _testo("app.js")
+    assert (
+        'role="progressbar" aria-label="Avanzamento del lavoro"' in html
+        and '$("prog").setAttribute("aria-valuenow",p)' in cantiere
+    )
+    assert '<dialog class="modal" id="modal" aria-labelledby="mtitle">' in html
+    assert "m.showModal()" in cantiere and '$("modal").classList' not in cantiere and "$('modal').classList" not in app
+    assert '<div class="card lav" role="button" tabindex="0"' in cantiere
+    assert '<button type="button" class="card bin"' in cantiere and '<button type="button" class="pg"' in cantiere
+    assert cantiere.count('role="button" tabindex="0" data-act="open-proof"') == 3  # catena, tabella, ritagli
+    assert "e.target.matches('[data-act][role=\"button\"]')" in app and "e.target.click()" in app
+
+
+def test_u14_nessun_font_dichiarato_e_mai_caricato():
+    for nome in ("index.html", "app.css"):
+        assert not re.search(r"\bInter\b", _testo(nome)), nome
+    assert not re.search(r"\bInter\b", (percorsi.CODICE / "docs" / "guide.css").read_text(encoding="utf-8"))

@@ -203,7 +203,7 @@ def _componi(cartella: Path, uscita: Path) -> dict:
         uscita.rename(finale)
     except PermissionError as exc:
         raise ExcelAperto(
-            f"Chiudi l’Excel aperto ({NOME_EXCEL}) o la cartella dei risultati e premi di nuovo «Analizza / riprendi»."
+            f"Chiudi l’Excel aperto ({NOME_EXCEL}) o la cartella dei risultati e premi di nuovo «Riprendi lettura»."
         ) from exc
     lv.evento(cartella, tipo="pronto", testo="Excel pronto", conteggio=risultato["conteggio"])
     return riepilogo

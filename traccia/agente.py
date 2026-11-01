@@ -126,7 +126,7 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
 
 def _check():
     if _cancel.is_set():
-        raise chatgpt.AgentError("Analisi interrotta. Premi «Analizza / riprendi» per continuare dalle pagine rimaste.")
+        raise chatgpt.AgentError("Analisi interrotta. Premi «Riprendi lettura» per continuare dalle pagine rimaste.")
 
 
 def analizza(cartella: Path, model: str, effort: str) -> None:
@@ -159,7 +159,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
             f"Lette {len(pages) - len(rimaste)} pagine su {len(pages)}; Excel pronto con queste. "
             f"{len(rimaste)} da rileggere ({elenco}): anche al secondo tentativo il controllo ha trovato citazioni "
             "che non corrispondono al testo della pagina, quindi la scheda non è stata accettata. Premi "
-            "«Analizza / riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
+            "«Riprendi lettura» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
 
 

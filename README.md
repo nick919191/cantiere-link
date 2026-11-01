@@ -79,7 +79,7 @@ Il collegamento segue [Sign in with ChatGPT per applicazioni open source locali]
 ## Il primo cantiere
 
 1. Inserisci un nome e carica PDF, immagini o ZIP.
-2. Attendi la preparazione locale delle pagine, poi premi Analizza / riprendi.
+2. Attendi la preparazione locale delle pagine, poi premi «Avvia lettura».
 3. Segui il diario. Le letture accettate vengono conservate; quelle non valide restano da verificare.
 4. Apri i collegamenti a ritroso e confronta i dati con le pagine originali.
 5. Seleziona Chiedi in chat su una voce, oppure aggiungi pagine con `+` e formula una domanda precisa.

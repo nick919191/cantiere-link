@@ -40,19 +40,19 @@ function dettaglio(x){try{const d=JSON.parse(x.responseText).detail;return typeo
 const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato",errore:"Nessuna pagina leggibile"};
 function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
 function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":l.fase==="errore"?"r":"b"}" title="${esc(l.motivo||"")}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"||l.fase==="errore"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
+function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" role="button" tabindex="0" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":l.fase==="errore"?"r":"b"}" title="${esc(l.motivo||"")}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"||l.fase==="errore"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;eraFinito=false;
  $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");$("lavoro").classList.remove("finito");$("dettagli").open=true;togliFlyer();
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
- $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" data-act="family" data-family="${k}"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
+ $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<button type="button" class="card bin" id="bin-${k}" data-act="family" data-family="${k}"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></button>`).join("");
  aggiorna()}  // poi è il ciclo di poll in app.js a tenerlo aggiornato
 async function aggiorna(){if(!L)return;
  try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").textContent="Lavoro non trovato";return}
  $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
  const p=stato.fase==="pronto"?100:stato.percentuale;
- $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
+ $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";$("prog").setAttribute("aria-valuenow",p);
  $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato",errore:stato.motivo||"Nessuna pagina leggibile"}[stato.fase];
  const fatte=stato.lette+stato.non_lette.length;
  $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
@@ -65,7 +65,8 @@ async function aggiorna(){if(!L)return;
  // U1: a lavoro finito i risultati vengono prima; lettura e diario restano sotto, ripiegati (una volta sola, poi decide l'utente)
  const finito=stato.fase==="pronto";$("lavoro").classList.toggle("finito",finito);
  if(finito&&!eraFinito){eraFinito=true;$("dettagli").open=false;togliFlyer()}if(!finito)eraFinito=false;
- const ab=$("analyze-button");ab.classList.toggle("s",finito);ab.classList.toggle("hidden",finito&&!stato.non_lette.length);ab.textContent=finito?"Rileggi pagine mancanti":"Analizza / riprendi";
+ if(finito)$("lookfile").textContent=`Lettura completata: ${stato.lette} pagine lette`;
+ const ab=$("analyze-button");ab.classList.toggle("s",finito);ab.classList.toggle("hidden",finito&&!stato.non_lette.length);ab.textContent=finito?"Rileggi pagine mancanti":stato.lette?"Riprendi lettura":"Avvia lettura";
  // pagine nei contenitori
  const nuove=stato.pagine.filter(x=>x.famiglia&&!giaVisti.has(x.pid));
  nuove.forEach((x,k)=>{giaVisti.add(x.pid);if(inizio)metti(x);else setTimeout(()=>vola(x),k*180)});
@@ -84,13 +85,15 @@ function vola(x){if(!stato||stato.fase==="pronto"||document.hidden){metti(x);ret
  const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
-const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["Sta guardando","b"],
+const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["In lettura","b"],
  scheda:["Letta","g"],ritaglio:["Ritaglio","o"],nota:["Agente","b"],correzione:["Correzione","o"],errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+/* U7: le pagine si leggono a gruppi; anteprima, nome del file e scheda devono riferirsi sempre alla stessa pagina */
+function nomePagina(pid,testo){const p=stato&&stato.pagine.find(x=>x.pid===pid);return p?`${p.file} · pagina ${p.pagina}`:String(testo||pid).replace(/^Lettura: /,"")}
 function evento(e){
- if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace(/^\w+ guarda /,"");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
- if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
+ if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent="In lettura: "+nomePagina(e.pid,e.testo);$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
+ if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);$("lookfile").textContent="Letta: "+nomePagina(e.pid);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
  if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
- if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" data-act="open-proof" data-url="/api/ritagli/${encodeURIComponent(e.ritaglio)}" data-title="Ritaglio: ${esc(e.testo)}">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
+ if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" alt="Ritaglio: ${esc(e.testo)}" role="button" tabindex="0" data-act="open-proof" data-url="/api/ritagli/${encodeURIComponent(e.ritaglio)}" data-title="Ritaglio: ${esc(e.testo)}">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
  const t=TIPI[e.tipo];if(!t)return;
  let testo=e.testo||"";if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
  if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
@@ -109,14 +112,16 @@ async function mostraPagina(pid,conZone){const box=$("lookpage");
 /* ---------- famiglie ---------- */
 function famiglia(k){if(!stato)return;const ps=stato.pagine.filter(x=>x.famiglia===k);
  $("mtitle").textContent=`${FAM[k].n} · ${ps.length} pagine`;$("mopen").classList.add("hidden");
- $("mbody").innerHTML=ps.length?`<div class="grid-pg">${ps.map(x=>`<div class="pg" data-act="page" data-pid="${esc(x.pid)}"><img src="${img(x.pid)}" alt=""><div>${esc(x.file)} · p${x.pagina}</div></div>`).join("")}</div>`:`<div class="note">Nessuna pagina in questa famiglia.</div>`;
- $("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");$("modal").classList.add("on")}
+ $("mbody").innerHTML=ps.length?`<div class="grid-pg">${ps.map(x=>`<button type="button" class="pg" data-act="page" data-pid="${esc(x.pid)}"><img src="${img(x.pid)}" alt=""><div>${esc(x.file)} · p${x.pagina}</div></button>`).join("")}</div>`:`<div class="note">Nessuna pagina in questa famiglia.</div>`;
+ $("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");mostraModale()}
 async function pagina(pid){const d=await api(`/api/lavori/${L}/pagine/${pid}`);const s=d.scheda||{};
  $("mtitle").textContent=`${d.pagina.file} · pagina ${d.pagina.pagina}`;
  $("mbody").innerHTML=`<p class="sub" style="margin:0 0 12px">${esc(s.motivo||"")}</p>${(s.avvisi||[]).map(a=>`<div class="pill o" style="margin:0 6px 8px 0">${esc(a)}</div>`).join("")}<img src="/api/lavori/${L}/pagine/${pid}.png" style="width:100%;border-radius:8px;border:1px solid var(--line)">`}
 function apri(url,titolo){$("mtitle").textContent=titolo;$("mopen").href=url;$("mopen").classList.remove("hidden");
- $("mframe").src=url;$("mframe").classList.remove("hidden");$("mbody").classList.add("hidden");$("modal").classList.add("on")}
-function chiudi(){$("modal").classList.remove("on");$("mframe").src="about:blank"}
+ $("mframe").src=url;$("mframe").classList.remove("hidden");$("mbody").classList.add("hidden");mostraModale()}
+function mostraModale(){const m=$("modal");if(!m.open)m.showModal()}
+function chiudi(){const m=$("modal");if(m.open)m.close()}
+$("modal").addEventListener("close",()=>{$("mframe").src="about:blank"});
 $("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};document.onkeydown=e=>{if(e.key==="Escape")chiudi()};
 
 /* ---------- risultato ---------- */
@@ -133,11 +138,11 @@ async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}c
  $("verifica").innerHTML=dav.length?dav.map(v=>{const C=v.colonne,m=[];if(manca(C["DDT COMMERCIANTE"].v))m.push("DDT del commerciante");if(manca(C["CERT 3.1 ACCIAIERIA"].v))m.push("certificato 3.1");if(!C["COLATA"].v)m.push(v.colate_possibili.length?"colata da scegliere tra "+v.colate_possibili.join(", "):"colata");
   const domanda=`Voce ${v.n} (${v.voce}): perché è ${v.stato}? Cosa manca per provarla e cosa devo chiedere al fornitore?`;
   return `<div class="vitem"><div class="vitem-main"><div><span class="pill ${STATI[v.stato]}">${v.stato}</span> <b>${esc(v.voce)}</b> <span class="muted">${esc(v.parte_opera||"")}</span></div><div class="why-full">${esc(v.note.join(" "))}</div>${m.length?`<div class="manca"><b>Manca:</b> ${esc(m.join(", "))}</div>`:""}</div><div class="vitem-acts"><button class="btn s" data-act="goto-row" data-voice="${v.n}">Vedi i collegamenti</button><button class="btn s" data-act="ask-about" data-voice="${v.n}" data-text="${esc(domanda)}">Chiedi in chat</button></div></div>`}).join(""):`<div class="note" style="margin:0">Nessuna voce da verificare: tutte le voci sono provate o dedotte.</div>`;
- const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`data-act="open-proof" data-url="${u}" data-title="${esc(c)} · voce ${v.n}"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
+ const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`role="button" tabindex="0" data-act="open-proof" data-url="${u}" data-title="${esc(c)} · voce ${v.n}"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
  $("chain").innerHTML=r.voci.map((v,i)=>{const C=v.colonne;const cert=C["CERT 3.1 ACCIAIERIA"].v,ddt=C["DDT COMMERCIANTE"].v,col=C["COLATA"].v;
   return `<div class="vrow" id="vrow-${v.n}" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" data-act="select-voice" data-voice="${v.n}">Chiedi in chat ↗</button></div>
   ${nodo(v,"DDT COMMERCIANTE",ddt.replace(/^DDT n\. /,"DDT "),C["COMMERCIANTE / CENTRO TRASF."].v,manca(ddt)?"miss":"")}
   ${nodo(v,"CERT 3.1 ACCIAIERIA",cert,C["PRODUTTORE"].v,manca(cert)?"miss":(v.stato==="DA CONFERMARE"?"warn":""))}
   ${nodo(v,"COLATA",col||(v.colate_possibili.length?v.colate_possibili.length+" colate":"—"),v.colate_possibili.join(" / "),v.stato==="MANCANTE"?"miss":(!col?"warn":""))}
   <div><span class="pill ${STATI[v.stato]}">${v.stato}</span><div class="why">${esc(v.note.slice(0,2).join(" "))}</div></div></div>`}).join("");
- $("tab").innerHTML=`<tr><th>N</th>${COL.map(c=>`<th>${esc(c)}</th>`).join("")}<th>STATO</th><th>NOTE</th></tr>`+r.voci.map(v=>`<tr><td>${v.n}</td>${COL.map(c=>{const u=prova(v,c);return `<td class="${u?"src":""}" ${u?`data-act="open-proof" data-url="${u}" data-title="${esc(c)} · voce ${v.n}"`:""}>${esc(v.colonne[c].v)}</td>`}).join("")}<td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td class="nota" style="color:var(--muted)">${esc(v.note.join(" "))}</td></tr>`).join("")}
+ $("tab").innerHTML=`<tr><th>N</th>${COL.map(c=>`<th>${esc(c)}</th>`).join("")}<th>STATO</th><th>NOTE</th></tr>`+r.voci.map(v=>`<tr><td>${v.n}</td>${COL.map(c=>{const u=prova(v,c);return `<td class="${u?"src":""}" ${u?`role="button" tabindex="0" data-act="open-proof" data-url="${u}" data-title="${esc(c)} · voce ${v.n}"`:""}>${esc(v.colonne[c].v)}</td>`}).join("")}<td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td class="nota" style="color:var(--muted)">${esc(v.note.join(" "))}</td></tr>`).join("")}
