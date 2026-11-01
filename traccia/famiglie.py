@@ -28,7 +28,7 @@ NOMI = {
     "da_escludere": "Non pertinenti",
     "illeggibile": "Illeggibili",
 }
-TIPI_RIFERIMENTO = ["ddt", "certificato", "ordine", "dop", "fpc", "commessa"]
+TIPI_RIFERIMENTO = ["ddt", "certificato", "ordine", "dop", "fpc", "commessa", "altro"]
 TIPI_SEGNO = ["freccia", "cerchio", "evidenziatore", "croce", "spunta", "scritta"]
 
 

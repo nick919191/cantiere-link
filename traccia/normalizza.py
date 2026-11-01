@@ -13,10 +13,53 @@ _TRAVI = re.compile(r"\b(HEA|HEB|HEM|IPE|UPN|UNP)\s*(\d+)")
 _U = re.compile(r"\bU\s+(\d+)\s*X\s*\d+")
 _TRE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
 _DUE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
+_TRE_DIM_SPAZI = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s+(\d{3,}(?:\.\d+)?)\s+(\d{3,}(?:\.\d+)?)(?![\d.])")
 _DECIMI = re.compile(r"(\d+)/10\b")
 _DECIMALE = re.compile(r"\d+\.\d+")
+# Parole che dicono "lamiera" (anche 'SP.012X2450X6000', 'L.DA TRENO', 'PLATES') e parole che dicono "tubo".
+_PAROLA_LAMIERA = re.compile(r"\bLAM|COIL|\bSTRIPS?\b|\bPLATES?\b|\bL\.?\s*DA\s+TRENO|\bSP\.\s*\d|\bSPESS")
+_PAROLA_TUBO = re.compile(r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b")
+_PAROLA_PIATTO = re.compile(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGHI\b")
+# Una lamiera ha una sola misura piccola (spessore) e due grandi (larghezza, lunghezza).
+SPESSORE_MAX, LATO_MIN = 60, 500
 
-_PAROLE_VUOTE = {"spa", "srl", "gmbh", "kg", "co", "nchfg", "sau", "sl", "ltd"}
+
+def _forma_lamiera(dims):
+    """True se, tra le misure, una sola è uno spessore (<= 60) e le altre sono lati (>= 500)."""
+    piccole = [d for d in dims if d <= SPESSORE_MAX]
+    return len(piccole) == 1 and all(d >= LATO_MIN for d in dims if d > SPESSORE_MAX) and len(dims) >= 2
+
+
+# Suffissi legali: tolti anche se incollati alla parola prima ('SETALS.P.A.' -> 'setalspa' -> 'setal').
+_FORME_GIURIDICHE = {
+    *"spa srl srls sas snc sapa scarl scrl coop gmbh ag kg ltd plc llc inc corp sl sa sau bv nv oy ab as sro".split(),
+    "unipersonale",
+}
+_SUFFISSO_INCOLLATO = re.compile(r"(?<=[a-z]{3})(?:spa|srl|srls|sas|snc|sapa|gmbh)$")
+# Parole che non identificano l'azienda (forma giuridica, congiunzioni).
+_PAROLE_VUOTE = _FORME_GIURIDICHE | {
+    "societa",
+    "society",
+    "soc",
+    "company",
+    "co",
+    "nchfg",
+    "e",
+    "and",
+    "di",
+    "del",
+    "della",
+    "dei",
+    "degli",
+    "in",
+    "the",
+    "it",
+}
+# Da qui in poi è indirizzo o reparto, non ragione sociale: 'via', 'viale', un CAP a 5 cifre, 'divisione'...
+_INIZIO_INDIRIZZO = re.compile(
+    r"^(?:via|viale|vialle|piazza|pzza|piazzale|corso|largo|strada|str|loc|localita|zona|zi|km|sede|tel|fax|cap|"
+    r"divisione|div|stabilimento|deposito|filiale|unit|plant|\d{5})$"
+)
 
 
 def numero(testo):
@@ -58,24 +101,32 @@ def profilo(descrizione):
     if m:
         return f"RONDELLA M{m.group(1)}"
 
-    # Lamiere e coils: conta solo lo spessore.
-    if re.search(r"\bLAM|\bCOIL", s):
-        m = re.search(r"\bSPESSORE\s+(\d+(?:\.\d+)?)\s*MM\b", s) or re.search(r"\bSP\s*[=.:]?\s*(\d+(?:\.\d+)?)", s)
+    # Lamiere e coils: conta solo lo spessore. 'LAMIERA 60-10' è un piatto 60x10 (scrittura di distinta).
+    if _PAROLA_LAMIERA.search(s) and not _PAROLA_TUBO.search(s) and not _PAROLA_PIATTO.search(s):
+        m = re.search(r"\b(?:LAMIER[AE]|LAM\.?|PL)\s*(\d+)\s*-\s*(\d+)\b", s)
+        if m:
+            return f"PIATTO {numero(m.group(1))}x{numero(m.group(2))}"
+        m = re.search(r"\bSPESSORE\s+(\d+(?:\.\d+)?)\s*MM\b", s) or re.search(
+            r"\bSP(?:ESS(?:ORE)?)?\s*[=.:]?\s*(\d+(?:\.\d+)?)", s
+        )
         if m:
             return f"LAMIERA {numero(m.group(1))}"
-        m = _TRE_DIM.search(s)
-        if m:
-            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
         m = _DECIMI.search(s)
         if m:
             return f"LAMIERA {numero(int(m.group(1)) / 10)}"
+        m = _TRE_DIM.search(s) or _TRE_DIM_SPAZI.search(s)
+        if m:
+            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
+        m = _DUE_DIM.search(s)
+        if m and _forma_lamiera([float(g) for g in m.groups()]):
+            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
         m = _DECIMALE.search(s)
         if m:
             return f"LAMIERA {numero(m.group(0))}"
 
     # Misure scritte per campo: LT=larghezza, LA=larghezza, AL=altezza, SP=spessore ('PIATTO LT=100,0 SP=10,0').
     misure = dict(re.findall(r"\b(LT|LA|AL|SP)\s*=\s*(\d+(?:\.\d+)?)", s))
-    if re.search(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGHI\b", s):
+    if _PAROLA_PIATTO.search(s):
         larghezza = misure.get("LT") or misure.get("LA")
         if larghezza and misure.get("SP"):
             return f"PIATTO {numero(larghezza)}x{numero(misure['SP'])}"
@@ -102,12 +153,24 @@ def profilo(descrizione):
     if m:
         return f"UPN {m.group(1)}"
 
+    # Tre misure senza parola: una sola piccola e due grandi è una lamiera ('6000x2500x15'); due piccole e una
+    # lunghezza è un tubo ('30x10x1.5'). Con la parola tubo (TUBO, CRP, CHS, Ø) è sempre un tubo.
+    tubo = bool(_PAROLA_TUBO.search(s))
     m = _TRE_DIM.search(s)
     if m:
+        dims = [float(g) for g in m.groups()]
+        if not tubo and _forma_lamiera(dims):
+            return f"LAMIERA {numero(str(min(dims)))}"
         return "TUBO " + "x".join(numero(g) for g in m.groups())
-    if "TUBO" in s or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
+    m = _TRE_DIM_SPAZI.search(s)
+    if m and not tubo and _forma_lamiera([float(g) for g in m.groups()]):
+        return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"  # misure di un certificato con spazi
+    if tubo or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
         m = _DUE_DIM.search(s)
         if m:
+            dims = [float(g) for g in m.groups()]
+            if not tubo and _forma_lamiera(dims):
+                return f"LAMIERA {numero(str(min(dims)))}"
             return "TUBO " + "x".join(numero(g) for g in m.groups())
 
     return re.sub(r"\s+", " ", s).strip()
@@ -172,15 +235,116 @@ def gradi(qualita):
     return risultato
 
 
-def aziende(nome):
-    """Ragioni sociali complete senza suffisso legale, mai soltanto la prima parola."""
-    risultato = set()
+def _parole(testo):
+    t = unicodedata.normalize("NFKD", testo or "").encode("ascii", "ignore").decode().lower().replace(".", "")
+    return [p for p in re.split(r"[^a-z0-9]+", t) if p]
+
+
+def nuclei(nome):
+    """Nuclei della ragione sociale, uno per ogni parte separata da '/': i token prima dell'indirizzo (via, CAP...)
+    e prima del reparto (divisione...), senza forma giuridica, anche se incollata ('SETALS.P.A.' -> ['setal']).
+
+    'S.A.C.I.F. SRL VIA NULLO N.5 20129 MILANO' -> [['sacif']]; 'Società Ambrosiana Costruzioni In Ferro Srl' ->
+    [['ambrosiana', 'costruzioni', 'ferro']]. Ogni nucleo porta anche le sigle fatte con le iniziali delle parole
+    ('sacif', 'fvs'), usate dal confronto.
+    """
+    risultato = []
     for parte in (nome or "").split("/"):
-        parte = unicodedata.normalize("NFKD", parte).encode("ascii", "ignore").decode().lower().replace(".", "")
-        parole = [p for p in re.split(r"[^a-z0-9]+", parte) if p and p not in _PAROLE_VUOTE]
-        if parole:
-            risultato.add(" ".join(parole))
+        parole = _parole(parte)
+        prima = next((i for i, p in enumerate(parole) if i and _INIZIO_INDIRIZZO.match(p)), len(parole))
+        parole = [_SUFFISSO_INCOLLATO.sub("", p) for p in parole[:prima]]
+        parole = [p for p in parole if p]
+        tokens = [p for p in parole if p not in _PAROLE_VUOTE]
+        sigle = {"".join(p[0] for p in parole if p not in _FORME_GIURIDICHE), "".join(p[0] for p in tokens)}
+        if tokens:
+            risultato.append((tokens, {s for s in sigle if len(s) >= 3 and len(tokens) >= 2}))
     return risultato
+
+
+def aziende(nome):
+    """Nuclei della ragione sociale come testo ('sacif', 'ambrosiana costruzioni ferro'): per chiavi e confronti
+    di uguaglianza. Per sapere se due nomi sono la stessa azienda usa `stessa_azienda`."""
+    return {" ".join(tokens) for tokens, _ in nuclei(nome)}
+
+
+def _stesso_token(a, b):
+    if a == b:
+        return True
+    corto, lungo = sorted((a, b), key=len)
+    return len(corto) >= 3 and corto.isalpha() and lungo.startswith(corto)
+
+
+def _contenuto(piccolo, grande):
+    return all(any(_stesso_token(p, g) for g in grande) for p in piccolo)
+
+
+def stessa_azienda(a, b, gruppi=()):
+    """True se i nuclei si contengono ('SACIF SRL' in 'S.A.C.I.F. SRL SOCIETA' AMBROSIANA COSTRUZIONI IN FERRO'),
+    se uno è la sigla dell'altro ('FVS' = Ferramenta Villafranca Siderurgica), oppure se i due nomi stanno nello
+    stesso gruppo di `gruppi` (alias del fascicolo: stessa partita IVA). Mai per la sola prima parola."""
+    na, nb = nuclei(a), nuclei(b)
+    for ta, sa in na:
+        for tb, sb in nb:
+            if _contenuto(ta, tb) or _contenuto(tb, ta) or "".join(ta) == "".join(tb):
+                return True
+            if sa & set(tb) or sb & set(ta):
+                return True
+    for gruppo in gruppi:
+        if any(stessa_azienda(a, g) for g in gruppo) and any(stessa_azienda(b, g) for g in gruppo):
+            return True
+    return False
+
+
+def piva(testo):
+    """Partita IVA come sole cifre ('IT 00716810155' -> '00716810155'); vuoto se non ha 11 cifre."""
+    cifre = re.sub(r"\D", "", testo or "")
+    return cifre if len(cifre) == 11 else ""
+
+
+_PREFISSO_COLATA = re.compile(r"^[a-z]{1,2}(?=\d{3})")
+_SUFFISSO_COLATA = re.compile(r"(?<=\d{4})[a-z]{1,2}\d?$")
+_ETICHETTA_COLATA = re.compile(
+    r"\b(?:COLAT[AE]|HEAT|CAST|CHARGE|SCHMELZE|COL\.)\s*(?:N[.°º]?|NO\.?|NR\.?)?\s*[:.]?\s*([A-Z0-9][A-Z0-9/-]{2,})"
+)
+_ETICHETTA_PLACCA = re.compile(
+    r"\b(?:PLACC[AH]E?|PLATE\s*(?:ID|N[.°º]?)|PIASTRA|LOTTO)\s*[:.]?\s*([A-Z0-9][A-Z0-9()/.-]*)"
+)
+
+
+def colata_normale(testo):
+    """Forma di confronto di una colata: minuscole, solo lettere e cifre, senza il prefisso di 1-2 lettere incollato
+    ('DU123329' -> '123329', 'CE256775' -> '256775') e senza il suffisso corto dopo le cifre ('123329BJ0' ->
+    '123329', '3151783B' -> '3151783'). Solo per confrontare: il valore mostrato resta quello letto."""
+    s = re.sub(r"[^a-z0-9]", "", (testo or "").lower())
+    s = _PREFISSO_COLATA.sub("", s)
+    return _SUFFISSO_COLATA.sub("", s)
+
+
+def stessa_colata(a, b):
+    """True se le due colate coincidono nella forma di confronto (almeno tre cifre)."""
+    na, nb = colata_normale(a), colata_normale(b)
+    return bool(na) and na == nb and len(re.sub(r"\D", "", na)) >= 3
+
+
+def colate_dichiarate(testo):
+    """Colate (e placche) scritte su una riga di DDT: 'Placca: 24G6302(A) Colata: 2458653 Placca: 24G6302(B)
+    Colata: 2458653' -> [('2458653', ['24G6302(A)', '24G6302(B)'])]; 'CERT.COL. DU123329BJ0' -> [('DU123329BJ0', [])].
+    Una riga con la parola colata/heat/cast/charge e un codice con almeno tre cifre dichiara una colata."""
+    s = (testo or "").upper()
+    eventi = [(m.start(), "colata", m.group(1)) for m in _ETICHETTA_COLATA.finditer(s)]
+    eventi += [(m.start(), "placca", m.group(1)) for m in _ETICHETTA_PLACCA.finditer(s)]
+    risultato: dict[str, list[str]] = {}
+    placca = ""
+    for _, tipo, valore in sorted(eventi):
+        valore = valore.strip(".,;:")
+        if tipo == "placca":
+            placca = valore
+        elif len(re.sub(r"\D", "", valore)) >= 3:
+            risultato.setdefault(valore, [])
+            if placca and placca not in risultato[valore]:
+                risultato[valore].append(placca)
+            placca = ""
+    return list(risultato.items())
 
 
 def cita_numero(testo, numero_ddt):
@@ -232,6 +396,46 @@ def stesso_numero(dichiarato, letto):
     if len(a2) >= 3 and re.search(rf"[^a-z0-9]{re.escape(a2)}$", (letto or "").lower().strip()):
         return "prefisso"
     return None
+
+
+def cita_ddt(citato, numero_ddt):
+    """True se il numero citato (timbro, lettera, tabella) è il DDT: uguale, con suffisso di serie, oppure la coda
+    del numero del DDT dopo un separatore ('51159' per 'G02 / 51159'; non '1159')."""
+    esito = stesso_numero(citato, numero_ddt)
+    if esito in ("uguale", "serie"):
+        return True
+    coda = numero_normale(citato).replace("/", "")
+    return (
+        esito == "prefisso"
+        and len(coda) >= 3
+        and re.search(rf"[^a-z0-9]{re.escape(coda)}$", (numero_ddt or "").lower().strip()) is not None
+    )
+
+
+def contiene_numero(testo, numero):
+    """True se il numero di documento (almeno 4 caratteri) compare nel testo come parola o come sequenza di parole
+    consecutive, confrontando solo lettere e cifre: 'DDT/DELIVNOTE BA/6577' contiene 'BA/6577', 'note 2026/45678'
+    contiene '45678'; '1066009422' non contiene '6577'."""
+    a = re.sub(r"[^a-z0-9]", "", (numero or "").lower())
+    if len(a) < 4:
+        return False
+    parole = re.findall(r"[a-z0-9]+", (testo or "").lower())
+    for i in range(len(parole)):
+        unito = ""
+        for j in range(i, len(parole)):
+            unito += parole[j]
+            if unito == a:
+                return True
+            if len(unito) >= len(a):
+                break
+    return False
+
+
+def progressivo(numero):
+    """Parte finale del numero di documento dopo l'ultimo separatore: 'G02 / 51159' -> '51159', '38747/ 51159' ->
+    '51159', '2026/45678' -> '45678'; vuoto se il numero non ha un separatore."""
+    parti = [p for p in re.split(r"[^a-z0-9]+", (numero or "").lower().strip()) if p]
+    return parti[-1].lstrip("0") if len(parti) >= 2 else ""
 
 
 def dimensioni_piatto(chiave):

@@ -22,19 +22,24 @@ def chiave_lettura(impronta: str) -> str:
     return f"{impronta}_{percorsi.versione_lettura()}"
 
 
-def file_lettura(impronta: str) -> Path:
-    return percorsi.archivio() / "letture" / f"{chiave_lettura(impronta)}.json"
+def file_lettura(impronta: str, parziale: bool = False) -> Path:
+    """La lettura della pagina; con `parziale` la scheda salvata a metà (famiglia e testata, senza righe), che vale
+    finché non arriva una lettura completa e intanto fa entrare il documento nelle prove."""
+    return percorsi.archivio() / "letture" / f"{chiave_lettura(impronta)}{'.parziale' if parziale else ''}.json"
 
 
 def leggi_lettura(impronta: str) -> dict | None:
-    f = file_lettura(impronta)
-    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+    for f in (file_lettura(impronta), file_lettura(impronta, parziale=True)):
+        if f.exists():
+            return json.loads(f.read_text(encoding="utf-8"))
+    return None
 
 
 def salva_lettura(impronta: str, scheda: dict) -> None:
-    f = file_lettura(impronta)
+    completa = file_lettura(impronta)
+    f = file_lettura(impronta, parziale=True) if scheda.get("parziale") else completa
     f.parent.mkdir(parents=True, exist_ok=True)
-    if f.exists():  # congelata: mai riscritta
+    if f.exists() or completa.exists():  # congelata: mai riscritta (una parziale lascia il posto alla completa)
         return
     # Nome del temporaneo univoco: due copie della stessa pagina lette da lotti paralleli non si pestano i piedi.
     temporaneo = f.with_name(f"{f.stem}.{uuid.uuid4().hex}.tmp")
@@ -127,6 +132,12 @@ def scheda_pagina(p: dict) -> dict | None:
 
 def _letta(p: dict) -> bool:
     """Come `scheda_pagina(p) is not None`, ma senza aprire la lettura (la home e l'impronta non ne hanno bisogno)."""
+    return completa(p) or file_lettura(p["impronta"], parziale=True).exists()
+
+
+def completa(p: dict) -> bool:
+    """Lettura completa in archivio: la pagina non si legge più. Una lettura parziale si ritenta finché ci sono
+    tentativi."""
     return bool(p.get("bianca")) or file_lettura(p["impronta"]).exists()
 
 
@@ -139,14 +150,17 @@ def stato(cartella: Path, leggero: bool = False) -> dict:
     lette, da_leggere, non_lette, dettagli = 0, [], [], []
     for p in elenco:
         voce = {"pid": p["pid"], "file": p["file"], "pagina": p["pagina"]}
-        if leggero and _letta(p):
+        esaurita = t.get(p["pid"], 0) >= MAX_TENTATIVI
+        if (completa(p) or esaurita) and leggero and _letta(p):
             lette += 1
             voce.update(stato="letta")
-        elif not leggero and (s := scheda_pagina(p)):
+        elif (completa(p) or esaurita) and not leggero and (s := scheda_pagina(p)):
             lette += 1
             per_famiglia[s["famiglia"]] = per_famiglia.get(s["famiglia"], 0) + 1
             voce.update(famiglia=s["famiglia"], stato="letta", orientamento=s.get("orientamento", 0))
-        elif t.get(p["pid"], 0) >= MAX_TENTATIVI:
+            if s.get("parziale"):
+                voce.update(parziale=True)
+        elif esaurita:
             non_lette.append(p["pid"])
             voce.update(stato="non_letta")
         else:
@@ -195,7 +209,7 @@ def impronta_letture(cartella: Path) -> str:
     h = hashlib.sha256((percorsi.versione_lettura() + VERSIONE).encode())
     t = tentativi(cartella)
     for p in pagine(cartella):
-        letta = _letta(p)
+        letta = f"{completa(p)}/{_letta(p)}"
         h.update(f"{p['pid']}:{p['impronta']}:{letta}:{t.get(p['pid'], 0) >= MAX_TENTATIVI}".encode())
     return h.hexdigest()[:16]
 

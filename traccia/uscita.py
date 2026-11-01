@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from . import lavoro as lv
-from . import percorsi
+from . import mappa, percorsi
 from .excel import scrivi
 from .famiglie import NOMI
 from .motore import COLONNE, elabora
@@ -48,7 +48,7 @@ def componi(cartella: Path) -> dict:
 def _componi(cartella: Path, uscita: Path) -> dict:
     lv.evento(cartella, tipo="componi", testo="Collego a ritroso: tabella -> DDT -> certificato -> colata")
     pagine, schede = _schede(cartella)
-    prove = costruisci(pagine, schede)
+    prove = costruisci(pagine, schede, {p["pid"]: mappa.famiglia_in_archivio(p["impronta"]) for p in pagine})
     indice = json.loads((cartella / "pagine.json").read_text(encoding="utf-8"))
     prove["file_non_letti"] = [p["file"] for p in indice if not p.get("pid")]
     risultato = elabora(prove)
@@ -117,6 +117,10 @@ def _componi(cartella: Path, uscita: Path) -> dict:
         if d["id"] not in usati:
             motivo = {
                 "costruttore_cliente": "DDT del costruttore al cliente: non porta la catena dei materiali",
+                "costruttore_terzista": "DDT del costruttore a un terzista (conto lavorazione): alimenta DDT "
+                "COSTRUTTORE, non le voci",
+                "terzista_cantiere": "reso del terzista al costruttore o al cantiere: materiale del costruttore, "
+                "non una fornitura",
                 "fuori_perimetro": "DDT non diretto al costruttore (es. acciaieria -> commerciante)",
             }.get(
                 d["tipo"],
@@ -141,7 +145,7 @@ def _componi(cartella: Path, uscita: Path) -> dict:
     if risultato["avviso_packing"]:
         avvisi.append(
             "Packing / tabella del costruttore MANCANTE: voci prese dai DDT ricevuti dal costruttore "
-            "(stato massimo DEDOTTO)."
+            "(perimetro dell'opera non confermato dal costruttore; gli stati valgono per la singola catena)."
         )
     if stato["non_lette"]:
         avvisi.append(
@@ -171,8 +175,8 @@ def _componi(cartella: Path, uscita: Path) -> dict:
         "PROVATO: certificato e DDT presenti, timbro o lettera con il numero del DDT, una sola colata.",
         "DEDOTTO: certificato e DDT presenti e coerenti, una sola colata, senza timbro o con il numero del DDT "
         "scritto a penna sul timbro.",
-        "DA CONFERMARE: più colate, legame incerto, pagine del certificato mancanti, timbro per un altro DDT, DDT "
-        "assente, segni a mano.",
+        "DA CONFERMARE: più colate (salvo il segno a mano su una sola), legame incerto, pagine del certificato "
+        "mancanti, timbro per un altro DDT, DDT assente, documento letto a metà, pagine della catena non lette.",
         "MANCANTE: certificato dichiarato non presente; nella colonna il numero dichiarato, da chiedere al fornitore.",
         "Ogni cella con una fonte ha un collegamento alla pagina del documento con il dato evidenziato.",
     ]

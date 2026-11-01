@@ -37,8 +37,8 @@ l'informazione per riga.
 - Conta la norma del campo "norma armonizzata" (o sotto il marchio CE, o riga "metodo 3a / ZA.3"), non le norme
   citate per le qualità: una DoP EN 1090 che scrive "S275 secondo EN 10025-2" resta EN 1090.
 - Etichetta CE su pagina separata: CPR, anno a due cifre, "N° Certificato FPC"; non porta numero e data della DoP.
-- **DoP EN 1090 di un fornitore intermedio** (commerciante che taglia o fora): non è la DoP del costruttore; va nelle
-  note della voce.
+- **DoP EN 1090 di un fornitore intermedio** (commerciante che taglia o fora): non è la DoP del costruttore; dalla
+  0.7.0 va in CE/DoP CENTRO delle voci del suo DDT (meglio se cita il numero del DDT), mai in CE/DoP COSTRUTTORE.
 - Attenzione con la visione: in 13 descrizioni su 109 il modello ha "visto" EN 1090 leggendo il numero di un organismo
   notificato. Senza EN 1090 né EXC nel testo leggibile non è DoP del costruttore.
 
@@ -46,13 +46,15 @@ l'informazione per riga.
 Più segni insieme: "documento di trasporto", D.P.R. 472/96 (anche "472" con la data in mezzo), causale del trasporto,
 vettore, firma conducente/destinatario, colli, peso; esteri "delivery note No.", "Lieferschein-Nr.".
 
-Tre tipi, decisi **a livello di fascicolo**, non di pagina:
+Cinque tipi, decisi **a livello di fascicolo**, non di pagina:
 
 | Tipo | Come si riconosce | Nel perimetro |
 |---|---|---|
-| commerciante -> costruttore | destinatario = costruttore; destinazione "idem"; righe di certificato ("contributo certificazione", "(3.1)"); "peso teorico ante lavorazioni" | sì, è il DDT della voce |
+| commerciante -> costruttore | destinatario = costruttore; destinazione "idem"; righe di certificato ("contributo certificazione", "(3.1)"); "peso teorico ante lavorazioni"; a volte la colata stampata sotto la riga ("Placca: ... Colata: ...", "CERT.COL.") | sì, è il DDT della voce; la colata dichiarata è la chiave verso il certificato |
 | acciaieria -> commerciante | intestazione di un produttore, destinatario = commerciante | no, non fa ponte |
 | costruttore -> cliente | emittente = costruttore; destinazione = cantiere; pezzi "NR. n", "fornitura e posa"; nessun certificato né colata | no per la catena; alimenta DDT COSTRUTTORE |
+| costruttore -> terzista | emittente = costruttore; causale "conto lavorazione"; destinatario zincatore, verniciatore...; oppure citato come "reso Vs. DDT n." da un DDT del terzista | no per la catena; alimenta DDT COSTRUTTORE ("tramite <terzista>") |
+| terzista -> cantiere (reso) | emittente = terzista, destinatario il costruttore; causale "reso conto lavoro", righe "Reso Vs. ddt n. N" | no, mai una fornitura: alimenta DDT COSTRUTTORE (reso al cantiere) |
 
 - Un DDT occupa più pagine: testata e righe possono stare su pagine diverse; l'ultima può avere solo peso, vettore,
   firme.
@@ -90,7 +92,10 @@ Tre tipi, decisi **a livello di fascicolo**, non di pagina:
 
 ## Lettera di accompagnamento
 "Certificate 1/1", "Delivery note no. N from data", "Pos. item", "quantity certificate", "produced automatically,
-requires no signature": lega le posizioni di un DDT ai certificati del blocco.
+requires no signature": lega le posizioni di un DDT ai certificati del blocco. Stessa famiglia per la **lista di
+rintracciabilità del commerciante** ("lista rintracciabilità", "certificati relativi al DDT n."): tabella placca ->
+colata -> n. certificato per un DDT, letta con righe `posizione, articolo, placca, colata, certificato` (decisione 5,
+01/11/2026); è un ponte di tipo B con le colate.
 
 ## Da escludere o segnalare
 - Patentini saldatori (ISO 9606, WPS): esclusi dai test e senza dati personali nei report.

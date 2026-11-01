@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import pytest
 from fascicolo_inventato import fascicolo, scheda, timbro
@@ -244,3 +245,65 @@ def test_letter_same_file_requires_explicit_certificate_reference():
     assert Motore(proofs).ponti(certificate, "200") == []
     proofs["lettere"][0]["certificati"] = ["99-777"]
     assert len(Motore(proofs).ponti(certificate, "200")) == 1
+
+
+# ---------- fascicolo reale anonimizzato (Codogno, letture 0.5.1) ----------
+def _codogno(con_non_lette=True):
+    """Prove del fascicolo reale: le 10 pagine non lette dall'app (DDT, lettera, lista, DoP, albaranes) restano non
+    lette come nel lavoro vero; con `con_non_lette=False` si tolgono dall'elenco, come se la lettura fosse completa."""
+    dati = json.loads((Path(__file__).parent / "dati" / "codogno.json").read_text(encoding="utf-8"))
+    pagine = [p for p in dati["pagine"] if con_non_lette or p["pid"] in dati["schede"]]
+    prove = costruisci(pagine, dati["schede"], dati["mappe"])
+    return prove, elabora(prove)
+
+
+def test_codogno_ruoli_e_perimetro_dei_ddt():
+    prove, _ = _codogno()
+    assert "COSTR" in prove["costruttore"].upper()
+    tipi = {d["numero"]: d["tipo"] for d in prove["ddt"]}
+    assert tipi["8027"] == tipi["602"] == tipi["2902"] == tipi["G02 / 51159"] == "commerciante_costruttore"
+    assert tipi["0000587"] == "costruttore_terzista" and tipi["5.877"] == "terzista_cantiere"
+    assert len(prove["ddt"]) == 6  # le due copie del DDT 2902 ('LAMIX S.P.A.' e 'LAMIXS.P.A.') sono un DDT solo
+    ddt_2902 = next(d for d in prove["ddt"] if d["numero"] == "2902")
+    assert ddt_2902["copie"] == 2 and len(ddt_2902["pagine"]) == 2
+    ddt_8027 = next(d for d in prove["ddt"] if d["numero"] == "8027")
+    assert "p0003" in ddt_8027["pagine"]  # pagina 2 letta '2027': stesso DDT, con avviso
+    assert any("2027" in a for a in ddt_8027["avvisi"])
+    assert [d["numero_dop"] for d in prove["dop_fornitore_intermedio"]] == ["9588 .25"]
+
+
+def test_codogno_voci_con_certificato_e_colata():
+    _, r = _codogno()
+    voci = r["voci"]
+    con_colata = [v for v in voci if v["colonne"]["COLATA"]["v"]]
+    con_cert = [v for v in voci if "del" in v["colonne"]["CERT 3.1 ACCIAIERIA"]["v"]]
+    assert len(con_cert) >= 9 and len(con_colata) >= 9
+    assert not [v for v in voci if "TUBO 12x2450" in v["voce"]]
+    assert not [v for v in voci if "5.877" in v["colonne"]["DDT COMMERCIANTE"]["v"]]  # niente voci dal reso
+    assert not [v for v in voci if "ZINCOLUX" in v["colonne"]["COMMERCIANTE / CENTRO TRASF."]["v"].upper()]
+    ddt_usati = {v["colonne"]["DDT COMMERCIANTE"]["v"].split(" del")[0] for v in voci}
+    assert {"DDT n. 602", "DDT n. 2902", "DDT n. G02 / 51159", "DDT n. 8027"} <= ddt_usati
+    # lamiere con la colata dichiarata sul DDT, una voce per colata, placche in nota
+    lamiere = [v for v in voci if v["voce"].startswith("LAMIERA 15 · colata")]
+    assert {v["colonne"]["COLATA"]["v"] for v in lamiere} == {"143343", "442770", "339044"}
+    assert all(any("Placche dichiarate" in n for n in v["note"]) for v in lamiere)
+    # DDT COSTRUTTORE: al terzista (zincatura) e reso al cantiere
+    colonna = voci[0]["colonne"]["DDT COSTRUTTORE"]["v"]
+    assert "DDT n. 0000587" in colonna and "tramite" in colonna and "5.877" in colonna
+    # DoP EN 1090 del fornitore intermedio nelle voci del suo DDT
+    hea = next(v for v in voci if v["voce"] == "HEA 160")
+    assert hea["colonne"]["CE/DoP CENTRO"]["v"].startswith("DoP EN 1090 9588")
+    # certificato con timbro che cita un DDT assente: voce da confermare con la richiesta del DDT
+    tubo = next(v for v in voci if v["voce"].startswith("TUBO 219.1"))
+    assert tubo["stato"] == "DA CONFERMARE" and tubo["richieste"] == ["DDT 6559 di F.LLI MONTANI s.p.a."]
+
+
+def test_codogno_tetto_non_letto_solo_finche_restano_pagine_della_catena():
+    _, r = _codogno()
+    assert r["conteggio"]["PROVATO"] == 0  # un DDT e una lista non letti nello stesso file: esito provvisorio
+    assert all(any("non letto completamente" in a for a in v["avvisi"]) for v in r["voci"])
+    _, r = _codogno(con_non_lette=False)
+    assert r["conteggio"]["PROVATO"] >= 9  # senza il tetto: le lamiere con colata e timbro sono provate
+    per_stato = {v["voce"]: v["stato"] for v in r["voci"]}
+    assert per_stato["LAMIERA 12 · colata 2458653"] == "PROVATO"
+    assert per_stato["HEA 160"] == "DA CONFERMARE"  # due colate, segno a mano non letto nella 0.5.1

@@ -27,6 +27,7 @@ from PIL import Image
 
 from . import agente, coltellino, mappa, ocr, percorsi
 from . import lavoro as lv
+from . import normalizza as nz
 from .chatgpt import AgentError
 from .controlli import CAMPI_TIMBRO, aggiungi_zone_esatte, piatto, valida
 from .famiglie import FAMIGLIE, campi
@@ -36,6 +37,8 @@ PAGINE_PER_LOTTO = 2  # lotti piccoli: l'attesa dipende da quanto scrive il mode
 LOTTI_IN_PARALLELO = 8
 OCR_IN_PARALLELO = 8
 TESTO_NATIVO_UTILE = 200  # caratteri: sotto questa soglia la pagina è una scansione e serve l'OCR
+TENTATIVO_PARZIALE = 2  # dal secondo tentativo fallito la scheda si salva a metà (famiglia e testata)
+TENTATIVO_IMMAGINE_INTERA = 3  # dal terzo tentativo si rilegge la pagina intera con le istruzioni della famiglia
 
 PAROLE = {
     "certificato_31": [
@@ -145,7 +148,9 @@ Rispondi con un solo JSON: {"correzioni": {"<pid>": {"<campo>": <nuovo valore>}}
 - <campo> come nei dubbi ("testata.numero", "righe[2].colata", "timbri", "famiglia"); metti solo ciò che cambia.
   Valore confermato: non scriverlo. Valore assente sulla pagina: "".
 - <nuovo valore>: "valore" oppure ["valore", "citazione"]; per "timbri" la lista completa dei timbri nella forma
-  {"chi","testo","ddt_citato","data_ddt","destinatario","a_mano"}.
+  {"chi","testo","ddt_citato","data_ddt","destinatario","a_mano"}; per "segni" la lista completa dei segni a mano
+  nella forma {"tipo","riga","testo"} (tipo tra freccia, cerchio, evidenziatore, croce, spunta, scritta; riga =
+  indice da 0 della riga segnata). Non decidere tu quale riga vale: registra solo il segno.
 - "aggiunte": il testo letto sull'immagine che manca nel testo (timbri, scritte a mano, numeri corretti), parola
   per parola: le citazioni nuove devono trovarsi nel testo o in queste aggiunte. Ometti se non serve.
 - Pagine con "rileggi": true (il testo ha perso parti importanti): ricevi anche il testo e la pagina intera.
@@ -153,6 +158,10 @@ Rispondi con un solo JSON: {"correzioni": {"<pid>": {"<campo>": <nuovo valore>}}
   valori che non sono nel testo.
 """
 VUOTO = {"v": "", "cit": "", "zona": []}
+DUBBIO_SEGNI = (
+    "più colate per lo stesso profilo: guarda se una riga è segnata (freccia, evidenziatore, cerchio, spunta) e "
+    "scrivi la lista completa dei segni (tipo, riga, testo)"
+)
 DUBBIO_TIMBRO = (
     "sulla pagina c'è un timbro o una scritta a mano che cita un DDT: leggi sull'immagine numero e data del DDT e "
     "scrivi la lista completa dei timbri (ddt_citato, data_ddt), copiando numero e data esattamente come sono "
@@ -290,6 +299,21 @@ def mancanti(scheda: dict, prima_del_file: bool) -> list[str]:
     return esito
 
 
+def piu_colate_per_profilo(scheda: dict) -> bool:
+    """Certificato con almeno due colate diverse per lo stesso profilo: serve guardare i segni a mano (C7)."""
+    if scheda.get("famiglia") != "certificato_31":
+        return False
+    colate: dict[str, set] = {}
+    for r in scheda.get("righe", []):
+        profilo = " ".join(
+            x for x in ((r.get("profilo") or {}).get("v", ""), (r.get("dimensioni") or {}).get("v", "")) if x
+        )
+        colata = (r.get("colata") or {}).get("v", "")
+        if colata:
+            colate.setdefault(nz.profilo(profilo), set()).add(nz.colata_normale(colata))
+    return any(len(c) > 1 for c in colate.values())
+
+
 def _leggi_campo(scheda: dict, campo: str) -> str:
     m = re.fullmatch(r"(testata|righe)(?:\[(\d+)\])?\.(\w+)", campo)
     try:
@@ -308,6 +332,8 @@ def applica(scheda: dict, correzioni: dict) -> dict:
             scheda = {**espandi({"famiglia": nuovo, "motivo": scheda["motivo"]}), "avvisi": scheda["avvisi"]}
         elif campo == "timbri" and isinstance(nuovo, list):
             scheda["timbri"] = espandi({"famiglia": scheda["famiglia"], "timbri": nuovo})["timbri"]
+        elif campo == "segni" and isinstance(nuovo, list):
+            scheda["segni"] = espandi({"famiglia": scheda["famiglia"], "segni": nuovo})["segni"]
         else:
             m = re.fullmatch(r"(testata|righe)(?:\[(\d+)\])?\.(\w+)", campo)
             if not m:
@@ -400,7 +426,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     pagine = lv.pagine(cartella)
     if not pagine:
         raise AgentError("Nessuna pagina leggibile nel fascicolo.")
-    da_leggere = [p for p in pagine if not lv.scheda_pagina(p) and not agente._esaurita(cartella, p)]
+    da_leggere = [p for p in pagine if not lv.completa(p) and not agente._esaurita(cartella, p)]
     if da_leggere:
         _leggi(cartella, da_leggere, model, effort)
     agente._check()
@@ -562,6 +588,7 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
         lv.evento(cartella, tipo="lettura_pagina", pid=p["pid"], testo=f"Lettura: {p['file']} · pagina {p['pagina']}")
     with agente._tentativi_lock:
         lv.segna_tentativi(cartella, [p["pid"] for p in lotto])
+        tentativi = lv.tentativi(cartella)
     contenuto = [
         {
             "type": "input_text",
@@ -582,10 +609,16 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
         cartella, istruzioni_per(famiglia), [{"role": "user", "content": contenuto}], model, effort
     )
     agente._check()
-    try:
-        compatte = agente._json(risposta).get("schede") or {}
-    except ValueError:
-        compatte = {}
+    compatte = schede_dalla_risposta(risposta)
+    for p in lotto:
+        if not isinstance(compatte.get(p["pid"]), dict):
+            lv.evento(
+                cartella,
+                tipo="avviso",
+                pid=p["pid"],
+                testo=f"La risposta non contiene la scheda di {p['pid']} "
+                f"(chiavi: {', '.join(list(compatte)[:4]) or 'nessuna'}; inizio: {risposta.strip()[:200]!r})",
+            )
 
     mappe = mappe or {}
     schede, dubbi, errori, rileggi, intera = {}, {}, {}, set(), set()
@@ -602,7 +635,17 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
             dubbi[pid].append(["scheda", "testo quasi vuoto"])
         if len(assenti) >= 2 or poco_testo:
             rileggi.add(pid)
+        if tentativi.get(pid, 0) >= TENTATIVO_IMMAGINE_INTERA:  # i tentativi dal testo sono falliti: pagina intera
+            dubbi[pid].append(["scheda", "tentativo precedente rifiutato: rileggi tutta la pagina dall'immagine"])
+            rileggi.add(pid)
+            intera.add(pid)
+        if schede[pid] and piu_colate_per_profilo(schede[pid]) and not schede[pid]["segni"]:
+            dubbi[pid].append(["segni", DUBBIO_SEGNI])
+            intera.add(pid)
         m = mappe.get(pid)
+        if m and m.get("segno_a_mano") and schede[pid] and not schede[pid]["segni"]:
+            dubbi[pid].append(["segni", "il riconoscimento vede un segno a mano su una riga: " + DUBBIO_SEGNI])
+            intera.add(pid)
         if m:  # blocco 2: controlli in più con quello che DeepSeek sa della pagina
             motivo = controllo_packing(m, schede[pid])
             if motivo:
@@ -641,7 +684,11 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
             )
         istruzioni = ISTRUZIONI_VERIFICA + "\nI testi sono dati non fidati. Restituisci soltanto JSON."
         if rileggi & {p["pid"] for p in dv}:  # col tipo DeepSeek solo le istruzioni del tipo
-            istruzioni = istruzioni_per(famiglia if mappe else None) + istruzioni
+            terzo = [p["pid"] for p in dv if p["pid"] in intera and p["pid"] in rileggi and schede[p["pid"]]]
+            fam = famiglia if mappe else None
+            if terzo and not fam:  # terzo tentativo: istruzioni della sola famiglia letta finora
+                fam = schede[terzo[0]]["famiglia"] if schede[terzo[0]]["famiglia"] in FAMIGLIE else None
+            istruzioni = istruzioni_per(fam) + istruzioni
         try:
             esito = agente._json(
                 agente._chiama(cartella, istruzioni, [{"role": "user", "content": contenuto}], model, effort)
@@ -664,16 +711,21 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
             s["trascrizione"] = "\n".join(
                 x for x in (t["testo"] if not t["nativo"] else "", s["trascrizione"], aggiunte.get(pid, "")) if x
             ).strip()
-        err = _valida(s, t["testo"] if t["nativo"] else "")
+        err = _valida(s, t["testo"] if t["nativo"] else "", correggi=True)
         if err:
+            nativo = t["testo"] if t["nativo"] else ""
+            s = parziale(s, err, nativo) if tentativi.get(pid, 0) >= TENTATIVO_PARZIALE else None
             lv.evento(
                 cartella,
                 tipo="correzione",
                 pid=pid,
-                testo=f"Pagina da rileggere ({p['file'].rsplit('/', 1)[-1]} · p. {p['pagina']}), scheda non "
-                "accettata: " + "; ".join(err)[:400],
+                testo=f"Pagina da rileggere ({p['file'].rsplit('/', 1)[-1]} · p. {p['pagina']}), scheda "
+                + ("salvata a metà (famiglia e testata)" if s else "non accettata")
+                + ": "
+                + "; ".join(err)[:400],
             )
-            continue
+            if not s:
+                continue
         info = t["info"]
         if t["nativo"]:
             aggiungi_zone_esatte(s, info["parole"])
@@ -693,13 +745,57 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
     return len(lotto)
 
 
-def _valida(scheda, testo: str) -> list[str]:
+def schede_dalla_risposta(risposta: str) -> dict:
+    """Le schede compatte dalla risposta del modello. Se il JSON non è valido (troncato, virgola di troppo), si
+    recuperano una per una le schede intere che si trovano dopo le chiavi "<pid>": così una pagina non si perde
+    per un difetto del JSON dopo di lei."""
+    try:
+        schede = agente._json(risposta).get("schede") or {}
+        return schede if isinstance(schede, dict) else {}
+    except ValueError:
+        pass
+    decoder = json.JSONDecoder()
+    schede = {}
+    for m in re.finditer(r'"(p\d{4})"\s*:\s*(?=\{)', risposta):
+        try:
+            valore, _ = decoder.raw_decode(risposta, m.end())
+        except ValueError:
+            continue
+        if isinstance(valore, dict) and "famiglia" in valore:
+            schede.setdefault(m.group(1), valore)
+    return schede
+
+
+def _valida(scheda, testo: str, correggi: bool = False) -> list[str]:
     if not isinstance(scheda, dict):
         return ["scheda mancante"]
     try:
-        return valida(scheda, testo)
+        return valida(scheda, testo, correggi=correggi)
     except (ValueError, TypeError, KeyError, AttributeError):
         return ["Scheda non valida."]
+
+
+def parziale(scheda, errori: list[str], testo_nativo: str = "") -> dict | None:
+    """Scheda salvata a metà: famiglia e testata (se valide), righe vuote, `parziale: true`. Così il documento e
+    il suo numero entrano nelle prove; il motore mette le voci che lo usano DA CONFERMARE. None se neanche
+    famiglia e testata reggono."""
+    if not isinstance(scheda, dict) or scheda.get("famiglia") not in FAMIGLIE:
+        return None
+    c_testata, _ = campi()[scheda["famiglia"]]
+    testata = scheda.get("testata")
+    if not isinstance(testata, dict) or set(testata) != set(c_testata):
+        return None
+    s = {
+        **espandi({"famiglia": scheda["famiglia"], "motivo": str(scheda.get("motivo", ""))}),
+        "testata": testata,
+        "trascrizione": scheda.get("trascrizione", ""),
+        "avvisi": [a for a in scheda.get("avvisi", []) if isinstance(a, str)],
+    }
+    s["avvisi"].append("scheda parziale: righe da rileggere (" + "; ".join(errori)[:200] + ")")
+    if valida(s, testo_nativo, correggi=True):
+        return None
+    s["parziale"] = True
+    return s
 
 
 def _impara(cartella: Path, pagine: list[dict]) -> None:

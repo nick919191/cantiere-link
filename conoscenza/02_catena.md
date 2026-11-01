@@ -10,8 +10,12 @@
 
 - **Il ruolo si decide dal fascicolo, non dalla pagina**: il costruttore è chi riceve i DDT dei commercianti
   (destinatario con più emittenti distinti, acciaierie escluse); chi gli emette DDT è un fornitore. Prova migliore:
-  identificativo fiscale validato, se disponibile. Il motore attuale confronta la ragione sociale normalizzata
-  completa e non effettua ancora la validazione della P.IVA. Non basta una prima parola comune.
+  identificativo fiscale validato, se disponibile. Dalla 0.7.0 il motore confronta il **nucleo** della ragione
+  sociale (i token prima dell'indirizzo e del reparto, senza forma giuridica anche se incollata: "SETALS.P.A." =
+  "SETAL"), per contenimento di token ("SACIF SRL" in "S.A.C.I.F. SRL SOCIETA' AMBROSIANA COSTRUZIONI IN FERRO VIA
+  NULLO 5") o per sigla dalle iniziali ("FVS" = Ferramenta Villafranca Siderurgica), e usa la **partita IVA** letta
+  sui DDT (`piva_emittente`, `piva_destinatario`) e sulle DoP EN 1090 (`piva`): stessa P.IVA = stessa azienda,
+  qualunque sia il nome. Non basta una prima parola comune.
 - Margine stretto (pochi DDT, due destinatari quasi alla pari): ruolo DA CONFERMARE, mai scelto a caso.
 - Su una pagina di certificato ci sono spesso 3-4 aziende (produttore, cliente, commerciante che timbra, costruttore
   a penna): campi separati.
@@ -74,7 +78,8 @@ Regole:
 | A timbro del commerciante | "COPIA CONFORME ALL'ORIGINALE Rif. Ns. ddt n. N del data", "valido per cliente X, DDT N. N del data", sovrascritta digitale "<commerciante> - DDT nr N del data" | sulla **propria pagina** |
 | B lettera del distributore | "Delivery note no. N from data" + posizioni | per il **documento** (blocco), con posizione in comune |
 | C campo DDT del produttore | "DDT N", "documento di trasporto N del" stampato dal produttore | ponte solo se il DDT è del perimetro; di solito è acciaieria -> commerciante: **no** |
-| D segni a mano | freccia, cerchio, evidenziatore su una colata | **scelgono la colata, non provano la consegna** |
+| D segni a mano | freccia, cerchio, evidenziatore su una colata | **scelgono la colata, non provano la consegna**: dalla 0.7.0 un segno su una sola colata la sceglie (avviso "controllare l'originale"); segni su più colate, nessuna scelta |
+| E colata dichiarata sul DDT | "Placca: ... Colata: ..." sotto la riga, "CERT.COL. N", lista di rintracciabilità del commerciante | lega la riga del DDT alla riga del certificato con quella colata, prima del profilo (0.7.0) |
 
 - Il ponte vale solo se il numero citato è un DDT dell'opera (commerciante -> costruttore).
 - "Lieferschein-Nr. LS-..." dentro il 3.1, albarán, "Documento di trasporto" stampato dal produttore: consegna del

@@ -22,4 +22,8 @@ righe: profilo, dimensioni, qualita, colata, lotto, pezzi, peso, componente
   `componente` = vite / dado / rondella; assieme vite+dado = due righe.
 - `ddt_produttore`: DDT del produttore verso il commerciante (campo DDT stampato, Lieferschein, albarán).
 - Timbri del commerciante con il numero del DDT: in `timbri` con `ddt_citato` (anche se stampati o sovrascritti).
+- Sigle sotto il marchio CE (organismo notificato a 4 cifre, codice del tipo "CELSA01BCN", numero FPC): in
+  `riferimenti` tipo `fpc` o `dop`, mai nel numero del certificato.
+- Segni a mano su una riga di colata (freccia, evidenziatore, cerchio, spunta): un elemento di `segni` con
+  l'indice della riga; non scegliere tu la colata.
 - `pagina_di`: "1/2", "Pag. 3/4" se stampato; se manca qualche pagina del certificato, avviso.
