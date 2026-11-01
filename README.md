@@ -8,7 +8,7 @@ Dai documenti di cantiere alla tracciabilità dei materiali da carpenteria metal
 
 La guida HTML include una catena documentale esplorabile, istruzioni Windows/Mac, schermate, percorso guidato e lettura vocale facoltativa. Puoi consultarla online, scaricare il progetto e aprire `docs/index.html`, oppure scegliere Guida interattiva nell’app. Il README qui sotto resta leggibile direttamente su GitHub, con sezioni espandibili.
 
-Versione 0.6.1 in anteprima (versione di prova), destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
+Versione 0.6.2 in anteprima (versione di prova), destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
 
 ## A cosa serve
 
