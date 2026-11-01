@@ -262,3 +262,77 @@ def test_dop_en_1090_del_fornitore_intermedio_non_e_del_costruttore():
     assert "cita il DDT" in v["colonne"]["CE/DoP CENTRO"]["perche"]
     v = next(v for v in r["voci"] if v["voce"] == "IPE 200")
     assert v["colonne"]["CE/DoP CENTRO"]["v"] == "Non presente nel fascicolo"
+
+
+def test_righe_del_ddt_con_elenco_di_colate_e_profilo_senza_misura():
+    """Letture reali: colate nel campo come '143343; 442770; 339044' con le placche, profilo 'LAM. CALDO' senza
+    misura (la misura sta nella descrizione), righe di sole colate che continuano la riga di materiale."""
+    d = ddt("2902", ["SP.015X2450X6000", "LAM. CALDO S355J2 EN 10025-2 SPIAN. Pz 7 6000x1500x 8,00"])
+    d["righe"][0]["colata"] = V("143343; 143343; 442770; 339044")
+    d["righe"][0]["placca"] = V("24E6061124(A); 24E6061124(B); 24E6061126(A); 24EQ001796(A)")
+    d["righe"][1]["profilo"] = V("LAM. CALDO")
+    seguito = ddt("", ["", "SP.010X2000X6000"])
+    seguito["righe"][0]["colata"] = V("C5051; C5081")
+    seguito["righe"][0]["placca"] = V("C5051B (10-02B); C5081A (06-01A)")
+    seguito["righe"][0]["descrizione"] = V("")
+    seguito["righe"][0]["profilo"] = V("")
+    prove = _prove([("a.pdf", 1, d), ("a.pdf", 2, seguito)])
+    righe = prove["ddt"][0]["righe"]
+    assert [r["chiave"] for r in righe] == ["LAMIERA 15", "LAMIERA 8", "LAMIERA 10"]
+    assert righe[0]["colate"] == ["143343", "442770", "339044"]
+    assert righe[0]["placche"]["143343"] == ["24E6061124(A)", "24E6061124(B)"]
+    assert righe[1]["colate"] == ["C5051", "C5081"]  # riga di sole colate: alla riga di materiale prima
+    assert righe[1]["placche"] == {"C5051": ["C5051B (10-02B)"], "C5081": ["C5081A (06-01A)"]}
+
+
+def test_lista_di_rintracciabilita_letta_come_ddt_o_come_certificato_diventa_lettera():
+    from fascicolo_inventato import certificato
+
+    fogli = [
+        ("a.pdf", 1, ddt("G02 / 51159", ["L.DA TRENO S355J2 Pz 8 6000x2500x15,00"], emittente="ROSSINI SPA")),
+        ("b.pdf", 1, ddt("20", ["IPE 200"], emittente="FORNITORE 002 SRL")),
+    ]
+    lista = ddt("38747/ 51159", ["", ""], emittente="Rossini S.p.A. - Società Unipersonale")
+    for r, (c, p) in zip(lista["righe"], (("SU36217", "X2590744"), ("SU35302", "X2590753")), strict=True):
+        r["descrizione"] = V("")
+        r["profilo"] = V("")
+        r["colata"] = V(c)
+        r["placca"] = V(p)
+    # "certificato" emesso dal commerciante: è la sua lista placca -> colata
+    finto = certificato(
+        "6738/3332", [("LAM. CALDO 5,00 x1500,00 x 6000,00", "S355J2+N", "24305236")], produttore="ROSSINI SPA"
+    )
+    finto["testata"]["ddt_produttore"] = V("3332")
+    finto["trascrizione"] += "\n3332"
+    fogli += [
+        ("c.pdf", 1, lista),
+        ("d.pdf", 1, ddt("G01 / 3332", ["LAM. CALDO 6000x1500x5,00"], emittente="ROSSINI SPA")),
+        ("e.pdf", 1, finto),
+    ]
+    prove = _prove(fogli)
+    assert [d["numero"] for d in prove["ddt"]] == ["G02 / 51159", "20", "G01 / 3332"]
+    assert prove["certificati"] == []
+    liste = {lt["ddt_citato"]: lt for lt in prove["lettere"]}
+    assert [(r["colata"], r["placca"]) for r in liste["G02 / 51159"]["righe"]] == [
+        ("SU36217", "X2590744"),
+        ("SU35302", "X2590753"),
+    ]
+    assert liste["G01 / 3332"]["righe"][0]["colata"] == "24305236" and liste["G01 / 3332"]["righe"][0][
+        "articolo"
+    ].startswith("LAM. CALDO")
+    assert any("letta come DDT" in a for a in prove["ddt"][0]["avvisi"])
+
+
+def test_emittente_uguale_al_destinatario_non_decide_il_ruolo():
+    fogli = [
+        ("a.pdf", 1, ddt("10", ["HEA 160"], emittente="FORNITORE 001 SRL", destinatario="COSTRUTTORE 001 SRL")),
+        ("b.pdf", 1, ddt("20", ["IPE 200"], emittente="FORNITORE 002 SRL", destinatario="COSTRUTTORE 001 SRL")),
+    ]
+    sbagliato = ddt("6559", ["TUBO 219,1x12,5"], emittente="COSTRUTTORE 001 SRL", destinatario="ALTRO SRL")
+    sbagliato["testata"]["piva_destinatario"] = V("01234567890")
+    buono = ddt("30", ["UPN 100"], emittente="COSTRUTTORE 001 SRL", destinatario="CLIENTE SRL")
+    buono["testata"]["piva_emittente"] = V("01234567890")
+    prove = _prove(fogli + [("c.pdf", 1, sbagliato), ("d.pdf", 1, buono)])
+    tipi = {d["numero"]: d["tipo"] for d in prove["ddt"]}
+    assert tipi["6559"] == "fuori_perimetro" and tipi["30"] == "costruttore_cliente"
+    assert any("stessa azienda" in a for a in next(d for d in prove["ddt"] if d["numero"] == "6559")["avvisi"])

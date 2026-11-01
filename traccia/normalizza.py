@@ -409,6 +409,32 @@ def cita_ddt(citato, numero_ddt):
     )
 
 
+def contiene_numero(testo, numero):
+    """True se il numero di documento (almeno 4 caratteri) compare nel testo come parola o come sequenza di parole
+    consecutive, confrontando solo lettere e cifre: 'DDT/DELIVNOTE BA/6577' contiene 'BA/6577', 'note 2026/45678'
+    contiene '45678'; '1066009422' non contiene '6577'."""
+    a = re.sub(r"[^a-z0-9]", "", (numero or "").lower())
+    if len(a) < 4:
+        return False
+    parole = re.findall(r"[a-z0-9]+", (testo or "").lower())
+    for i in range(len(parole)):
+        unito = ""
+        for j in range(i, len(parole)):
+            unito += parole[j]
+            if unito == a:
+                return True
+            if len(unito) >= len(a):
+                break
+    return False
+
+
+def progressivo(numero):
+    """Parte finale del numero di documento dopo l'ultimo separatore: 'G02 / 51159' -> '51159', '38747/ 51159' ->
+    '51159', '2026/45678' -> '45678'; vuoto se il numero non ha un separatore."""
+    parti = [p for p in re.split(r"[^a-z0-9]+", (numero or "").lower().strip()) if p]
+    return parti[-1].lstrip("0") if len(parti) >= 2 else ""
+
+
 def dimensioni_piatto(chiave):
     """'PIATTO 80x10' -> (80.0, 10.0); 'LAMIERA 10' -> (None, 10.0); altro -> None."""
     m = re.fullmatch(r"PIATTO (\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", chiave or "")

@@ -400,3 +400,59 @@ def test_certificato_con_timbro_che_cita_un_ddt_assente_diventa_voce_da_conferma
     assert v["colonne"]["COMMERCIANTE / CENTRO TRASF."]["v"] == "F.lli Molteni s.p.a."
     assert v["colonne"]["PARTE D'OPERA"]["v"].endswith("(da un certificato)")
     assert len(r["voci"]) == 3  # il certificato usato (HEA 160) non genera un'altra voce
+
+
+def test_segni_croce_escludono_e_non_scelgono():
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    # reale (anonimo): partite barrate con una croce, una evidenziata; inventato: tutte barrate tranne una
+    c1 = certificato(
+        "16024488927",
+        [("Hot Rolled Heavy Plates 15,00 X 2450,00 X 12000,00", "S275JR", c) for c in ("442571", "143343", "442770")],
+        [timbro("2902")],
+        segni=[
+            {"tipo": "croce", "riga": 0, "testo": "", "zona": []},
+            {"tipo": "evidenziatore", "riga": 1, "testo": "", "zona": []},
+            {"tipo": "croce", "riga": 2, "testo": "", "zona": []},
+        ],
+    )
+    c2 = certificato(
+        "77",
+        [("HEA 200", "S275JR", c) for c in ("700100", "700200", "700300")],
+        [timbro("20")],
+        segni=[
+            {"tipo": "croce", "riga": 0, "testo": "", "zona": []},
+            {"tipo": "croce", "riga": 2, "testo": "", "zona": []},
+        ],
+    )
+    fogli = [
+        ("ddt.pdf", 1, ddt("2902", ["LAMIERE SP.015X2450X6000"])),
+        ("ddt2.pdf", 1, ddt("20", ["HEA 200"], emittente="FORNITORE 002 SRL")),
+        ("c1.pdf", 1, c1),
+        ("c2.pdf", 1, c2),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "LAMIERA 15")
+    assert v["colonne"]["COLATA"]["v"] == "143343" and v["stato"] == "PROVATO"
+    v = _voce(r, "HEA 200")
+    assert v["colonne"]["COLATA"]["v"] == "700200" and any("barrate" in a for a in v["avvisi"])
+
+
+def test_dop_collegata_per_ddt_del_produttore_anche_con_etichetta_nel_campo():
+    from fascicolo_inventato import V, certificato, ddt, scheda, timbro
+
+    cert = certificato("6577", [("HEA 160", "S275JR", "150890")], [timbro("8027")])
+    cert["testata"]["ddt_produttore"] = V("DDT/DELIVNOTE BA/6577")
+    cert["trascrizione"] += "\nDDT/DELIVNOTE BA/6577"
+    dop = scheda(
+        "dop_ce_prodotto",
+        {"fabbricante": V("PRODUTTORE 001 SPA"), "numero_dop": V("03 N 2025"), "ddt_citato": V("BA/6577")},
+    )
+    fogli = [
+        ("ddt.pdf", 1, ddt("8027", ["HEA 160"])),
+        ("ddt2.pdf", 1, ddt("20", ["UPN 100"], emittente="FORNITORE 002 SRL")),
+        ("c.pdf", 1, cert),
+        ("d.pdf", 1, dop),
+    ]
+    v = _voce(_senza_packing(fogli), "HEA 160")
+    assert "DoP 03 N 2025" in v["colonne"]["CE/DoP ACCIAIERIA"]["v"]

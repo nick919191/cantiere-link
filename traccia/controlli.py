@@ -27,6 +27,7 @@ CHIAVI = [
 ]
 CAMPI_TIMBRO = ["chi", "testo", "ddt_citato", "data_ddt", "destinatario", "a_mano", "zona"]
 CAMPI_ENUM = {"tipo_proposto", "tipo_materiale", "servizio", "componente"}  # valori scelti, non trascritti
+CAMPI_ELENCO = {"colata", "placca", "certificato"}  # più valori separati da ';' (righe del DDT): ognuno sta nel testo
 # Valori ammessi per i campi scelti (istruzioni/famiglie/*.md); vuoto = non determinato.
 VALORI_ENUM = {
     "tipo_proposto": {
@@ -95,6 +96,13 @@ def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
         errori.append(f"{campo}: valore senza citazione")
     elif _compatto(v["cit"]) not in _compatto(testo_pagina):
         errori.append(f"{campo}: la citazione {v['cit'][:60]!r} non si trova nella trascrizione")
+    elif nome in CAMPI_ELENCO and ";" in v["v"]:
+        # elenco: ogni elemento deve stare nella citazione o nel testo della pagina
+        compatto = _compatto(v["cit"]) + " " + _compatto(testo_pagina)
+        for parte in (x.strip() for x in v["v"].split(";")):
+            if parte and _compatto(parte) not in compatto:
+                errori.append(f"{campo}: l'elemento {parte[:40]!r} non si trova nella trascrizione")
+                break
     elif _compatto(v["v"]) not in _compatto(v["cit"]):
         errori.append(f"{campo}: il valore {v['v'][:40]!r} non sta nella sua citazione")
 

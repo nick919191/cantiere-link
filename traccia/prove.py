@@ -103,8 +103,24 @@ def _colate_riga(r: dict) -> list[tuple[str, list[str]]]:
     campo = [c.strip() for c in re.split(r"[;|]", _v(r.get("colata"))) if c.strip()]
     if campo:
         placche = [p.strip() for p in re.split(r"[;|]", _v(r.get("placca"))) if p.strip()]
-        return [(c, placche if len(campo) == 1 else placche[i : i + 1]) for i, c in enumerate(campo)]
+        esito: dict[str, list[str]] = {}
+        for i, c in enumerate(campo):
+            esito.setdefault(c, [])
+            for p in placche if len(campo) == 1 else placche[i : i + 1]:
+                if p not in esito[c]:
+                    esito[c].append(p)
+        return list(esito.items())
     return nz.colate_dichiarate(" ".join(_v(r.get(k)) for k in ("descrizione", "profilo")))
+
+
+def _chiave_riga(profilo: str, descrizione: str) -> str:
+    """Chiave del materiale: il campo profilo se porta una misura ('SP.012X2450X6000'); altrimenti la descrizione
+    ('LAM. CALDO' + 'LAM. CALDO S355J2 ... 6000x1500x 8,00' -> LAMIERA 8); altrimenti ciò che c'è."""
+    for testo in (profilo, descrizione, f"{profilo} {descrizione}"):
+        chiave = nz.profilo(testo) if testo.strip() else ""
+        if re.search(r"\d", chiave):
+            return chiave
+    return nz.profilo(profilo or descrizione)
 
 
 def _pagina_di(testo: str) -> tuple[int, int] | None:
@@ -223,13 +239,24 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 if _v(r.get("servizio")).lower() == "si":
                     doc.setdefault("servizi", []).append(_v(r.get("descrizione")))
                     continue
-                descr = _v(r.get("profilo")) or _v(r.get("descrizione"))
                 colate = _colate_riga(r)
+                chiave = _chiave_riga(_v(r.get("profilo")), _v(r.get("descrizione")))
+                if not chiave and colate and doc["righe"]:
+                    # riga di sole colate/placche (continuazione della riga di materiale precedente, anche da
+                    # un'altra pagina): le colate vanno alla riga prima
+                    prima = doc["righe"][-1]
+                    for c, placche in colate:
+                        if c not in prima["colate"]:
+                            prima["colate"].append(c)
+                        prima["placche"].setdefault(c, [])
+                        prima["placche"][c] += [p for p in placche if p not in prima["placche"][c]]
+                        prima["fonti"].setdefault("colata", fonti.aggiungi(pid, f"r{i}.colata", r.get("colata")))
+                    continue
                 doc["righe"].append(
                     {
                         "pid": pid,
                         "descrizione": _v(r.get("descrizione")),
-                        "chiave": nz.profilo(descr),
+                        "chiave": chiave,
                         "qualita": _v(r.get("qualita")),
                         "quantita": f"{_v(r.get('quantita'))} {_v(r.get('unita'))}".strip(),
                         "colate": [c for c, _ in colate],
@@ -373,8 +400,10 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
         c["incompleto"] = bool(totali) and viste != set(range(1, max(totali) + 1))
         c["pagine_di_testo"] = ", ".join(f"{i}/{n}" for i, n in sorted(set(c["pagine_di"])))
 
+    _liste_lette_come_ddt(ddt, lettere, stessa)
     costruttore = _costruttore(ddt, dop_costr, packing, stessa)
     _tipi(ddt, costruttore, stessa)
+    _liste_lette_come_certificati(ddt, certificati, lettere, stessa)
     commercianti = [d["emittente"] for d in ddt if d["tipo"] == "commerciante_costruttore" and d["emittente"]]
     dop_intermedi = [
         d
@@ -412,6 +441,108 @@ CONTO_LAVORAZIONE = re.compile(r"conto\s*lavor|c/\s*lavor|lavorazione\s+per\s+co
 RESO = re.compile(r"\breso\b|\bresi\b|\brestituzione\b|\britorno\b", re.I)
 
 
+def _liste_lette_come_ddt(ddt: list[dict], lettere: list[dict], stessa) -> None:
+    """Una lista di rintracciabilità letta come DDT (stesso emittente di un DDT, stesso progressivo del numero,
+    righe senza materiale ma con colate) non è un DDT: diventa una lettera che cita quel DDT."""
+    for d in list(ddt):
+        if not d["righe"] or any(r["chiave"] for r in d["righe"]) or not any(r["colate"] for r in d["righe"]):
+            continue
+        prog = nz.progressivo(d["numero"])
+        altro = next(
+            (
+                e
+                for e in ddt
+                if e is not d
+                and any(r["chiave"] for r in e["righe"])
+                and prog
+                and nz.progressivo(e["numero"]) == prog
+                and stessa(e["emittente"], d["emittente"])
+            ),
+            None,
+        )
+        if not altro:
+            continue
+        ddt.remove(d)
+        righe = [
+            {
+                "posizione": "",
+                "articolo": "",
+                "placca": p,
+                "colata": c,
+                "certificato": r.get("certificato", ""),
+                "fonti": {},
+            }
+            for r in d["righe"]
+            for c in r["colate"]
+            for p in (r["placche"].get(c) or [""])
+        ]
+        lettere.append(
+            {
+                "pid": d["pagine"][0],
+                "emittente": d["emittente"],
+                "ddt_citato": altro["numero"],
+                "posizioni": [],
+                "certificati": [r["certificato"] for r in righe if r["certificato"]],
+                "righe": righe,
+                "fid": d["fonti"].get("numero"),
+                "da_ddt": d["numero"],
+            }
+        )
+        altro["avvisi"].append(
+            f"lista di rintracciabilità {d['numero']} (pagina {d['pagine']}) letta come DDT: usata come lista"
+        )
+
+
+def _liste_lette_come_certificati(ddt: list[dict], certificati: list[dict], lettere: list[dict], stessa) -> None:
+    """Un "certificato" il cui produttore è il commerciante di un DDT del perimetro non è un 3.1 (li emettono le
+    acciaierie): è la sua lista di rintracciabilità (placca -> colata -> certificato) e vale come lettera per il DDT
+    che cita (campo DDT o timbro)."""
+    commercianti = [d for d in ddt if d["tipo"] == "commerciante_costruttore" and d["emittente"]]
+    for c in list(certificati):
+        if not c["produttore"] or not any(stessa(c["produttore"], d["emittente"]) for d in commercianti):
+            continue
+        citati = [c.get("ddt_produttore", "")] + [t["ddt_citato"] for t in c["timbri"]]
+        doc = next(
+            (
+                d
+                for d in commercianti
+                for n in citati
+                if n and (nz.cita_ddt(n, d["numero"]) or nz.cita_ddt(d["numero"], n))
+            ),
+            None,
+        )
+        if not doc:
+            continue
+        certificati.remove(c)
+        lettere.append(
+            {
+                "pid": c["pagine"][0],
+                "emittente": c["produttore"],
+                "ddt_citato": doc["numero"],
+                "posizioni": [],
+                "certificati": [v for v, _ in c["ce_dop"]],
+                "righe": [
+                    {
+                        "posizione": "",
+                        "articolo": r["descrizione"],
+                        "placca": r.get("lotto", ""),
+                        "colata": r["colata"],
+                        "certificato": "",
+                        "fonti": r["fonti"],
+                    }
+                    for r in c["righe"]
+                    if r["colata"]
+                ],
+                "fid": c["fonti"].get("numero"),
+                "da_certificato": c["numero"],
+            }
+        )
+        doc["avvisi"].append(
+            f"documento {c['numero']} di {c['produttore']} letto come certificato: è la lista del commerciante, "
+            "usata come lista"
+        )
+
+
 def _tipi(ddt: list[dict], costruttore: str, stessa) -> None:
     """Tipo di ogni DDT dal fascicolo (conoscenza 02): emesso dal costruttore -> costruttore_cliente, oppure
     costruttore_terzista se la causale dice conto lavorazione o se un DDT del terzista lo cita come reso; ricevuto
@@ -422,6 +553,10 @@ def _tipi(ddt: list[dict], costruttore: str, stessa) -> None:
     for d in ddt:
         d["tipo"] = "fuori_perimetro"
         d["tramite"] = ""
+        if d["emittente"] and d["destinatario"] and stessa(d["emittente"], d["destinatario"]):
+            d["avvisi"].append("emittente e destinatario letti come la stessa azienda: ruolo del DDT da controllare")
+    emessi = [d for d in emessi if not (d["destinatario"] and stessa(d["emittente"], d["destinatario"]))]
+    ricevuti = [d for d in ricevuti if not (d["emittente"] and stessa(d["emittente"], d["destinatario"]))]
     for d in emessi:
         d["tipo"] = "costruttore_terzista" if CONTO_LAVORAZIONE.search(_testo_ddt(d)) else "costruttore_cliente"
     for d in ricevuti:
@@ -432,12 +567,16 @@ def _tipi(ddt: list[dict], costruttore: str, stessa) -> None:
             d["tipo"] = "terzista_cantiere"
             for e in resi:
                 e["tipo"] = "costruttore_terzista"
-                e["tramite"] = e["destinatario"] or d["emittente"]
+                e["tramite"] = _prima_riga(e["destinatario"] or d["emittente"])
         else:
             d["tipo"] = "commerciante_costruttore"
     for e in emessi:
         if e["tipo"] == "costruttore_terzista" and not e["tramite"]:
-            e["tramite"] = e["destinatario"]
+            e["tramite"] = _prima_riga(e["destinatario"])
+
+
+def _prima_riga(testo: str) -> str:
+    return (testo or "").strip().splitlines()[0].strip() if (testo or "").strip() else ""
 
 
 def _testo_ddt(d: dict) -> str:

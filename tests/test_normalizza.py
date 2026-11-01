@@ -130,3 +130,10 @@ def test_colata_per_il_confronto_e_colate_dichiarate_sulla_riga():
     assert nz.colate_dichiarate("contributo certificazione colata N. 12") == []  # meno di tre cifre
     assert nz.cita_ddt("51159", "G02 / 51159") and nz.cita_ddt("8027", "8027") and nz.cita_ddt("5678", "5678/1")
     assert not nz.cita_ddt("1159", "G02 / 51159") and not nz.cita_ddt("777", "1777")
+
+
+def test_numero_contenuto_e_progressivo():
+    assert nz.contiene_numero("DDT/DELIVNOTE BA/6577", "BA/6577") and not nz.contiene_numero("1066009422", "6577")
+    assert nz.contiene_numero("Delivery note 2026/45678 del", "45678") and not nz.contiene_numero("x", "")
+    assert nz.progressivo("G02 / 51159") == nz.progressivo("38747/ 51159") == "51159"
+    assert nz.progressivo("8027") == "" and nz.progressivo("2026/45678") == "45678"

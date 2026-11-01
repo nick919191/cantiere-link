@@ -59,3 +59,15 @@ def test_con_correzione_restano_bloccanti_famiglia_testata_e_righe():
     s = ddt("1", ["HEA 100"])
     s["righe"][0] = {"descrizione": V("x")}
     assert any(e.startswith("righe[0]") for e in valida(s, correggi=True))
+
+
+def test_campo_a_elenco_controllato_elemento_per_elemento():
+    """Più colate sulla riga del DDT ('143343; 442770'): il valore non è una sequenza del testo, ma ogni elemento sì."""
+    s = ddt("2902", ["SP.015X2450X6000"])
+    s["trascrizione"] += "\nPlacca: 24E6061124(A) Colata: 143343 Placca: 24E6061126(A) Colata: 442770"
+    s["righe"][0]["colata"] = V("143343; 442770", "Colata: 143343")
+    s["righe"][0]["placca"] = V("24E6061124(A); 24E6061126(A)", "Placca: 24E6061124(A)")
+    assert valida(s) == []
+    s["righe"][0]["colata"] = V("143343; 999999", "Colata: 143343")  # un elemento inventato
+    assert any("999999" in e for e in valida(s))
+    assert valida(s, correggi=True) == [] and s["righe"][0]["colata"]["v"] == ""

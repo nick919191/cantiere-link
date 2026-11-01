@@ -113,7 +113,8 @@ def voci_dal_fascicolo(prove: dict) -> list[dict]:
                 continue
             per_chiave: dict[str, list] = {}
             for r in d["righe"]:
-                per_chiave.setdefault(r["chiave"], []).append(r)
+                if r["chiave"]:  # una riga senza materiale riconoscibile non è una voce
+                    per_chiave.setdefault(r["chiave"], []).append(r)
             for chiave, righe in per_chiave.items():
                 base = {
                     "origine": "dai_ddt",
@@ -229,6 +230,9 @@ def _righe_affini(cert: dict, voce: dict, riga_ddt: dict | None) -> list[dict]:
     return [r for r in cert["righe"] if any(_affine(o, r["chiave"]) for o in obiettivo)]
 
 
+SEGNI_CHE_SCELGONO = {"freccia", "cerchio", "evidenziatore", "spunta"}  # la croce esclude, la scritta non decide
+
+
 def _scegli_segnata(cert: dict, righe: list[dict]) -> tuple[list[dict], str | None]:
     """Decisione 1: con più colate per il profilo, un segno a mano (freccia, evidenziatore, cerchio) su UNA sola di
     loro la sceglie; la voce va avanti come se la colata fosse unica, con avviso. Segni su più colate: nessuna
@@ -237,12 +241,20 @@ def _scegli_segnata(cert: dict, righe: list[dict]) -> tuple[list[dict], str | No
     if len(colate) < 2:
         return righe, None
     possibili = {r["colata"] for r in colate}
-    segnate = sorted({s["colata"] for s in cert.get("segni", []) if s.get("colata") in possibili})
-    if len(segnate) != 1:
-        return righe, None
-    tipo = next(s["tipo"] for s in cert["segni"] if s["colata"] == segnate[0])
-    scelta = [r for r in righe if r["colata"] == segnate[0]]
-    return scelta, f"colata {segnate[0]} scelta dal segno a mano ({tipo}): controllare l'originale"
+    segni = [s for s in cert.get("segni", []) if s.get("colata") in possibili]
+    scelte = sorted({s["colata"] for s in segni if s["tipo"] in SEGNI_CHE_SCELGONO})
+    barrate = sorted({s["colata"] for s in segni if s["tipo"] == "croce"})
+    if len(scelte) == 1:
+        tipo = next(s["tipo"] for s in segni if s["colata"] == scelte[0] and s["tipo"] in SEGNI_CHE_SCELGONO)
+        return [r for r in righe if r["colata"] == scelte[0]], (
+            f"colata {scelte[0]} scelta dal segno a mano ({tipo}): controllare l'originale"
+        )
+    if not scelte and barrate and len(possibili - set(barrate)) == 1:
+        (rimasta,) = possibili - set(barrate)
+        return [r for r in righe if r["colata"] == rimasta], (
+            f"colata {rimasta} scelta perché le altre sono barrate a mano: controllare l'originale"
+        )
+    return righe, None
 
 
 def _per_colata(righe: list[dict]) -> list[dict]:
@@ -700,9 +712,10 @@ def _dop_del_certificato(prove: dict, cert: dict) -> list[tuple[dict, str]]:
         p1 = any(
             nz.stesso_numero(v, d.get(k, "")) == "uguale" for v, _ in cert["ce_dop"] for k in ("numero_dop", "fpc")
         )
-        p2 = (
-            bool(cert.get("ddt_produttore"))
-            and nz.stesso_numero(cert["ddt_produttore"], d.get("ddt_citato", "")) in STESSO
+        p2 = bool(cert.get("ddt_produttore") and d.get("ddt_citato")) and (
+            nz.stesso_numero(cert["ddt_produttore"], d["ddt_citato"]) in STESSO
+            or nz.contiene_numero(cert["ddt_produttore"], d["ddt_citato"])
+            or nz.contiene_numero(d["ddt_citato"], cert["ddt_produttore"])
         )
         organismo = re.search(r"\b\d{4}\b", d.get("organismo", "") or "")
         p3 = (
