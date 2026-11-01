@@ -1,4 +1,4 @@
-"""Motore di regole 0.7.0: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.1: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
@@ -14,6 +14,9 @@ Regole (conoscenza/05_regole_di_stato.md):
 - tetti: timbro con il numero del DDT scritto a penna -> al massimo DEDOTTO, mai sotto il certificato senza timbro
   (impostazione PENNA_VALE_COME_PROVA, 0.6.0); pezzo ricavato da un profilo più largo -> al massimo DEDOTTO. Dalla
   0.7.0 la packing assente non abbassa più lo stato (resta l'avviso e la dicitura "(dai DDT)").
+  0.7.1 (da Viollier) O e 0 nei numeri; piatto scritto '70X10' sul certificato; DDT a penna letto male ripreso per
+        data; certificato dichiarato assente sostituito da quello timbrato per lo stesso DDT (max DEDOTTO); una
+        voce per file di packing anche se il titolo cambia da pagina a pagina.
 """
 
 import hashlib
@@ -22,7 +25,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.7.0"
+VERSIONE = "0.7.1"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 
@@ -98,24 +101,28 @@ def _colate_da_lettere(prove: dict, numero_ddt: str, chiavi: list[str]) -> dict[
 def voci_dal_fascicolo(prove: dict) -> list[dict]:
     voci = []
     if prove["packing"]:
+        # Stesso certificato, stesso DDT, stesso gruppo di profilo, stesso file di packing: una voce. Il titolo
+        # (parte d'opera) non separa: su un ciclo di più pagine il lettore lo prende diverso da pagina a pagina.
+        pid_file = {f["pid"]: f["file"] for f in prove["fonti"].values()}
         gruppi: dict[tuple, list] = {}
         for r in prove["packing"]:
             chiave = (
                 nz.numero_normale(r.get("certificato", "")),
                 nz.numero_normale(r.get("ddt", "")),
                 nz.gruppo(r["chiave"]),
-                r.get("titolo", ""),
+                pid_file.get(r["pid"], ""),
             )
             gruppi.setdefault(chiave, []).append(r)
         for righe in gruppi.values():
             primo = next((r for r in righe if r.get("certificato")), righe[0])
+            titoli = list(dict.fromkeys(r.get("titolo", "") for r in righe if r.get("titolo")))
             voci.append(
                 {
                     "origine": "costruttore",
                     "righe": righe,
                     "etichetta": _etichetta(righe),
                     "chiavi": sorted({r["chiave"] for r in righe}),
-                    "parte_opera": primo.get("titolo", ""),
+                    "parte_opera": " / ".join(titoli),
                     **{
                         k: next((r.get(k, "") for r in righe if r.get(k)), "")
                         for k in (
@@ -242,7 +249,10 @@ def _affine(a: str, b: str) -> bool:
     if da and db:
         return da[1] == db[1]
     if da or db:
-        return False
+        # 'PIATTO 70x10' e '70X10' scritto senza parola (preso per un tubo): stesse due misure, stesso piatto
+        piatto, altro = (da, b) if da else (db, a)
+        m = re.fullmatch(r"TUBO (\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", altro)
+        return bool(m and piatto[0] is not None and {float(m.group(1)), float(m.group(2))} == {piatto[0], piatto[1]})
     pa, pb = a.split(" ", 1), b.split(" ", 1)
     ma, mb = (
         re.search(r"\d+(?:\.\d+)?", pa[1] if len(pa) > 1 else ""),
@@ -408,11 +418,24 @@ class Motore:
 
         cert, righe, ricavato, ponti = None, [], False, []
         ambiguo = False  # più certificati candidati: non è un'assenza (MANCANTE) ma un dubbio (DA CONFERMARE)
+        sostituito = False  # certificato dichiarato assente: ne vale uno timbrato per lo stesso DDT (max DEDOTTO)
         if voce["certificato"]:
             trovati = [c for c in self.p["certificati"] if nz.stesso_numero(voce["certificato"], c["numero"])]
             if not trovati:
-                motivi.append(f"il costruttore dichiara il certificato {voce['certificato']}: non è nel fascicolo")
-                richieste.append(f"certificato {voce['certificato']}")
+                cert, righe, ricavato, ambiguo = self._cerca_per_ponte(
+                    voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi, avvisi
+                )
+                if cert:
+                    sostituito = True
+                    motivi.append(
+                        f"il costruttore dichiara il certificato {voce['certificato']}, che non è nel fascicolo; il "
+                        f"certificato {cert['numero']} è timbrato per lo stesso DDT e ha il profilo"
+                    )
+                    avvisi.append("numero del certificato diverso da quello dichiarato: da verificare")
+                else:
+                    ambiguo = False
+                    motivi.append(f"il costruttore dichiara il certificato {voce['certificato']}: non è nel fascicolo")
+                    richieste.append(f"certificato {voce['certificato']}")
             elif len(trovati) > 1:
                 ambiguo = True
                 motivi.append("più certificati con lo stesso numero: identificazione non univoca")
@@ -421,6 +444,14 @@ class Motore:
                 if nz.stesso_numero(voce["certificato"], cert["numero"]) == "prefisso":
                     avvisi.append(f"il costruttore scrive {voce['certificato']}, il certificato porta {cert['numero']}")
                 righe, ricavato = _righe_cert(cert, voce, riga_ddt)
+                if not righe:  # profilo scritto diversamente ('70X10' senza parola per il piatto 70x10)
+                    righe = _righe_affini(cert, voce, riga_ddt)
+                    if righe:
+                        obiettivo = [riga_ddt["chiave"]] if riga_ddt else voce["chiavi"]
+                        avvisi.append(
+                            f"profilo scritto diversamente: {' / '.join(obiettivo)} sul DDT, "
+                            f"{', '.join(sorted({r['chiave'] for r in righe}))} sul certificato"
+                        )
         else:
             dichiarate = self.colate_dichiarate(voce, riga_ddt)
             cert, righe, ricavato, ambiguo = self._cerca_per_colata(voce, dichiarate, riga_ddt, motivi, avvisi)
@@ -444,6 +475,8 @@ class Motore:
                 else f"DDT {voce['ddt']}"
             )
         stato = self._stato(voce, cert, righe, doc_ddt, riga_ddt, ricavato, ambiguo, motivi, avvisi)
+        if sostituito:
+            stato = _tetto(stato, DEDOTTO)
         vicine = self.non_lette_vicine([doc_ddt, cert], {r["pid"] for r in voce["righe"]})
         if vicine or self.p.get("file_non_letti"):
             stato = DA_CONFERMARE
@@ -624,6 +657,11 @@ class Motore:
             motivi.append(
                 f"timbro di {p['chi'] or 'commerciante'} sul certificato con il DDT {p.get('ddt_citato') or ''}"
             )
+            if p.get("ddt_letto"):
+                avvisi.append(
+                    f"sul timbro il numero del DDT è letto {p['ddt_letto']}: preso il DDT {p['ddt_citato']} dello "
+                    f"stesso giorno, da controllare sull'originale"
+                )
             if p["a_mano"] and not PENNA_VALE_COME_PROVA:
                 avvisi.append("numero del DDT scritto a penna sul timbro: da controllare sull'originale")
                 stato = DEDOTTO

@@ -524,3 +524,91 @@ def test_ddt_letto_male_non_toglie_la_richiesta_del_ddt_citato_dal_timbro():
     r = _senza_packing(fogli)
     v = _voce(r, "TUBO 219.1x12.5x12000")
     assert v["stato"] == "DA CONFERMARE" and v["richieste"] == ["DDT 6559 di F.lli Molteni s.p.a."]
+
+
+def _con_packing(fogli):
+    pagine = [{"pid": f"p{i:04d}", "file": f, "pagina": n} for i, (f, n, _) in enumerate(fogli, 1)]
+    return elabora(costruisci(pagine, {p["pid"]: s for p, (_, _, s) in zip(pagine, fogli, strict=True)}))
+
+
+def test_piatto_scritto_senza_parola_sul_certificato_vale_per_il_piatto_dichiarato():
+    """0.7.1 (Viollier): il certificato CELSA scrive '70X10 L.6.00m' (letto come tubo) per il piatto 70x10; il timbro
+    stampato scrive il DDT '3209 - 1' per il DDT 3209/1 che il costruttore chiama 3209."""
+    from fascicolo_inventato import V, certificato, ddt, riga_tabella, scheda, timbro
+
+    tab = scheda("packing_costruttore", {"titolo": V("Copertura")}, [riga_tabella("PL10*70", "201952727", "3209")])
+    t = timbro("3209 - 1")
+    cert = certificato("201952727", [("70X10 L.6.00m", "S275JR +AR", "CE613171")], [t])
+    r = _con_packing([("t.pdf", 1, tab), ("d.pdf", 1, ddt("3209/1", ["FERRO PIATTO 70X10"])), ("c.pdf", 1, cert)])
+    v = _voce(r, "PL10*70")
+    assert v["stato"] == "PROVATO" and v["colonne"]["COLATA"]["v"] == "CE613171"
+    assert any("scritto diversamente" in a for a in v["avvisi"])
+
+
+def test_certificato_dichiarato_assente_sostituito_da_quello_timbrato_per_lo_stesso_ddt():
+    """0.7.1 (Viollier): il ciclo dichiara GI2300/2021, il certificato stampa G1200/2021 ma il timbro a penna cita il
+    DDT 1062 e il profilo c'è: vale, al massimo DEDOTTO, senza richiesta del certificato dichiarato."""
+    from fascicolo_inventato import V, certificato, ddt, riga_tabella, scheda, timbro
+
+    tab = scheda("packing_costruttore", {"titolo": V("Copertura")}, [riga_tabella("L50*5", "GI2300/2021", "1062")])
+    cert = certificato(
+        "G1200/2021",
+        [("ANG.50X50X5", "S275JR+AR", "151166"), ("ANG.50X50X5", "S275JR+AR", "22005213")],
+        [timbro("1062", a_mano=True)],
+        segni=[{"tipo": "croce", "riga": 0}],
+    )
+    d = ddt("01062", ["ANGOLARE A LATI UGUALI LT=50.0 LT=50.0 SP=5.0 LU=L.C."])
+    r = _con_packing([("t.pdf", 1, tab), ("d.pdf", 1, d), ("c.pdf", 1, cert)])
+    v = _voce(r, "L50*5")
+    assert v["stato"] == "DEDOTTO" and v["colonne"]["COLATA"]["v"] == "22005213"
+    assert "G1200/2021" in v["colonne"]["CERT 3.1 ACCIAIERIA"]["v"]
+    assert any("diverso da quello dichiarato" in a for a in v["avvisi"])
+    assert not any("certificato" in x for x in v["richieste"])
+
+
+def test_ddt_a_penna_letto_male_ripreso_per_data_ed_emittente():
+    """0.7.1 (Viollier): sul timbro '1062' è letto '1002'; nessun DDT 1002, ma il DDT 1062 dello stesso giorno c'è:
+    il timbro vale per quello, il certificato non diventa una voce fantasma che chiede il DDT 1002."""
+    from fascicolo_inventato import V, certificato, ddt, riga_tabella, scheda, timbro
+
+    t = timbro("1002", a_mano=True)
+    t["chi"], t["data_ddt"] = "Magazzino CELESTRI di Gallarate", "18/5/22"
+    beltrame = certificato("283664", [("UN. ANG. 120X80X10", "S275JR+AR", "BE 198928")], [t])
+    d = ddt("01062", ["ANGOLARE A LATI UGUALI LT=120 LA=80 SP=10"], emittente="CELESTRI S.R.L.")
+    d["testata"]["data"] = V("18/05/2022")
+    riga = riga_tabella("L120*80*10", "283664", "1062", fornito="CELESTRI")
+    tab = scheda("packing_costruttore", {"titolo": V("Copertura")}, [riga])
+    r = _con_packing([("t.pdf", 1, tab), ("d.pdf", 1, d), ("c.pdf", 1, beltrame)])
+    assert [v["stato"] for v in r["voci"]] == ["DEDOTTO"], [(v["motivi"], v["avvisi"]) for v in r["voci"]]
+    v = r["voci"][0]
+    assert any("letto 1002" in a for a in v["avvisi"])
+    # se il costruttore non dichiara quel materiale, il certificato resta fuori: nessuna voce "dal certificato"
+    # che chieda il DDT 1002 (prima della 0.7.1 ne nasceva una)
+    altra = scheda("packing_costruttore", {"titolo": V("Copertura")}, [riga_tabella("HEB 180", "777", "200")])
+    r2 = _con_packing([("t.pdf", 1, altra), ("d.pdf", 1, d), ("c.pdf", 1, beltrame)])
+    assert [v["origine"] for v in r2["voci"]] == ["costruttore"]
+
+
+def test_titolo_diverso_da_pagina_a_pagina_non_divide_la_voce():
+    """0.7.1 (Viollier): il ciclo TELAI di tre pagine è letto con titolo 'RINTRACCIABITA' MATERIALI' a pagina 1 e 'VIA
+    VIOLLIER MILANO' a pagina 3: stesso certificato, DDT e profilo nello stesso file -> una voce, titoli uniti."""
+    from fascicolo_inventato import V, certificato, ddt, riga_tabella, scheda, timbro
+
+    p1 = scheda(
+        "packing_costruttore", {"titolo": V("RINTRACCIABITA' MATERIALI")}, [riga_tabella("HEB 180", "777", "200")]
+    )
+    p3 = scheda("packing_costruttore", {"titolo": V("VIA VIOLLIER MILANO")}, [riga_tabella("HEB 180", "777", "200")])
+    altro = scheda("packing_costruttore", {"titolo": V("Portali")}, [riga_tabella("HEB 180", "777", "200")])
+    cert = certificato("99-777", [("HEB 180", "S275J0+AR", "H1001")], [timbro("200")])
+    r = _con_packing(
+        [
+            ("ciclo.pdf", 1, p1),
+            ("ciclo.pdf", 3, p3),
+            ("ciclo2.pdf", 1, altro),
+            ("d.pdf", 1, ddt("200", ["TRAVE HEB 180"])),
+            ("c.pdf", 1, cert),
+        ]
+    )
+    parti = sorted(v["parte_opera"] for v in r["voci"])
+    assert parti == ["Portali", "RINTRACCIABITA' MATERIALI / VIA VIOLLIER MILANO"]  # un altro file resta un'altra voce
+    assert all(v["stato"] == "PROVATO" for v in r["voci"])

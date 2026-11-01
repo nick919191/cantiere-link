@@ -336,3 +336,12 @@ def test_emittente_uguale_al_destinatario_non_decide_il_ruolo():
     tipi = {d["numero"]: d["tipo"] for d in prove["ddt"]}
     assert tipi["6559"] == "fuori_perimetro" and tipi["30"] == "costruttore_cliente"
     assert any("stessa azienda" in a for a in next(d for d in prove["ddt"] if d["numero"] == "6559")["avvisi"])
+
+
+def test_chiave_riga_preferisce_la_forma_riconosciuta():
+    """DDT con descrizione e misure in campi separati: 'ANGOLARE A LATI UGUALI' + 'LT=50.0 LT=50.0 SP=5.0'."""
+    from traccia.prove import _chiave_riga
+
+    assert _chiave_riga("LT=50.0 LT=50.0 SP=5.0 LU=L.C.", "ANGOLARE A LATI UGUALI") == "ANGOLARE 50 50 5"
+    assert _chiave_riga("SP=3.00 LA=1000 LU=2000", "LAMIERE A CALDO") == "LAMIERA 3"
+    assert _chiave_riga("SP.012X2450X6000", "LAMIERA") == "LAMIERA 12"  # il campo profilo con la misura vince ancora

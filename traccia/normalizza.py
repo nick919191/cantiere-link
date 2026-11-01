@@ -136,6 +136,10 @@ def profilo(descrizione):
     if re.search(r"\bTUB[OI]\b", s) and misure.get("LT") and misure.get("AL") and misure.get("SP"):
         return f"TUBO {numero(misure['LT'])}x{numero(misure['AL'])}x{numero(misure['SP'])}"
     if re.search(r"\bANG(?:OLAR[EI]|OL[OI]|LE|\.)?\b|\bELLE\b", s):
+        lati = re.findall(r"\b(?:LT|LA|AL)\s*=\s*(\d+(?:\.\d+)?)", s)
+        if lati and misure.get("SP"):  # misure per campo sul DDT: 'LT=50.0 LT=50.0 SP=5.0'
+            a, b = lati[0], lati[1] if len(lati) > 1 else lati[0]
+            return f"ANGOLARE {numero(a)} {numero(b)} {numero(misure['SP'])}"
         m = _TRE_DIM.search(s)
         if m:
             return "ANGOLARE " + " ".join(numero(g) for g in m.groups())
@@ -174,6 +178,14 @@ def profilo(descrizione):
             return "TUBO " + "x".join(numero(g) for g in m.groups())
 
     return re.sub(r"\s+", " ", s).strip()
+
+
+_FAMIGLIE_CHIAVE = re.compile(r"^(?:HEA|HEB|HEM|IPE|UPN|PIATTO|LAMIERA|TUBO|ANGOLARE|TONDO|VITE|DADO|RONDELLA) ")
+
+
+def riconosciuta(chiave):
+    """True se la chiave è una forma normalizzata ('PIATTO 70x10'), non il testo com'era ('LT=50.0 SP=5.0')."""
+    return bool(_FAMIGLIE_CHIAVE.match(chiave or ""))
 
 
 def chiave_larga(chiave):
@@ -370,9 +382,18 @@ def numero_normale(testo):
     if m:
         s = m.group(1)
     s = re.sub(r"/0+$", "", s)
+    s = re.sub(r"(?<=\d)\s*-\s*(?=\d{1,2}$)", "/", s)  # '3209 - 1' sul timbro è il DDT '3209/1'
     s = re.sub(r"(?<=\d)\.(?=\d{3}\b)", "", s)
     s = re.sub(r"[^a-z0-9/]", "", s)
+    s = re.sub(r"o(?=\d)|(?<=\d)o", "0", s)  # 'CO19604' e 'C019604' sono lo stesso numero (O letta come zero)
     return s.lstrip("0") or s
+
+
+def quasi_uguale(a, b):
+    """Numeri con le sole cifre della stessa lunghezza che differiscono per una cifra sola ('1002' e '01062'):
+    serve per un numero scritto a penna e letto male, mai da solo."""
+    ca, cb = re.sub(r"\D", "", a or "").lstrip("0"), re.sub(r"\D", "", b or "").lstrip("0")
+    return len(ca) >= 3 and len(ca) == len(cb) and sum(x != y for x, y in zip(ca, cb, strict=True)) == 1
 
 
 def stesso_numero(dichiarato, letto):
@@ -458,4 +479,10 @@ def gruppo(chiave):
 def data_iso(data):
     """'05/06/2026' -> '2026-06-05', anche dentro 'DDT n. 123 del 05/06/2026'; altrimenti il testo com'e'."""
     m = re.search(r"\b(\d{2})/(\d{2})/(\d{4})\b", data or "")
-    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else (data or "")
+    if m:
+        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b", data or "")  # a penna: '18/5/22'
+    if m:
+        anno = m.group(3) if len(m.group(3)) == 4 else "20" + m.group(3)
+        return f"{anno}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+    return data or ""

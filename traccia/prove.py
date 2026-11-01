@@ -116,8 +116,11 @@ def _colate_riga(r: dict) -> list[tuple[str, list[str]]]:
 def _chiave_riga(profilo: str, descrizione: str) -> str:
     """Chiave del materiale: il campo profilo se porta una misura ('SP.012X2450X6000'); altrimenti la descrizione
     ('LAM. CALDO' + 'LAM. CALDO S355J2 ... 6000x1500x 8,00' -> LAMIERA 8); altrimenti ciò che c'è."""
-    for testo in (profilo, descrizione, f"{profilo} {descrizione}"):
-        chiave = nz.profilo(testo) if testo.strip() else ""
+    tentativi = [nz.profilo(t) if t.strip() else "" for t in (profilo, descrizione, f"{descrizione} {profilo}")]
+    for chiave in tentativi:  # prima una forma riconosciuta con misura ('ANGOLARE A LATI UGUALI' + 'LT=50 SP=5')
+        if nz.riconosciuta(chiave) and re.search(r"\d", chiave):
+            return chiave
+    for chiave in tentativi:
         if re.search(r"\d", chiave):
             return chiave
     return nz.profilo(profilo or descrizione)
@@ -394,6 +397,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 }
             )
 
+    _timbri_a_penna_per_data(ddt, certificati, stessa)
     for c in certificati:
         totali = {n for _, n in c["pagine_di"]}
         viste = {i for i, _ in c["pagine_di"]}
@@ -435,6 +439,31 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
         "escluse": escluse,
         "fonti": fonti.tutte,
     }
+
+
+def _timbri_a_penna_per_data(ddt: list[dict], certificati: list[dict], stessa) -> None:
+    """Numero del DDT scritto a penna sul timbro e letto male ('1002' per '1062'): se nessun DDT del fascicolo lo
+    porta, ma uno solo ha la stessa data del timbro e un numero che differisce per una cifra (e, se serve a
+    scegliere, lo stesso emittente del timbro), il timbro cita quello. Il numero letto resta in `ddt_letto`."""
+    for c in certificati:
+        for t in c["timbri"]:
+            n = t.get("ddt_citato", "")
+            if not n or not t.get("a_mano") or not t.get("data_ddt"):
+                continue
+            if any(nz.cita_ddt(n, d["numero"]) for d in ddt):
+                continue
+            data = nz.data_iso(t["data_ddt"])
+            candidati = [d for d in ddt if d["data_iso"] and d["data_iso"] == data and nz.quasi_uguale(n, d["numero"])]
+            if len(candidati) > 1 and t.get("chi"):
+                candidati = [d for d in candidati if d["emittente"] and stessa(t["chi"], d["emittente"])]
+            if len(candidati) != 1:
+                continue
+            scelto = candidati[0]
+            t["ddt_letto"], t["ddt_citato"] = n, scelto["numero"]
+            c["avvisi"].append(
+                f"sul timbro il numero del DDT letto è {n}: preso il DDT {scelto['numero']} di {scelto['emittente']} "
+                f"con la stessa data ({t['data_ddt']})"
+            )
 
 
 CONTO_LAVORAZIONE = re.compile(r"conto\s*lavor|c/\s*lavor|lavorazione\s+per\s+conto|in\s+conto\s+terzi", re.I)

@@ -143,3 +143,23 @@ def test_tre_misure_con_spazi_senza_parola():
     assert nz.profilo("10.00 2000 12000") == "LAMIERA 10"  # campo dimensioni di un certificato
     assert nz.profilo("30.00 2000 10000") == "LAMIERA 30"
     assert nz.profilo("40 40 3") == "40 40 3"  # non è una lamiera: resta com'è
+
+
+def test_numeri_con_o_per_zero_e_suffisso_con_trattino():
+    """0.7.1 (Viollier): 'CO19604' dichiarato e 'C019604' letto sono lo stesso certificato; il timbro scrive il DDT
+    '3209 - 1' per '3209/1'."""
+    assert nz.stesso_numero("CO19604", "C019604") == "uguale"
+    assert nz.stesso_numero("3209 - 1", "3209/1") == "uguale"
+    assert nz.cita_ddt("3209 - 1", "3209") and nz.cita_ddt("3209 - 1", "3209/1")
+    assert nz.stesso_numero("SP21-05850", "SP21-05850") == "uguale"  # il trattino con più cifre resta un prefisso
+    assert nz.quasi_uguale("1002", "01062") and not nz.quasi_uguale("1002", "1062/1")
+    assert not nz.quasi_uguale("1002", "2062") and not nz.quasi_uguale("12", "13")
+
+
+def test_data_scritta_a_penna_e_angolare_con_misure_per_campo():
+    assert nz.data_iso("18/5/22") == "2022-05-18"
+    assert nz.data_iso("1/2/2026") == "2026-02-01"
+    assert nz.data_iso("18/05/2022") == "2022-05-18"
+    assert nz.profilo("ANGOLARE A LATI UGUALI LT=50.0 LT=50.0 SP=5.0 LU=L.C.") == "ANGOLARE 50 50 5"
+    assert nz.profilo("ANGOLARE LT=100 LA=50 SP=6") == "ANGOLARE 100 50 6"
+    assert nz.riconosciuta("PIATTO 70x10") and not nz.riconosciuta("LT=50.0 LT=50.0 SP=5.0 LU=L.C.")

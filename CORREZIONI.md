@@ -81,6 +81,29 @@ rilettura 0.7.0 (istruzioni cambiate) le travi FVS prendono la colata dal segno 
   (i DDT al terzista non alimentano le voci, come chiesto); l'analisi a vista lo elencava. Una regola "materiale
   consegnato dal costruttore senza DDT di fornitura" è una scelta da prendere a parte.
 
+## Viollier con la 0.7.0 e correzioni 0.7.1 (01/11/2026, analisi fatta dall'utente nell'app, 62 chiamate)
+
+Primo fascicolo con il ciclo di lavorazione del costruttore (31 pagine di packing, 86 pagine, 31 file). Confronto con
+`Tracciabilita_SCL_Viollier.xlsx` (30 righe): tutte presenti. Le letture erano giuste; i difetti stavano nel motore e
+nella normalizzazione, verificati sulle immagini delle pagine. Correzioni (motore 0.7.1), tutte a costo zero perché
+non cambiano le istruzioni di lettura:
+
+| Caso | Prima | Causa | Correzione | Dopo |
+|---|---|---|---|---|
+| Tecnosider PL15, DDT SP21-05850 | MANCANTE "chiedere CO19604" | certificato letto `C019604` (O/0) | `numero_normale` equipara O e 0 vicino a una cifra | DEDOTTO (cert e DDT presenti, timbro a penna illeggibile) |
+| CELSA PL10*70, DDT 3209 | DA CONFERMARE "profilo non sul certificato" | `70X10 L.6.00m` letto come tubo; timbro `3209 - 1` non riconosciuto come 3209/1 | `_affine`: piatto = due misure senza parola; `numero_normale`: ` - 1` finale è suffisso di serie; nel percorso del certificato dichiarato si provano anche le righe affini | PROVATO |
+| Beltrame 283664, "DDT 1002" | voce fantasma DA CONFERMARE | `1062` a penna letto `1002` | `prove._timbri_a_penna_per_data`: DDT con stessa data e numero che differisce per una cifra (`quasi_uguale`), emittente se serve; `data_iso` accetta `18/5/22` | nessuna voce, certificato nei documenti non usati |
+| Olifer L50*5, DDT 1062 | MANCANTE "chiedere GI2300/2021" | ciclo scrive GI2300/2021, certificato G1200/2021 | certificato dichiarato assente: vale quello timbrato per lo stesso DDT con il profilo, tetto DEDOTTO e avviso | DEDOTTO (colata scelta: le altre barrate) |
+| 6 voci portali doppie | 12 voci | titolo del ciclo diverso da pagina a pagina | `voci_dal_fascicolo` raggruppa per file di packing, non per titolo; titoli uniti con " / " | 6 voci |
+| DDT 1062 righe `ANGOLARE A LATI UGUALI` + `LT=50 LT=50 SP=5` | chiave = testo grezzo | misure per campo in un campo separato | `profilo` legge LT/LA/AL + SP per gli angolari; `_chiave_riga` preferisce una forma riconosciuta (`riconosciuta`) | ANGOLARE 50 50 5 |
+
+Viollier: da 38 voci (2 PROVATO, 8 DEDOTTO, 3 DA CONFERMARE, 25 MANCANTE) a 32 (2, 7, 1, 22). I 22 MANCANTE sono
+certificati e DDT che il ciclo dichiara e che nel fascicolo non ci sono (foglio Richieste: CELESTRI, NEGRI, FVS,
+FTL ROSSI). Codogno ricomposto con la 0.7.1: invariato (25 PROVATO, 1 DA CONFERMARE). Test: 220 (da 213).
+Non sistemato: il timbro a penna sul certificato Tecnosider (`SP21-0580`, letto `PR21-0580`) non fa ponte, la voce
+resta DEDOTTO invece di PROVATO; il DDT 10871 di FTL Rossi con il certificato CELSA 202032266 non è nel ciclo e resta
+fuori, come nell'atteso.
+
 # Correzioni della review 2026-10
 
 > **Integrazione con la 0.5 (versione 0.5.1).** Le correzioni qui sotto sono nate sul branch `fix/review-2026-10`, su base
