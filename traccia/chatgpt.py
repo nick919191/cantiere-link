@@ -12,13 +12,14 @@ import secrets
 import threading
 import time
 import webbrowser
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 import jwt
 import keyring
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
 from . import configurazione as cfg
 
@@ -29,6 +30,7 @@ SCOPE = "openid profile email offline_access resource.invoke chatgpt.tokens.use.
 SERVICE = "tracciabilita-materiali.chatgpt"
 CHUNK = 1000
 _LOCK = threading.RLock()
+_REFRESH = threading.Lock()  # un solo rinnovo del token alla volta, senza bloccare status() nel frattempo
 _pending = None
 _message = ""
 
@@ -85,6 +87,21 @@ def _write(data: dict) -> None:
 def _filelock():
     cfg.directory().mkdir(parents=True, exist_ok=True)
     return FileLock(cfg.directory() / "account.lock", timeout=30)
+
+
+@contextmanager
+def _serializzato():
+    """Lock di processo + lock di file per leggere/scrivere il portachiavi. Mai tenuto durante una chiamata di rete."""
+    with _LOCK:
+        lock = _filelock()
+        try:
+            lock.acquire()
+        except Timeout as exc:
+            raise AgentError("Un’altra operazione sull’account è in corso: riprova tra qualche secondo.") from exc
+        try:
+            yield
+        finally:
+            lock.release()
 
 
 def _request(method: str, url: str, **kwargs) -> dict:
@@ -158,7 +175,7 @@ def _credentials(tokens: dict, old: dict | None = None) -> dict:
 
 def status() -> dict:
     try:
-        with _LOCK, _filelock():
+        with _serializzato():
             data = _read()
         profile = data["profiles"].get(data["active"], {})
         return {
@@ -181,7 +198,7 @@ def status() -> dict:
 
 def start(profile_id: str | None = None) -> dict:
     global _pending, _message
-    with _LOCK, _filelock():
+    with _serializzato():
         if _pending:
             raise AgentError("Un accesso è già in corso. Completa la finestra aperta nel browser.")
         data = _read()
@@ -285,67 +302,86 @@ def complete(attempt: dict, query: dict) -> None:
         raise AgentError("Registrazione incompleta. Ripeti l’accesso.")
     if attempt.get("client_id") and issued != attempt["client_id"]:
         raise AgentError("Registrazione diversa dall’account selezionato.")
-    with _LOCK, _filelock():
+    with _serializzato():
         data = _read()
         # Conserva la registrazione anche se lo scambio del codice fallisce.
         old = data["profiles"].setdefault(issued, {"client_id": issued})
         data["retry"] = issued
         _write(data)
-        tokens = _request(
-            "POST",
-            TOKEN,
-            data={
-                "grant_type": "authorization_code",
-                "client_id": issued,
-                "code": query["code"],
-                "code_verifier": attempt["verifier"],
-                "redirect_uri": attempt["redirect"],
-                "resource": RESOURCE,
-            },
-        )
-        identity = _identity(tokens.get("id_token", ""), issued, attempt["nonce"])
-        expected = attempt.get("subject") or old.get("subject")
-        if expected and identity["sub"] != expected:
-            raise AgentError("L’account restituito è diverso da quello selezionato.")
-        record = _credentials(tokens)
-        record.update(client_id=issued, subject=identity["sub"], email=identity.get("email", ""))
-        data["profiles"][issued] = record
+    tokens = _request(
+        "POST",
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "client_id": issued,
+            "code": query["code"],
+            "code_verifier": attempt["verifier"],
+            "redirect_uri": attempt["redirect"],
+            "resource": RESOURCE,
+        },
+    )
+    identity = _identity(tokens.get("id_token", ""), issued, attempt["nonce"])
+    expected = attempt.get("subject") or old.get("subject")
+    if expected and identity["sub"] != expected:
+        raise AgentError("L’account restituito è diverso da quello selezionato.")
+    record = _credentials(tokens)
+    record.update(client_id=issued, subject=identity["sub"], email=identity.get("email", ""))
+    with _serializzato():
+        data = _read()
+        data["profiles"][issued] = {**data["profiles"].get(issued, {}), **record}
         data["active"] = issued
         data.pop("retry", None)
         _write(data)
 
 
+def _profilo_attivo() -> tuple[str, dict]:
+    data = _read()
+    profile = data["profiles"].get(data["active"], {})
+    if not profile.get("access_token") or "chatgpt.tokens.use.direct" not in profile.get("scopes", []):
+        raise AgentError("Collega ChatGPT e autorizza l’utilizzo del piano prima di avviare l’agente.")
+    return data["active"], profile
+
+
+def _in_scadenza(profile: dict) -> bool:
+    return profile.get("expires_at", 0) < time.time() + 60
+
+
 def access_token() -> str:
-    with _LOCK, _filelock():
-        data = _read()
-        profile = data["profiles"].get(data["active"], {})
-        if not profile.get("access_token") or "chatgpt.tokens.use.direct" not in profile.get("scopes", []):
-            raise AgentError("Collega ChatGPT e autorizza l’utilizzo del piano prima di avviare l’agente.")
-        if profile.get("expires_at", 0) < time.time() + 60:
-            if not profile.get("refresh_token"):
-                raise AgentError("Sessione scaduta. Ricollega ChatGPT.")
-            tokens = _request(
-                "POST",
-                TOKEN,
-                data={
-                    "grant_type": "refresh_token",
-                    "client_id": data["active"],
-                    "refresh_token": profile["refresh_token"],
-                    "resource": RESOURCE,
-                },
-            )
-            if tokens.get("id_token") and _identity(tokens["id_token"], data["active"])["sub"] != profile["subject"]:
-                raise AgentError("Identità della sessione non valida.")
-            profile = _credentials(tokens, profile)
-            data["profiles"][data["active"]] = profile
-            _write(data)
-        if "chatgpt.tokens.use.direct" not in profile["scopes"]:
-            raise AgentError("Autorizza l’utilizzo del piano ChatGPT.")
-        return profile["access_token"]
+    with _serializzato():
+        active, profile = _profilo_attivo()
+    if _in_scadenza(profile):
+        # Il rinnovo parla con la rete: fuori dal lock del portachiavi (status() non deve aspettarlo) e uno alla
+        # volta (i lotti paralleli non devono usare lo stesso refresh token due volte).
+        with _REFRESH:
+            with _serializzato():
+                active, profile = _profilo_attivo()
+            if _in_scadenza(profile):
+                if not profile.get("refresh_token"):
+                    raise AgentError("Sessione scaduta. Ricollega ChatGPT.")
+                tokens = _request(
+                    "POST",
+                    TOKEN,
+                    data={
+                        "grant_type": "refresh_token",
+                        "client_id": active,
+                        "refresh_token": profile["refresh_token"],
+                        "resource": RESOURCE,
+                    },
+                )
+                if tokens.get("id_token") and _identity(tokens["id_token"], active)["sub"] != profile["subject"]:
+                    raise AgentError("Identità della sessione non valida.")
+                profile = _credentials(tokens, profile)
+                with _serializzato():
+                    data = _read()
+                    data["profiles"][active] = profile
+                    _write(data)
+    if "chatgpt.tokens.use.direct" not in profile["scopes"]:
+        raise AgentError("Autorizza l’utilizzo del piano ChatGPT.")
+    return profile["access_token"]
 
 
 def select(profile_id: str) -> None:
-    with _LOCK, _filelock():
+    with _serializzato():
         if _pending:
             raise AgentError("Completa o attendi la scadenza dell’accesso in corso prima di cambiare account.")
         data = _read()
@@ -358,29 +394,25 @@ def select(profile_id: str) -> None:
 def logout() -> dict:
     global _message
     confirmed = True
-    with _LOCK, _filelock():
+    with _serializzato():
         if _pending:
             raise AgentError("Completa o attendi la scadenza dell’accesso in corso prima di scollegare l’account.")
         data = _read()
-        profile = data["profiles"].get(data["active"], {})
-        if profile.get("refresh_token"):
-            confirmed = False
-            for _ in range(2):
-                try:
-                    url = _trusted_url(_discovery()["revocation_endpoint"])
-                    _request(
-                        "POST",
-                        url,
-                        data={
-                            "token": profile["refresh_token"],
-                            "token_type_hint": "refresh_token",
-                            "client_id": data["active"],
-                        },
-                    )
-                    confirmed = True
-                    break
-                except (AgentError, KeyError):
-                    time.sleep(0.25)
+        active = data["active"]
+        refresh = data["profiles"].get(active, {}).get("refresh_token")
+    if refresh:
+        confirmed = False
+        for _ in range(2):
+            try:
+                url = _trusted_url(_discovery()["revocation_endpoint"])
+                _request("POST", url, data={"token": refresh, "token_type_hint": "refresh_token", "client_id": active})
+                confirmed = True
+                break
+            except (AgentError, KeyError):
+                time.sleep(0.25)
+    with _serializzato():
+        data = _read()
+        profile = data["profiles"].get(active, {})
         for key in ("access_token", "refresh_token", "id_token", "scopes", "expires_at"):
             profile.pop(key, None)
         _write(data)
