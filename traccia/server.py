@@ -43,8 +43,14 @@ async def lifecycle(_app):
     if percorsi.lavori().exists():
         for directory in percorsi.lavori().iterdir():
             if directory.is_dir() and not directory.name.startswith("."):
-                for question in chat.in_attesa(directory):
-                    chat.fallita(directory, question["id"], "Sessione interrotta. Puoi inviare di nuovo la domanda.")
+                try:
+                    for question in chat.in_attesa(directory):
+                        chat.fallita(
+                            directory, question["id"], "Sessione interrotta. Puoi inviare di nuovo la domanda."
+                        )
+                except (OSError, ValueError):
+                    # Un chat.jsonl troncato o non leggibile riguarda solo quel cantiere: l'app deve partire comunque.
+                    continue
     yield
     stop_checks.set()
     agente.stop()
@@ -354,8 +360,8 @@ def elenco():
             if not (c / "info.json").exists():
                 continue
             s = lv.stato(c)
-        except OSError:
-            # Una cartella non leggibile (permessi) non deve nascondere tutti gli altri cantieri.
+        except (OSError, ValueError):
+            # Una cartella non leggibile (permessi) o un JSON corrotto non devono nascondere gli altri cantieri.
             continue
         voci.append({k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")})
     return voci
@@ -425,17 +431,9 @@ async def carica(file: list[UploadFile], nome: str = Form("")):
         temporary.rename(cartella)
     finally:
         shutil.rmtree(temporary, ignore_errors=True)
-    (cartella / "info.json").write_text(
-        json.dumps(
-            {
-                "nome": nome or id_lavoro,
-                "creato": time.strftime("%d/%m/%Y %H:%M"),
-                "file": accettati,
-                "scartati": scartati,
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    configurazione.scrivi_json(
+        cartella / "info.json",
+        {"nome": nome or id_lavoro, "creato": time.strftime("%d/%m/%Y %H:%M"), "file": accettati, "scartati": scartati},
     )
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file ricevuti", file=accettati, scartati=scartati)
     _prepara_in_sfondo(id_lavoro, cartella)
@@ -470,7 +468,7 @@ async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
     info = json.loads(info_file.read_text(encoding="utf-8"))
     info["file"] = info.get("file", []) + accettati
     info["scartati"] = info.get("scartati", []) + scartati
-    info_file.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+    configurazione.scrivi_json(info_file, info)
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
     _prepara_in_sfondo(id_lavoro, cartella)
     return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}

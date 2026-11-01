@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import consumi, percorsi
+from . import configurazione, consumi, percorsi
 from .famiglie import FAMIGLIE
 
 MAX_TENTATIVI = 4
@@ -70,15 +70,25 @@ def _json(f: Path, vuoto):
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else vuoto
 
 
+def _json_tollerante(f: Path, vuoto):
+    """File di contorno (info, tentativi, riepilogo): se corrotto o del tipo sbagliato vale come assente."""
+    try:
+        valore = _json(f, vuoto)
+    except (OSError, ValueError):
+        return vuoto
+    return valore if isinstance(valore, type(vuoto)) else vuoto
+
+
 def tentativi(cartella: Path) -> dict[str, int]:
-    return _json(cartella / "tentativi.json", {})
+    t = _json_tollerante(cartella / "tentativi.json", {})
+    return {k: v for k, v in t.items() if isinstance(k, str) and isinstance(v, int)}
 
 
 def segna_tentativi(cartella: Path, pids: list[str]) -> None:
     t = tentativi(cartella)
     for pid in pids:
         t[pid] = t.get(pid, 0) + 1
-    (cartella / "tentativi.json").write_text(json.dumps(t, indent=1), encoding="utf-8")
+    configurazione.scrivi_json(cartella / "tentativi.json", t)
 
 
 def pagine(cartella: Path) -> list[dict]:
@@ -108,7 +118,7 @@ def scheda_pagina(p: dict) -> dict | None:
 
 
 def stato(cartella: Path) -> dict:
-    info = _json(cartella / "info.json", {})
+    info = _json_tollerante(cartella / "info.json", {})
     elenco = pagine(cartella)
     t = tentativi(cartella)
     per_famiglia = {f: 0 for f in FAMIGLIE}
@@ -128,7 +138,7 @@ def stato(cartella: Path) -> dict:
             voce.update(stato="da_leggere")
         dettagli.append(voce)
     preparata = (cartella / "pagine.json").exists()
-    composto = _json(cartella / "uscita" / "riepilogo.json", None)
+    composto = _json_tollerante(cartella / "uscita" / "riepilogo.json", {}) or None
     if not preparata:
         fase = "preparazione"
     elif da_leggere:

@@ -30,15 +30,37 @@ def scrivi_json(path: Path, value: dict) -> None:
     tmp.replace(path)
 
 
+PREDEFINITE = {"model": "", "reasoning": "low", "theme": "system", "chat_width": 390}
+
+
+def _valide(value: dict) -> dict:
+    """Scarta i campi del tipo sbagliato: un file modificato a mano non deve impedire l'avvio."""
+    pulito = dict(value)
+    for name, default in PREDEFINITE.items():
+        if type(pulito.get(name)) is not type(default):
+            pulito[name] = default
+    if pulito["theme"] not in ("system", "light", "dark"):
+        pulito["theme"] = PREDEFINITE["theme"]
+    if pulito["reasoning"] not in ("", "low", "medium", "high"):
+        pulito["reasoning"] = PREDEFINITE["reasoning"]
+    pulito["chat_width"] = max(310, min(600, pulito["chat_width"]))
+    return pulito
+
+
 def leggi() -> dict:
     with LOCK:
         path = directory() / "preferenze.json"
-        value = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-        if not value.get("host_id"):
+        try:
+            value = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, ValueError):
+            value = {}
+        if not isinstance(value, dict):
+            value = {}
+        if not isinstance(value.get("host_id"), str) or not value.get("host_id"):
             value["host_id"] = "urn:uuid:" + str(uuid.uuid4())
             scrivi_json(path, value)
         # "low": sulle pagine semplici il risultato è lo stesso e si risparmiano i token di ragionamento
-        return {"model": "", "reasoning": "low", "theme": "system", "chat_width": 390, **value}
+        return _valide({**PREDEFINITE, **value})
 
 
 def aggiorna(value: dict) -> dict:
