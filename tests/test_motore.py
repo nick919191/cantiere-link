@@ -734,3 +734,86 @@ def test_tra_due_certificati_timbrati_per_lo_stesso_ddt_vale_quello_con_il_segno
     r = _senza_packing([("d.pdf", 1, ddt("4563", ["UNP 160"])), ("a.pdf", 1, a), ("b.pdf", 1, b)])
     v = _voce(r, "UPN 160")
     assert v["stato"] == "PROVATO" and v["colonne"]["COLATA"]["v"] == "CE259891"
+
+
+def test_ddt_dichiarato_come_coda_e_colata_con_la_sigla_del_commerciante():
+    """0.7.4 (progresso): la tabella del costruttore scrive il DDT '12000/' e il DDT Vanoli porta '1/12000' con
+    'IPE MM. 400 CERT.COL. DU123329BJ0'; il certificato Duferco ha due IPE 400, colate 123329B e 999999B. La colata
+    dichiarata (con la sigla DU davanti) sceglie la riga; senza timbro resta DEDOTTO."""
+    from fascicolo_inventato import V, certificato, riga_tabella, scheda
+
+    tab = scheda(
+        "packing_costruttore",
+        {"costruttore": V("COSTRUTTORE 001 SRL"), "titolo": V("Struttura scala")},
+        [
+            riga_tabella(
+                "PROFILO S275J0 IPE 400 - A MIS/DISEGNO (66,3Kg/m)", "", "12000/", fornito="VANOLI FERRO S.P.A."
+            ),
+            riga_tabella("FINITURA GREZZO", "", "", fornito="COSTRUTTORE 001 SRL"),
+            riga_tabella("BARRA FILETTATA Zn 8.8 M12x1000", "", "8603/", fornito="VITERIE OROBICHE SPA"),
+        ],
+    )
+    d1 = scheda(
+        "ddt",
+        {
+            "emittente": V("vanoli ferro S.p.A."),
+            "destinatario": V("COSTRUTTORE 001 SRL"),
+            "numero": V("1/12000"),
+            "data": V("08/06/2021"),
+        },
+        [
+            {
+                "descrizione": V("TRAVI IPE MM. 400 (3°) S275 CERT.COL. DU123329BJ0"),
+                "profilo": V("IPE MM. 400"),
+                "qualita": V("S275"),
+                "quantita": V("142"),
+                "servizio": V("no"),
+            }
+        ],
+    )
+    d2 = scheda(
+        "ddt",
+        {
+            "emittente": V("VITERIE OROBICHE s.p.a."),
+            "destinatario": V("COSTRUTTORE 001 SRL"),
+            "numero": V("2021-S_DVE-0008603"),
+            "data": V("09/06/2021"),
+        },
+        [
+            {
+                "descrizione": V("BARRA FILETTATA 8.8 D.12X1MT"),
+                "profilo": V(""),
+                "qualita": V("8.8"),
+                "quantita": V("7"),
+                "servizio": V("no"),
+            }
+        ],
+    )
+    c1 = certificato(
+        "354 2021", [("IPE 400", "S275J0 +AR", "123329B"), ("IPE 400", "S275J0 +AR", "999999B")], produttore="DUFERCO"
+    )
+    c1["testata"]["cliente"] = V("VANOLI FERRO SPA")
+    c2 = certificato(
+        "C3085-042-19",
+        [("THREADED RODS M12X1.000 CLASS 8.8 PL", "8.8", "G191227813")],
+        produttore="VITERIE OROBICHE S.p.A.",
+    )
+    c2["testata"]["cliente"] = V("VITERIE OROBICHE SPA")
+    r = _senza_packing(
+        [
+            ("registro.pdf", 1, tab),
+            ("plico.pdf", 3, d1),
+            ("plico.pdf", 59, d2),
+            ("plico.pdf", 7, c1),
+            ("plico.pdf", 62, c2),
+        ]
+    )
+    per_voce = {v["voce"]: v for v in r["voci"]}
+    assert not any(v.startswith("FINITURA") for v in per_voce)  # riga di finitura: non è una voce
+    ipe = next(v for k, v in per_voce.items() if "IPE 400" in k)
+    assert ipe["stato"] == "DEDOTTO" and ipe["colonne"]["COLATA"]["v"] == "123329B"
+    assert ipe["colonne"]["DDT COMMERCIANTE"]["v"].startswith("DDT n. 1/12000")
+    assert any("DU123329BJ0" in m for m in ipe["motivi"])
+    barra = per_voce["BARRA FILETTATA Zn 8.8 M12x1000"]
+    assert barra["stato"] == "DEDOTTO" and barra["colonne"]["COLATA"]["v"] == "G191227813"
+    assert barra["colonne"]["DDT COMMERCIANTE"]["v"].startswith("DDT n. 2021-S_DVE-0008603")

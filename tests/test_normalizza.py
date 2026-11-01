@@ -208,3 +208,38 @@ def test_lamiera_detta_piatti_date_con_punti_e_ddt_nel_nome_con_parole():
     assert nz.ddt_nel_nome("DDT ROSSI SIDERURGICA 3596_HEB 120.pdf") == ["3596"]
     assert nz.ddt_nel_nome("DDT SIDER.VI 2323_LAMIERA SPESSORE 5, 8, 10 MM.pdf") == ["2323"]
     assert nz.ddt_nel_nome("DDT aggiuntivi/BC 28 RESPEDIL VALENTINO INT.5.pdf") == []
+
+
+def test_scritture_del_cantiere_progresso():
+    """0.7.4 (progresso): 'IPE MM. 400' sul DDT; 'LAMINATO ELLE' è un angolare, non una lamiera; dadi scritti MA16,
+    16MA, 'M- 12'; barre filettate in tre scritture; tubi di un certificato scritti per colonne."""
+    assert nz.profilo("IPE MM. 400") == "IPE 400"
+    assert nz.profilo("LAMINATO ELLE S275JR 60x40x6L=6000(4,46Kg/m)") == "ANGOLARE 60 40 6"
+    assert nz.profilo("LAMINATO PIATTO S275JR 45x8 L=6000(2,83Kg/m)") == "PIATTO 45x8"
+    assert nz.profilo("DADO Zn ESAG SB MA16") == "DADO M16"
+    assert nz.profilo("DADO MEDIO CL.8 16MA") == "DADO M16"
+    assert nz.profilo("DADI ESAG. ISO 4032 EN-15048-1 M- 12 CH=18 H=10.59") == "DADO M12"
+    assert nz.profilo("BARRA FILETTATA Zn 8.8 M12x1000") == "BARRA FILETTATA M12x1000"
+    assert nz.profilo("BARRA FILETTATA 8.8 D.12X1MT") == "BARRA FILETTATA M12x1000"
+    assert nz.profilo("THREADED RODS M12X1.000 CLASS 8.8 PL") == "BARRA FILETTATA M12x1000"
+    assert nz.profilo("THREADED RODS 16X1000 CLASS 8.8 ZP 16X1000") == "BARRA FILETTATA M16x1000"
+    assert (
+        nz.profilo("PROFILATI CAVI STRUTTURALI FORMATI A FREDDO DI ACCIAI NON LEGATI 5 100 100 12000")
+        == "TUBO 100x100x5"
+    )
+    assert nz.profilo("PROFILATI CAVI DI ACCIAIO FORMATI A FREDDO 3 | 40 | 20 | 6000") == "TUBO 40x20x3"
+    assert nz.profilo("TUBO QUADRO S355J2 100x100x5 L=6000(14,26Kg/m)") == "TUBO 100x100x5"
+    assert nz.profilo("10.00 2000 12000") == "LAMIERA 10"  # le lamiere scritte con gli spazi restano lamiere
+    assert nz.e_riferimento("FINITURA GREZZO") and nz.e_riferimento("PRESTAZIONE SERVIZIO CERTIFICATI")
+    assert not nz.e_riferimento("LAMIERA 8")
+
+
+def test_ddt_dichiarato_come_coda_del_numero_e_colata_con_la_sigla_del_produttore():
+    """0.7.4 (progresso): la tabella del costruttore scrive '12000/' per il DDT '1/12000' e '8603/' per
+    '2021-S_DVE-0008603'; il commerciante scrive la colata con la sigla del produttore davanti."""
+    assert nz.cita_ddt("12000/", "1/12000") and nz.cita_ddt("8603/", "2021-S_DVE-0008603")
+    assert not nz.cita_ddt("1159", "G02 / 51159")  # la coda deve essere intera
+    assert nz.stesso_numero("4455", "16624455") is None  # senza separatore non basta
+    assert nz.stessa_colata("SICL2103435A", "CL21/03435A") and nz.stessa_colata("OL142191", "142191")
+    assert nz.stessa_colata("DU123329BJ0", "123329B")
+    assert not nz.stessa_colata("1234", "51234")  # troppo corta per essere una coda

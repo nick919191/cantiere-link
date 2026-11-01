@@ -1,4 +1,4 @@
-"""Motore di regole 0.7.3: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.4: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
@@ -23,6 +23,11 @@ Regole (conoscenza/05_regole_di_stato.md):
         punti; timbro a penna ripreso per data e emittente; copia del certificato senza numero unita; lettera del
         distributore riconosciuta dal protocollo nel nome del file; tubi affini solo con le stesse misure; nessuna
         voce fantasma da un certificato già ancorato a un DDT del fascicolo.
+  0.7.4 (da progresso) il DDT dichiarato dal costruttore vale anche come coda del numero stampato ('12000/' per
+        '1/12000', '8603/' per '2021-S_DVE-0008603'); colata dichiarata con la sigla del produttore davanti
+        ('SICL2103435A' per 'CL21/03435A'); 'IPE MM. 400', 'LAMINATO ELLE 60x40x6', 'DADO MA16', barre filettate
+        e tubi scritti per colonne; righe di finitura e servizio non sono voci; motivo esplicito quando la
+        tabella del costruttore non dà la misura del profilo.
 """
 
 import hashlib
@@ -31,7 +36,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.7.3"
+VERSIONE = "0.7.4"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 
@@ -355,7 +360,11 @@ class Motore:
         return vicine
 
     def ddt_di(self, voce: dict) -> dict | None:
-        trovati = [d for d in self.ddt_noti if nz.stesso_numero(voce["ddt"], d["numero"]) in STESSO]
+        trovati = [
+            d
+            for d in self.ddt_noti
+            if nz.stesso_numero(voce["ddt"], d["numero"]) in STESSO or nz.cita_ddt(voce["ddt"], d["numero"])
+        ]
         if voce["fornito_da"]:
             stessi = [d for d in trovati if _stessa(self.p, d["emittente"], voce["fornito_da"])]
             trovati = stessi
@@ -724,7 +733,11 @@ class Motore:
         ponti = self.ponti(cert, voce["ddt"]) if voce["ddt"] else []
         altrove = self.timbrato_altrove(cert, voce["ddt"]) if voce["ddt"] else []
         if not righe:
-            if cert.get("incompleto"):
+            if not any(re.match(r"^[A-Z ]+ M?\d", k) for k in voce["chiavi"]):  # 'LAMIERA IN S275JR' senza spessore
+                motivi.append(
+                    "la tabella del costruttore non dà la misura del profilo: la riga del certificato non si individua"
+                )
+            elif cert.get("incompleto"):
                 motivi.append(
                     f"nel fascicolo solo le pagine {cert['pagine_di_testo']} del certificato: la riga del "
                     f"profilo non c'è"

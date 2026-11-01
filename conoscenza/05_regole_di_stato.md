@@ -64,3 +64,15 @@ partita IVA; lamiere scritte come misure non sono tubi; colata dichiarata sul DD
 terzista (conto lavorazione, reso) e DoP EN 1090 del fornitore intermedio in CE/DoP CENTRO; decisioni 1-5 sopra;
 DoP di prodotto collegata anche per fabbricante e organismo notificato (P3); certificato con timbro che cita un DDT
 assente -> voce DA CONFERMARE con richiesta del DDT.
+
+Motore 0.7.4 (01/11/2026, verifica a tavolino del cantiere progresso): il numero di DDT scritto nella tabella del
+costruttore vale anche come coda del numero stampato sul DDT ('12000/' per '1/12000', '8603/' per
+'2021-S_DVE-0008603'); la colata dichiarata dal commerciante può portare davanti la sigla del produttore
+('SICL2103435A' per 'CL21/03435A', 'OL142191' per '142191'): vale se la più corta ha almeno cinque cifre ed è la
+coda dell'altra; 'IPE MM. 400', 'LAMINATO ELLE 60x40x6' (angolare), 'DADO MA16' / '16MA' / 'M- 12', barre filettate
+('BARRA FILETTATA 8.8 D.12X1MT' = 'THREADED RODS M12X1.000' = M12x1000) e tubi scritti per colonne ('PROFILATI CAVI
+... 5 100 100 12000' = TUBO 100x100x5) hanno una chiave; le righe di finitura e servizio della tabella del
+costruttore ('FINITURA GREZZO', 'PRESTAZIONE SERVIZIO') non sono voci; quando la tabella non dà la misura del
+profilo ('Lamiera in S275JR') il motivo lo dice, invece di "la riga del profilo non c'è". Restano da decidere:
+materiale "da magazzino" del costruttore (fornitore = costruttore, DDT vuoto), prodotti con DoP/ETA senza 3.1
+(ancoranti, tasselli), lista del fornitore intermedio come ponte tra il suo DDT e i certificati.

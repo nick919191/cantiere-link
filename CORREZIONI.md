@@ -166,6 +166,34 @@ Resta DA CONFERMARE: Megasider 3674ZG26 (DDT FVS 1870 non nel fascicolo, piatti 
 2323 (certificato 235408 con due colate, timbro a penna senza numero), PROFILO 100X100X5 (certificato Pirefiltubi
 senza numero, timbro `480` del 24/03/26 illeggibile). MANCANTE: dadi M12 Viteria.
 
+## progresso con la 0.7.3 e correzioni 0.7.4 (01/11/2026, verifica a tavolino, nessuna lettura)
+
+Fascicolo letto dall'utente nell'app (265 chiamate, 174 pagine, 8 mai accettate dopo 4 tentativi: due DDT, tre
+certificati, una DoP, una pagina della DoP del costruttore). Registro di controllo del costruttore come packing (19
+righe), plico di 164 pagine con DDT Vanoli, OMAR, Viterie Orobiche, Hilti, "Elenco materiali di commessa" di OMAR.
+Verifica fatta guardando le immagini delle pagine contro `risultato.json`, senza rileggere nulla. Correzioni
+(motore 0.7.4), tutte verificate per ricomposizione dei cinque cantieri:
+
+| Caso | Prima | Causa | Correzione | Dopo |
+|---|---|---|---|---|
+| IPE 400, DDT Vanoli `1/12000` con `CERT.COL. DU123329BJ0`; certificato Duferco 354/2021 con la riga IPE 400 colata `123329B` | DA CONFERMARE "più certificati possibili" | la tabella scrive `12000/`, il DDT `1/12000`: `stesso_numero` non li lega; la riga del DDT `IPE MM. 400` non ha chiave | `ddt_di` accetta anche `cita_ddt` (coda dopo un separatore, anche con zeri davanti); `_TRAVI` salta `MM.`; `numero_normale` toglie la barra finale | DDT agganciato, colata trovata; resta DA CONFERMARE solo per il tetto "fascicolo non letto completamente" (p0022, p0068 nello stesso file) |
+| TUBO 100x100x5 (DDT `1/12166`, p0022 non letta) | MANCANTE | riga del certificato Sideralba `PROFILATI CAVI ... 5 100 100 12000` senza chiave | `PROFILATI CAVI` è una parola da tubo; misure per colonne (spessore, altezza, larghezza, lunghezza) → `TUBO 100x100x5`; celle `|` come spazi | DA CONFERMARE "per esclusione; DDT 12166 non nel fascicolo" (giusto finché p0022 non è letta) |
+| BARRA FILETTATA M12x1000, DDT `8603/` | MANCANTE, chiede "DDT 8603/" | DDT `2021-S_DVE-0008603` non agganciato; `BARRA FILETTATA 8.8 D.12X1MT`, `THREADED RODS M12X1.000` e `BARRA FILETTATA Zn 8.8 M12x1000` con tre chiavi diverse | coda con zeri davanti; chiave `BARRA FILETTATA M12x1000` (D./M, MT, punto delle migliaia) | DEDOTTO (certificato intestato al commerciante, senza timbro con il DDT); DA CONFERMARE per il tetto delle pagine non lette |
+| BARRA FILETTATA M16x1000, DADI M12/M16, LAMINATO ELLE 60x40x6 (materiale da magazzino: fornitore = costruttore, DDT vuoto) | MANCANTE | `LAMINATO ELLE` → `LAMIERA 6`; `MA16`, `16MA`, `M- 12` senza chiave; `THREADED RODS 16X1000` | angolare prima delle lamiere; dadi con MA/`M-`; barre filettate | DA CONFERMARE "abbinato per esclusione; nessun DDT dichiarato" (il certificato c'è) |
+| `FINITURA GREZZO` | voce MANCANTE | riga di finitura della tabella | `e_riferimento` anche per finitura, prestazione, servizio, zincatura, trasporto, imballo, verniciatura, sabbiatura, noleggio; applicato anche alle righe della packing (scartate) | nessuna voce |
+| Lamiere `Lamiera in S275JR` dell'elenco OMAR | "nel fascicolo solo le pagine n/N: la riga del profilo non c'è" (la riga c'è: la chiave non ha lo spessore) | la famiglia packing non legge spessore e colata | motivo esplicito "la tabella del costruttore non dà la misura del profilo"; i campi nelle istruzioni sono rimandati (cambiano la versione di lettura: ~600 pagine) | DA CONFERMARE con il motivo giusto |
+| colata dichiarata con la sigla del produttore (`SICL2103435A` per `CL21/03435A`, `OL142191` per `142191`) | non legata | confronto per uguaglianza | `stessa_colata`: la più corta (almeno cinque cifre) è la coda dell'altra | pronta per quando p0022 sarà letta |
+
+progresso: da 23 voci (0/0/11/12) a **22 (0 PROVATO, 0 DEDOTTO, 17 DA CONFERMARE, 5 MANCANTE)**. I 5 MANCANTE: tasselli
+e ancorante Hilti (prodotti con DoP/ETA, non con 3.1) e due rondelle senza certificato. Codogno, Viollier, Valentino e
+Gstaad ricomposti con la 0.7.4: invariati. Test: 237 (da 234).
+
+Da decidere (non fatto): materiale "da magazzino" del costruttore (cercare nei DDT del fascicolo con tetto DEDOTTO?);
+prodotti con DoP/ETA senza 3.1 (colonna CE/DoP, richiesta della DoP invece di "certificato mancante"); l'elenco del
+fornitore intermedio (OMAR) come ponte tra il suo DDT 1013 e i certificati per spessore (unirebbe le voci 1-4 e 5-8);
+il DDT che cita la colata come ponte (oggi DEDOTTO senza timbro); le 8 pagine rifiutate dal validatore
+(`riferimenti[].tipo` fuori lista, citazione non trovata su tabelle scansionate): sbloccarle costa 8 letture.
+
 # Correzioni della review 2026-10
 
 > **Integrazione con la 0.5 (versione 0.5.1).** Le correzioni qui sotto sono nate sul branch `fix/review-2026-10`, su base

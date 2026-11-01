@@ -9,7 +9,7 @@ bulloneria, numeri di documento con prefissi, anni e suffissi di serie.
 import re
 import unicodedata
 
-_TRAVI = re.compile(r"\b(HEA|HEB|HEM|IPE|UPN|UNP)\s*(\d+)")
+_TRAVI = re.compile(r"\b(HEA|HEB|HEM|IPE|UPN|UNP)\s*(?:MM\.?\s*)?(\d+)")  # 'IPE MM. 400' (0.7.4)
 _U = re.compile(r"\bU\s+(\d+)\s*X\s*\d+")
 _TRE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
 _DUE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
@@ -18,7 +18,11 @@ _DECIMI = re.compile(r"(\d+)/10\b")
 _DECIMALE = re.compile(r"\d+\.\d+")
 # Parole che dicono "lamiera" (anche 'SP.012X2450X6000', 'L.DA TRENO', 'PLATES') e parole che dicono "tubo".
 _PAROLA_LAMIERA = re.compile(r"\bLAM|COIL|\bSTRIPS?\b|\bPLATES?\b|\bL\.?\s*DA\s+TRENO|\bSP\.\s*\d|\bSPESS")
-_PAROLA_TUBO = re.compile(r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b")
+_PAROLA_TUBO = re.compile(
+    r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b|\bPROFILAT[OI]\s+CAV[OI]|\bHOLLOW\s+SECTION"
+)
+_BARRA_FILETTATA = re.compile(r"\bBARR[AE]\s+FILETT|\bTHREADED\s+RODS?\b|\bTIRANT[EI]\s+FILETT")
+_TUBO_SPAZI = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)(?:\s+\d{3,})?(?![\d.])")
 _VITE_PAROLA = re.compile(r"\b(?:VIT[EI]|BULLON[EI]|BOLTS?|SCREWS?|HEX\.?\s*SCR)\b")
 _VITE_CODICE = re.compile(r"\b(?:ISO|DIN|UNI|I)\s*-?\s*(?:4014|4017|4762|931|933|5737|5739)\b")
 _DADO_PAROLA = re.compile(r"\b(?:DAD[OI]|NUTS?)\b")
@@ -85,7 +89,7 @@ def profilo(descrizione):
     Esempi: 'TRAVI HE/A 200 L=500' -> 'HEA 200'; 'UPN220 L.6.1M' -> 'UPN 220';
     'LAM NERE 2000x1000x80/10' -> 'LAMIERA 8'; 'Coil 1250x5,00' -> 'LAMIERA 5'.
     """
-    s = (descrizione or "").upper().replace(",", ".")
+    s = (descrizione or "").upper().replace(",", ".").replace("|", " ")  # celle di tabella separate da '|'
     s = re.sub(r"(?<=\d)\s*\*\s*(?=\d)", "X", s)  # '200,00*10,00' come '200X10'
     s = re.sub(r"POS\.\s*\d+\s*-\s*", "", s)
     s = re.sub(r"HE\s*/\s*([ABM])", r"HE\1", s)
@@ -98,6 +102,25 @@ def profilo(descrizione):
     if m:
         a, b, c = m.groups()
         return f"ANGOLARE {a} {a} {b}" if c is None else f"ANGOLARE {a} {b} {c}"
+
+    # Barre filettate (0.7.4, progresso): 'BARRA FILETTATA Zn 8.8 M12x1000', 'BARRA FILETTATA 8.8 D.12X1MT',
+    # 'THREADED RODS M12X1.000 CLASS 8.8', 'THREADED RODS 16X1000': diametro e lunghezza in millimetri.
+    if _BARRA_FILETTATA.search(s):
+        m = re.search(r"\b(?:M|D\.?)\s*(\d+)\s*X\s*(\d+(?:\.\d+)?)\s*(MT|MM|M)?\b", s) or re.search(
+            r"\b(\d+)\s*X\s*(\d+(?:\.\d+)?)\s*(MT|MM|M)?\b", s
+        )
+        if m:
+            lunghezza = m.group(2)
+            if m.group(3) in ("MT", "M"):
+                lunghezza = numero(str(float(lunghezza) * 1000))
+            elif re.fullmatch(r"\d{1,2}\.\d{3}", lunghezza):  # '1.000' con il punto delle migliaia
+                lunghezza = lunghezza.replace(".", "")
+            return f"BARRA FILETTATA M{numero(m.group(1))}x{numero(lunghezza)}"
+    # 'LAMINATO ELLE 60x40x6' (0.7.4, progresso): la parola LAMINATO non ne fa una lamiera.
+    if re.search(r"\bELLE\b|\bANGOLAR", s):
+        m = _TRE_DIM.search(s)
+        if m:
+            return "ANGOLARE " + " ".join(numero(g) for g in m.groups())
 
     # Bulloneria, anche in inglese e tedesco e con i codici ISO/DIN dei distributori ('I 4017 8.8U CE nut M 12 x 50',
     # 'HEX BOLT-ISO4017 ... M12X50', 'Scheibe ISO 7090 - 10', '7089 steel 10 (10,5 x 20 x 2)'). La vite prima del
@@ -114,7 +137,12 @@ def profilo(descrizione):
     if m and (_VITE_PAROLA.search(s) or _VITE_CODICE.search(s) or _DADO_PAROLA.search(s)):
         return f"VITE M{numero(m.group(1))}x{numero(m.group(2))}"
     if _DADO_PAROLA.search(s) or _DADO_CODICE.search(s):
-        m = re.search(r"\bM\s*(\d+)\b", s)
+        # 'M- 12', 'MA16' e '16MA' (0.7.4, progresso) sono M12 e M16
+        m = (
+            re.search(r"\bM\s*-?\s*(\d+)\b", s)
+            or re.search(r"\bMA\s?(\d{1,2})\b", s)
+            or re.search(r"\b(\d{1,2})\s*MA\b", s)
+        )
         if m:
             return f"DADO M{m.group(1)}"
 
@@ -192,6 +220,17 @@ def profilo(descrizione):
     m = _TRE_DIM_SPAZI.search(s)
     if m and not tubo and _forma_lamiera([float(g) for g in m.groups()]):
         return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"  # misure di un certificato con spazi
+    m = _TUBO_SPAZI.search(s) if tubo else None
+    if m:
+        # tabella di un certificato di tubi con spessore, altezza, larghezza (e lunghezza) in colonne separate:
+        # 'PROFILATI CAVI ... 5 100 100 12000' (0.7.4, progresso). Lo spessore è la misura più piccola.
+        dims = [float(g) for g in m.groups()]
+        spessore = min(dims)
+        if spessore <= 20 and all(d >= 10 for d in dims if d != spessore):
+            lati = [d for d in dims if d != spessore] or [spessore]
+            if len(lati) == 1:
+                lati = lati * 2
+            return f"TUBO {numero(str(lati[0]))}x{numero(str(lati[1]))}x{numero(str(spessore))}"
     if tubo or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
         m = _DUE_DIM.search(s)
         if m:
@@ -207,7 +246,9 @@ _FAMIGLIE_CHIAVE = re.compile(r"^(?:HEA|HEB|HEM|IPE|UPN|PIATTO|LAMIERA|TUBO|ANGO
 
 
 _RIFERIMENTO = re.compile(
-    r"^\s*(?:RIF\.?|RIFERIMENTO|NS\.?\s*RIF|VS\.?\s*(?:ORD|RIF)|ORDINE|COMMESSA|CERTIFICAT[IO]\b|CERT\.)", re.I
+    r"^\s*(?:RIF\.?|RIFERIMENTO|NS\.?\s*RIF|VS\.?\s*(?:ORD|RIF)|ORDINE|COMMESSA|CERTIFICAT[IO]\b|CERT\.|"
+    r"FINITUR|PRESTAZION|SERVIZI|ZINCATUR|TRASPORT|IMBALL|VERNICIAT|SABBIAT|NOLEGG)",
+    re.I,
 )
 
 
@@ -369,7 +410,14 @@ def colata_normale(testo):
 def stessa_colata(a, b):
     """True se le due colate coincidono nella forma di confronto (almeno tre cifre)."""
     na, nb = colata_normale(a), colata_normale(b)
-    return bool(na) and na == nb and len(re.sub(r"\D", "", na)) >= 3
+    if not na or not nb:
+        return False
+    if na == nb:
+        return len(re.sub(r"\D", "", na)) >= 3
+    # il commerciante scrive la colata con la sigla del produttore davanti ('SICL2103435A' per 'CL21/03435A',
+    # 'OL142191' per '142191', 0.7.4): vale se la più corta ha almeno cinque cifre ed è la coda dell'altra
+    corta, lunga = sorted((na, nb), key=len)
+    return len(re.sub(r"\D", "", corta)) >= 5 and lunga.endswith(corta)
 
 
 def colate_dichiarate(testo):
@@ -420,6 +468,7 @@ def numero_normale(testo):
     s = re.sub(r"(?<=\d)\.(?=\d{3}\b)", "", s)
     s = re.sub(r"[^a-z0-9/]", "", s)
     s = re.sub(r"o(?=\d)|(?<=\d)o", "0", s)  # 'CO19604' e 'C019604' sono lo stesso numero (O letta come zero)
+    s = s.rstrip("/")  # '12000/' nella tabella del costruttore (0.7.4)
     return s.lstrip("0") or s
 
 
@@ -448,7 +497,7 @@ def stesso_numero(dichiarato, letto):
     if (len(a2) >= 5 and b2.endswith(a2)) or (len(b2) >= 5 and a2.endswith(b2)):
         return "prefisso"
     # numeri corti: il prefisso deve essere staccato ('99-777' contiene '777', '1777' no)
-    if len(a2) >= 3 and re.search(rf"[^a-z0-9]{re.escape(a2)}$", (letto or "").lower().strip()):
+    if len(a2) >= 3 and re.search(rf"[^a-z0-9]0*{re.escape(a2)}$", (letto or "").lower().strip()):
         return "prefisso"
     return None
 
@@ -475,8 +524,8 @@ def cita_ddt(citato, numero_ddt):
     return (
         esito == "prefisso"
         and len(coda) >= 3
-        and re.search(rf"[^a-z0-9]{re.escape(coda)}$", (numero_ddt or "").lower().strip()) is not None
-    )
+        and re.search(rf"[^a-z0-9]0*{re.escape(coda)}$", (numero_ddt or "").lower().strip()) is not None
+    )  # anche con gli zeri davanti: '8603' per '2021-S_DVE-0008603' (0.7.4)
 
 
 def contiene_numero(testo, numero):

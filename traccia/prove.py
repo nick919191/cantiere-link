@@ -179,7 +179,9 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                     chiave=nz.profilo(riga.get("materiale", "")),
                     fonti={k: fonti.aggiungi(pid, f"r{i}.{k}", r[k]) for k in r},
                 )
-                if riga.get("materiale") or riga.get("certificato"):
+                if nz.e_riferimento(riga.get("materiale", "")) and not riga.get("certificato"):
+                    scartate.append({"pid": pid, "indice": i})  # 'FINITURA GREZZO': non è materiale (0.7.4)
+                elif riga.get("materiale") or riga.get("certificato"):
                     packing.append(riga)
                 else:  # non porta la catena: non si usa, ma si dice (avviso nell'Excel)
                     scartate.append({"pid": pid, "indice": i})
