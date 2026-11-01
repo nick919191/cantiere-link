@@ -137,3 +137,9 @@ def test_numero_contenuto_e_progressivo():
     assert nz.contiene_numero("Delivery note 2026/45678 del", "45678") and not nz.contiene_numero("x", "")
     assert nz.progressivo("G02 / 51159") == nz.progressivo("38747/ 51159") == "51159"
     assert nz.progressivo("8027") == "" and nz.progressivo("2026/45678") == "45678"
+
+
+def test_tre_misure_con_spazi_senza_parola():
+    assert nz.profilo("10.00 2000 12000") == "LAMIERA 10"  # campo dimensioni di un certificato
+    assert nz.profilo("30.00 2000 10000") == "LAMIERA 30"
+    assert nz.profilo("40 40 3") == "40 40 3"  # non è una lamiera: resta com'è

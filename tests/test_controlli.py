@@ -71,3 +71,12 @@ def test_campo_a_elenco_controllato_elemento_per_elemento():
     s["righe"][0]["colata"] = V("143343; 999999", "Colata: 143343")  # un elemento inventato
     assert any("999999" in e for e in valida(s))
     assert valida(s, correggi=True) == [] and s["righe"][0]["colata"]["v"] == ""
+
+
+def test_campo_a_elenco_con_citazione_a_elenco():
+    """Il lettore copia l'elenco anche nella citazione ('C5051; C5081'): vale se ogni elemento sta nella pagina."""
+    s = ddt("602", ["SP.010X2000X6000"])
+    s["trascrizione"] += "\nPlacca: C5051B (10-02B) Colata: C5051 Placca: C5081A (06-01A) Colata: C5081"
+    s["righe"][0]["colata"] = V("C5051; C5081", "C5051; C5081")
+    s["righe"][0]["placca"] = V("C5051B (10-02B); C5081A (06-01A)", "C5051B (10-02B); C5081A (06-01A)")
+    assert valida(s) == []

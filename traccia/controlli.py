@@ -94,15 +94,15 @@ def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
         return
     if not v["cit"]:
         errori.append(f"{campo}: valore senza citazione")
-    elif _compatto(v["cit"]) not in _compatto(testo_pagina):
-        errori.append(f"{campo}: la citazione {v['cit'][:60]!r} non si trova nella trascrizione")
-    elif nome in CAMPI_ELENCO and ";" in v["v"]:
-        # elenco: ogni elemento deve stare nella citazione o nel testo della pagina
-        compatto = _compatto(v["cit"]) + " " + _compatto(testo_pagina)
+    elif nome in CAMPI_ELENCO and (";" in v["v"] or ";" in v["cit"]):
+        # elenco ('143343; 442770'): valore e citazione non sono una sequenza della pagina, ogni elemento sì
+        compatto = _compatto(testo_pagina)
         for parte in (x.strip() for x in v["v"].split(";")):
             if parte and _compatto(parte) not in compatto:
                 errori.append(f"{campo}: l'elemento {parte[:40]!r} non si trova nella trascrizione")
                 break
+    elif _compatto(v["cit"]) not in _compatto(testo_pagina):
+        errori.append(f"{campo}: la citazione {v['cit'][:60]!r} non si trova nella trascrizione")
     elif _compatto(v["v"]) not in _compatto(v["cit"]):
         errori.append(f"{campo}: il valore {v['v'][:40]!r} non sta nella sua citazione")
 

@@ -162,6 +162,9 @@ def profilo(descrizione):
         if not tubo and _forma_lamiera(dims):
             return f"LAMIERA {numero(str(min(dims)))}"
         return "TUBO " + "x".join(numero(g) for g in m.groups())
+    m = _TRE_DIM_SPAZI.search(s)
+    if m and not tubo and _forma_lamiera([float(g) for g in m.groups()]):
+        return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"  # misure di un certificato con spazi
     if tubo or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
         m = _DUE_DIM.search(s)
         if m:

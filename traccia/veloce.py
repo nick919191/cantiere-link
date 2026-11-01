@@ -613,6 +613,15 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
         compatte = agente._json(risposta).get("schede") or {}
     except ValueError:
         compatte = {}
+    for p in lotto:
+        if not isinstance(compatte.get(p["pid"]), dict):
+            lv.evento(
+                cartella,
+                tipo="avviso",
+                pid=p["pid"],
+                testo=f"La risposta non contiene la scheda di {p['pid']} "
+                f"(chiavi: {', '.join(list(compatte)[:4]) or 'nessuna'}; inizio: {risposta.strip()[:200]!r})",
+            )
 
     mappe = mappe or {}
     schede, dubbi, errori, rileggi, intera = {}, {}, {}, set(), set()

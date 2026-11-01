@@ -71,6 +71,30 @@ def _etichetta(righe: list[dict]) -> str:
     return f"{base}, {len(righe)} righe" if len(righe) > 1 else base
 
 
+def _colate_da_lettere(prove: dict, numero_ddt: str, chiavi: list[str]) -> dict[str, list[str]]:
+    """Colate (con le placche) che le lettere o liste del commerciante dichiarano per un DDT e un materiale: le
+    righe con un articolo compatibile valgono per quel materiale; quelle senza articolo valgono per tutti i
+    materiali del DDT, ma solo se nessuna riga con articolo lo descrive (il preciso vince sul generico)."""
+    if not numero_ddt:
+        return {}
+    precise: dict[str, list[str]] = {}
+    generiche: dict[str, list[str]] = {}
+    for lt in prove.get("lettere", []):
+        if not nz.cita_ddt(lt.get("ddt_citato", ""), numero_ddt):
+            continue
+        for r in lt.get("righe", []):
+            if not r.get("colata"):
+                continue
+            articolo = nz.profilo(r["articolo"]) if r.get("articolo") else ""
+            if articolo and not any(articolo == k or _affine(articolo, k) for k in chiavi):
+                continue
+            dove = precise if articolo else generiche
+            dove.setdefault(r["colata"], [])
+            if r.get("placca") and r["placca"] not in dove[r["colata"]]:
+                dove[r["colata"]].append(r["placca"])
+    return precise or generiche
+
+
 def voci_dal_fascicolo(prove: dict) -> list[dict]:
     voci = []
     if prove["packing"]:
@@ -138,6 +162,8 @@ def voci_dal_fascicolo(prove: dict) -> list[dict]:
                     for c in r.get("colate", []):
                         colate.setdefault(c, [])
                         colate[c] += [p for p in r.get("placche", {}).get(c, []) if p not in colate[c]]
+                if not colate:  # il DDT non le stampa: forse le dichiara la lista del commerciante
+                    colate = _colate_da_lettere(prove, d["numero"], [chiave])
                 if colate and VOCE_PER_COLATA:
                     for c, placche in colate.items():
                         voci.append(
@@ -334,21 +360,7 @@ class Motore:
             return list(voce["colate_dichiarate"])
         if riga_ddt and riga_ddt.get("colate"):
             return list(riga_ddt["colate"])
-        if not voce["ddt"]:
-            return []
-        colate = []
-        for lt in self.p["lettere"]:
-            if not nz.cita_ddt(lt["ddt_citato"], voce["ddt"]):
-                continue
-            for r in lt.get("righe", []):
-                if not r.get("colata"):
-                    continue
-                articolo = nz.profilo(r.get("articolo", "")) if r.get("articolo") else ""
-                if (not articolo or any(_affine(articolo, k) or articolo == k for k in voce["chiavi"])) and (
-                    r["colata"] not in colate
-                ):
-                    colate.append(r["colata"])
-        return colate
+        return list(_colate_da_lettere(self.p, voce["ddt"], voce["chiavi"]))
 
     def timbrato_altrove(self, cert: dict, numero_ddt: str) -> list[str]:
         altri = set()

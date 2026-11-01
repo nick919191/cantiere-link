@@ -456,3 +456,48 @@ def test_dop_collegata_per_ddt_del_produttore_anche_con_etichetta_nel_campo():
     ]
     v = _voce(_senza_packing(fogli), "HEA 160")
     assert "DoP 03 N 2025" in v["colonne"]["CE/DoP ACCIAIERIA"]["v"]
+
+
+def test_lista_del_commerciante_divide_la_voce_per_colata_e_il_preciso_vince_sul_generico():
+    from fascicolo_inventato import V, certificato, ddt, scheda, timbro
+
+    lista = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("FORNITORE 001 SRL"), "ddt_citato": V("51159"), "data_ddt": V("16/09/2025")},
+        [
+            {"placca": V("PP64808201"), "colata": V("SU36217")},
+            {"placca": V("PP64808202"), "colata": V("SU36217")},
+            {"placca": V("PP64113902"), "colata": V("SU35302")},
+        ],
+    )
+    generica = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("FORNITORE 001 SRL"), "ddt_citato": V("3332"), "data_ddt": V("14/02/2025")},
+        [{"colata": V("24064054"), "certificato": V("24064054")}],  # coil, senza articolo: generica
+    )
+    precisa = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("FORNITORE 001 SRL"), "ddt_citato": V("3332"), "data_ddt": V("14/02/2025")},
+        [{"articolo": V("LAM. CALDO 5,00 x1500,00 x 6000,00"), "colata": V("24305236")}],
+    )
+    c1 = certificato("P1", [("HOT ROLLED PLATE 15x2500x6000", "S275JR", "SU36217")], [timbro("51159")])
+    c2 = certificato("P2", [("HOT ROLLED PLATE 15x2500x6000", "S275JR", "SU35302")], [timbro("51159")])
+    c3 = certificato("15.329", [("Hot Rolled Mill Edge Coil 5,00x1500xC", "S275JR", "24305236")], [timbro("3332")])
+    fogli = [
+        ("f.pdf", 1, ddt("G02 / 51159", ["L.DA TRENO S355J2 Pz 8 6000x2500x15,00"])),
+        ("f.pdf", 2, lista),
+        ("f.pdf", 3, c1),
+        ("f.pdf", 4, c2),
+        ("g.pdf", 1, ddt("G01 / 3332", ["LAM. CALDO 6000x1500x5,00"], emittente="FORNITORE 002 SRL")),
+        ("g.pdf", 2, generica),
+        ("g.pdf", 3, precisa),
+        ("g.pdf", 4, c3),
+    ]
+    r = _senza_packing(fogli)
+    voci = {v["voce"]: v for v in r["voci"]}
+    assert {"LAMIERA 15 · colata SU36217", "LAMIERA 15 · colata SU35302", "LAMIERA 5 · colata 24305236"} <= set(voci)
+    assert voci["LAMIERA 15 · colata SU36217"]["colonne"]["COLATA"]["v"] == "SU36217"
+    assert any("PP64808201, PP64808202" in n for n in voci["LAMIERA 15 · colata SU36217"]["note"])
+    assert voci["LAMIERA 15 · colata SU35302"]["colonne"]["CERT 3.1 ACCIAIERIA"]["v"].startswith("P2")
+    assert "24064054" not in voci  # la riga generica (coil) non fa voce: c'è la riga precisa
+    assert voci["LAMIERA 5 · colata 24305236"]["stato"] == "PROVATO"
