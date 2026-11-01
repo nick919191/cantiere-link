@@ -5,6 +5,7 @@ Il servizio locale collega il browser all’agente ChatGPT e conserva originali 
 
 import io
 import json
+import logging
 import os
 import re
 import secrets
@@ -22,13 +23,16 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, percorsi
+from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, percorsi, registro
 from . import lavoro as lv
 from .preparazione import prepara
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifecycle(_app):
+    registro.configura()
     stop_checks = threading.Event()
 
     def update_checks():
@@ -36,7 +40,7 @@ async def lifecycle(_app):
             try:
                 aggiornamenti.check()
             except Exception:
-                pass
+                log.exception("Controllo aggiornamenti non riuscito")
             stop_checks.wait(3600)
 
     threading.Thread(target=update_checks, daemon=True).start()
@@ -50,6 +54,7 @@ async def lifecycle(_app):
                         )
                 except (OSError, ValueError):
                     # Un chat.jsonl troncato o non leggibile riguarda solo quel cantiere: l'app deve partire comunque.
+                    log.exception("Chat del cantiere %s non leggibile all'avvio", directory.name)
                     continue
     yield
     stop_checks.set()
@@ -89,8 +94,9 @@ async def locale(request: Request, call_next):
 
 
 @app.exception_handler(Exception)
-async def errore_interno(_request: Request, _exc: Exception):
+async def errore_interno(request: Request, exc: Exception):
     """Qualunque errore inatteso arriva al browser come JSON con `detail`, mai come testo grezzo."""
+    log.error("Errore interno su %s %s", request.method, request.url.path, exc_info=exc)
     return JSONResponse(
         {"detail": "Errore interno dell’applicazione. Riprova; se il problema resta, chiudi e riapri l’app."},
         status_code=500,
@@ -110,7 +116,10 @@ def sessione():
 @app.get("/api/impostazioni")
 def impostazioni():
     prefs = configurazione.leggi()
-    return {k: prefs[k] for k in ("model", "reasoning", "theme", "chat_width")} | {"cartella": str(percorsi.RADICE)}
+    return {k: prefs[k] for k in ("model", "reasoning", "theme", "chat_width")} | {
+        "cartella": str(percorsi.RADICE),
+        "registro": str(registro.percorso()),
+    }
 
 
 class Preferenze(BaseModel):
@@ -407,6 +416,7 @@ def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
         try:
             prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
         except Exception:
+            log.exception("Preparazione del cantiere %s non riuscita", id_lavoro)
             lv.evento(
                 cartella, tipo="errore", testo="Preparazione non riuscita: controlla formato e dimensioni dei file."
             )

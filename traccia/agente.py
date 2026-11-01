@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,8 +17,10 @@ from .controlli import aggiungi_zone_esatte, valida
 from .preparazione import info_pagina, prepara
 from .uscita import componi
 
+log = logging.getLogger(__name__)
 _lock = threading.RLock()
-_cancel = threading.Event()
+_cancel = threading.Event()  # ferma i lotti: lo alza stop() oppure l'errore di un lotto
+_stop_richiesto = threading.Event()  # lo alza soltanto stop(): distingue "interrotta" da "errore"
 _tentativi_lock = threading.Lock()
 PAGINE_IN_PARALLELO = 6  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
 PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
@@ -44,6 +47,7 @@ def stop() -> dict:
     with _lock:
         if not _state["busy"]:
             return {"message": "Nessuna operazione in corso."}
+        _stop_richiesto.set()
         _cancel.set()
         _state.update(stopping=True, message="Interruzione in corso: attendo la risposta della pagina corrente…")
     return {"message": "Interruzione richiesta. Le pagine già lette restano salvate: riprendi quando vuoi."}
@@ -89,6 +93,7 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
         if not chatgpt.status().get("plan_enabled"):
             raise chatgpt.AgentError("Collega ChatGPT e abilita l’utilizzo del piano nelle impostazioni.")
         _cancel.clear()
+        _stop_richiesto.clear()
         _state.update(
             busy=True, job=cartella.name, message="Avvio dell’agente…", error=False, stopping=False, stopped=False
         )
@@ -102,10 +107,13 @@ def avvia(cartella: Path, qid: str | None = None) -> None:
                 analizza(cartella, model, effort)
             _state.update(message="Operazione completata.")
         except Exception as exc:
-            message = (
-                str(exc) if isinstance(exc, chatgpt.AgentError) else "Operazione non completata. Riprova dal cantiere."
-            )
-            _state.update(message=message, error=not _cancel.is_set(), stopped=_cancel.is_set())
+            interrotta = _stop_richiesto.is_set()
+            if isinstance(exc, chatgpt.AgentError):
+                message = str(exc)
+            else:
+                message = "Operazione non completata. Riprova dal cantiere."
+                log.exception("Agente sul cantiere %s: errore inatteso", cartella.name)
+            _state.update(message=message, error=not interrotta, stopped=interrotta)
             lv.evento(cartella, tipo="errore", testo=message)
             if qid:
                 chat.fallita(cartella, qid, message)

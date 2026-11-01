@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import platform
 import re
@@ -21,6 +22,7 @@ from filelock import FileLock
 
 from . import VERSIONE_APP, configurazione, percorsi
 
+log = logging.getLogger(__name__)
 _lock = threading.RLock()
 _state = {"busy": False, "checking": False, "message": "", "available": None, "checked_at": None}
 MAX_ARCHIVE = 250 * 1024 * 1024
@@ -374,6 +376,8 @@ def install(expected_version):
                         available=None, message="Aggiornamento pronto. Chiudi l’app e riapri il consueto Avvia."
                     )
         except Exception as exc:
+            if not isinstance(exc, UpdateError):
+                log.exception("Installazione dell'aggiornamento %s non riuscita", expected_version)
             with _lock:
                 _state["message"] = (
                     str(exc)
