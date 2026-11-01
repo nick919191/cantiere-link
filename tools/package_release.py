@@ -29,6 +29,7 @@ FILES = {
     "LICENSE",
     "CLAUDE.md",
     "requirements.txt",
+    "requirements.lock",
     "pyproject.toml",
     "Avvia.bat",
     "Avvia.command",

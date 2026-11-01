@@ -299,21 +299,28 @@ def extract(archive, target, item):
         raise UpdateError("I file del pacchetto non corrispondono al manifest.")
 
 
+def _requisiti(root):
+    """Come avvia.requisiti: lockfile con hash se la release lo contiene, altrimenti requirements.txt."""
+    lock = root / "requirements.lock"
+    if lock.exists():
+        return lock, ["--require-hashes", "-r", str(lock)]
+    return root / "requirements.txt", ["-r", str(root / "requirements.txt")]
+
+
 def _prepare_environment(root):
     python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+    elenco, argomenti = _requisiti(root)
     commands = [
         [sys.executable, "-m", "venv", str(root / ".venv")],
-        [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(root / "requirements.txt")],
+        [str(python), "-m", "pip", "install", "--disable-pip-version-check", *argomenti],
         [str(python), "-c", "from traccia.server import app; assert app"],
     ]
     for command in commands:
         subprocess.run(
             command, cwd=root, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags
         )
-    (root / ".venv/requirements.sha256").write_text(
-        hashlib.sha256((root / "requirements.txt").read_bytes()).hexdigest()
-    )
+    (root / ".venv/requirements.sha256").write_text(hashlib.sha256(elenco.read_bytes()).hexdigest())
 
 
 def install(expected_version):
