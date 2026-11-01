@@ -103,7 +103,7 @@ def test_u12_tastiera_progressbar_e_dialog_nativo():
     assert '$("prog").setAttribute("aria-valuenow",p)' in cantiere
     assert '<dialog class="modal" id="modal" aria-labelledby="mtitle">' in html
     assert "m.showModal()" in cantiere and '$("modal").classList' not in cantiere and "$('modal').classList" not in app
-    assert '<div class="card lav" role="button" tabindex="0"' in cantiere
+    assert '<tr class="lav" role="button" tabindex="0"' in cantiere
     assert '<button type="button" class="card bin"' in cantiere and '<button type="button" class="pg"' in cantiere
     assert 'role="button" tabindex="0" data-act="open-proof"' in cantiere
     assert 'role="button" tabindex="0" data-act="view-page"' in cantiere

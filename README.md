@@ -8,7 +8,7 @@ Dai documenti di cantiere alla tracciabilità dei materiali da carpenteria metal
 
 La guida HTML include una catena documentale esplorabile, istruzioni Windows/Mac, schermate, percorso guidato e lettura vocale facoltativa. Puoi consultarla online, scaricare il progetto e aprire `docs/index.html`, oppure scegliere Guida interattiva nell’app. Il README qui sotto resta leggibile direttamente su GitHub, con sezioni espandibili.
 
-Versione 0.6.4 in anteprima (versione di prova), destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
+Versione 0.7.0 in anteprima (versione di prova), destinata alla valutazione. Consulta gli allegati della release per i pacchetti disponibili. Gli installer non hanno una firma di distribuzione; l’accesso ChatGPT con un account reale e il collaudo completo sui sistemi supportati restano da completare. Inizia con documenti di prova.
 
 ## A cosa serve
 
@@ -93,8 +93,8 @@ Il collegamento segue [Sign in with ChatGPT per applicazioni open source locali]
 2. L’app prepara le pagine e avvia l’analisi da sola. Le barre mostrano ogni fase: ricevuti, preparazione, lettura e smistamento, collegamento dei documenti, Excel.
 3. Premi Ferma quando vuoi non consumare token: le pagine lette restano salvate e il cantiere non riparte finché non premi Riprendi.
 4. Usa Aggiungi file anche durante l’analisi: i file nuovi entrano in coda, quelli identici non vengono aggiunti e le pagine già lette non si rileggono.
-5. Nel risultato premi Vedi tabella: cliccando una cella vedi la pagina con il dato evidenziato, il documento originale e il perché il dato è stato usato.
-6. Scarica Excel e prove o i documenti riordinati.
+5. Nel risultato la tabella è già aperta: cliccando una cella vedi a destra la pagina raddrizzata con il dato evidenziato e il perché è stato usato; 📄 apre quella sola pagina. Cliccando PROVATO, DEDOTTO, DA CONFERMARE o MANCANTE si apre la spiegazione dello stato con il flusso dei documenti.
+6. Premi Scarica tutto: un solo ZIP con Excel, prove e documenti riordinati.
 
 Le schermate e la [demo esplorabile](demo/tracciabilita-demo.html) usano documenti inventati. Le schermate sono della versione 0.3.0: alcune parti (chat, catena) non ci sono più.
 
@@ -186,7 +186,7 @@ L’app usa l’API [GitHub Releases](https://docs.github.com/en/rest/releases/r
 
 ## Eliminare e ripristinare un cantiere
 
-Nella schermata iniziale premi Elimina sul cantiere, poi conferma Sposta nel cestino. Il cantiere scompare dai lavori, conservando originali e risultati. Per recuperarlo apri Cestino e premi Ripristina. Una preparazione o un’operazione dell’agente in corso impedisce la rimozione.
+Nella schermata iniziale premi l’icona del cestino sulla riga del cantiere, poi conferma Sposta nel cestino. La matita accanto al nome lo rinomina. Il cantiere scompare dai lavori, conservando originali e risultati. Per recuperarlo apri Cestino e premi Ripristina. Una preparazione o un’operazione dell’agente in corso impedisce la rimozione.
 
 Il cestino è recuperabile: continua a occupare spazio su disco. Non elimina la cache condivisa delle letture. Non è prevista una cancellazione definitiva automatica.
 

@@ -43,18 +43,51 @@ function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)}
 const voci=n=>n+(n===1?" voce":" voci");
 function esitoLavoro(l){const c=l.conteggio;
  if(l.fase==="errore")return [l.motivo||"Nessuna pagina leggibile","r"];
- if(l.fase!=="pronto")return [{preparazione:"Preparo le pagine",lettura:"Sto leggendo · "+l.percentuale+"%",composizione:"Preparo l'Excel"}[l.fase]||l.fase,"b"];
+ if(l.fase!=="pronto")return [{preparazione:"Caricamento effettuato · preparo le pagine",lettura:"Caricamento effettuato · lettura in corso",composizione:"Caricamento effettuato · preparo l'Excel"}[l.fase]||l.fase,"b"];
  const tot=c?Object.values(c).reduce((a,x)=>a+x,0):0;
  if(!tot)return ["Nessuna voce trovata","o"];
- if(c.MANCANTE)return [`Mancano documenti per ${voci(c.MANCANTE)}`,"r"];
- if(c["DA CONFERMARE"])return [`${voci(c["DA CONFERMARE"])} da confermare`,"o"];
- return [`Tutto collegato · ${tot} voci`,"g"]}
+ return ["Completato","g"]}
 function barraConti(l){const c=l.conteggio;
- if(l.fase!=="pronto")return `<div class="conti"><i style="width:${l.fase==="preparazione"?5:l.percentuale}%;background:var(--accent)"></i></div>`;
+ if(l.fase!=="pronto")return `<div class="conti blu"><i style="width:${l.fase==="preparazione"?5:l.percentuale}%"></i></div>`;
  const tot=c?Object.values(c).reduce((a,x)=>a+x,0):0;if(!tot)return `<div class="conti"></div>`;
  return `<div class="conti">${Object.entries(STATI).map(([k,s])=>`<i style="width:${(c[k]||0)/tot*100}%;background:var(--${{g:"green",b:"accent",o:"orange",r:"red"}[s]})" title="${k}: ${c[k]||0}"></i>`).join("")}</div>`}
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>{const [e,c]=esitoLavoro(l);return `<div class="card lav" role="button" tabindex="0" data-nome="${esc(l.nome.toLowerCase())}" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div><span class="pill ${c}">${esc(e)}</span></div>${barraConti(l)}<div class="apri">Apri →</div></div>`}).join(""):`<div class="note" style="align-self:center">Nessun cantiere ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`;filtra($("cerca").value)}).catch(()=>{})}
-function filtra(q){q=(q||"").trim().toLowerCase();document.querySelectorAll("#lavori .lav").forEach(e=>e.classList.toggle("hidden",!!q&&!e.dataset.nome.includes(q)))}
+/* costo stimato in euro dai token: i prezzi (euro per milione) stanno nelle impostazioni, il piano ChatGPT non espone un costo */
+const eur=n=>n.toLocaleString("it-IT",{style:"currency",currency:"EUR",minimumFractionDigits:2,maximumFractionDigits:2});
+function costoStimato(c){if(!c||!c.chiamate)return "";const p=typeof preferences!=="undefined"?preferences:{};
+ return eur(((Number(c.ingresso)||0)*(Number(p.prezzo_ingresso)||0)+(Number(c.uscita)||0)*(Number(p.prezzo_uscita)||0))/1e6)}
+const PRIMI=5;let tuttiICantieri=false,inRinomina=null,elencoCantieri=[];
+function rigaCantiere(l){const [e,c]=esitoLavoro(l),tot=l.conteggio?Object.values(l.conteggio).reduce((a,x)=>a+x,0):0;
+ const av=l.fase==="pronto"?`${barraConti(l)}<div class="l"><span>${esc(e)}</span><span>${tot?voci(tot):""}</span></div>`
+  :l.fase==="errore"?`<div class="l"><span class="pill r">${esc(e)}</span></div>`
+  :`${barraConti(l)}<div class="l"><span style="color:var(--accent)">${esc(e)}</span><span>${l.fase==="preparazione"?"":l.percentuale+"%"}</span></div>`;
+ const nome=inRinomina===l.lavoro?`<input id="rinomina-${esc(l.lavoro)}" value="${esc(l.nome)}" maxlength="200" aria-label="Nuovo nome del cantiere" data-act="noop"> <span class="pill b">Invio salva · Esc annulla</span>`
+  :`<span class="nome-txt">${esc(l.nome)}</span><button class="ibtn" data-act="rinomina" data-job="${esc(l.lavoro)}" title="Rinomina" aria-label="Rinomina cantiere"><svg class="ic" style="width:14px;height:14px"><use href="#pen"/></svg></button>`;
+ const costo=costoStimato(l.consumo);
+ return `<tr class="lav" role="button" tabindex="0" data-nome="${esc(l.nome.toLowerCase())}" data-act="open-job" data-job="${esc(l.lavoro)}"><td><div class="t">${nome}</div></td><td class="m">${esc(l.creato)}</td><td class="m">${l.pagine_totali}</td>
+  <td class="tok">${l.consumo&&l.consumo.chiamate?`<b>${tok(l.consumo.ingresso)}</b> in<br><b>${tok(l.consumo.uscita)}</b> out`:"—"}</td>
+  <td class="costo">${costo?`${costo}<small>stimato</small>`:"—"}</td><td class="av">${av}</td>
+  <td class="az"><button class="btn sm" data-act="open-job" data-job="${esc(l.lavoro)}">Apri →</button> <button class="ibtn del trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" title="Sposta nel cestino" aria-label="Sposta cantiere nel cestino"><svg class="ic"><use href="#trash"/></svg></button></td></tr>`}
+function casa(){api("/api/lavori").then(ls=>{elencoCantieri=ls;disegnaCantieri()}).catch(()=>{})}
+function disegnaCantieri(){const ls=elencoCantieri,q=($("cerca").value||"").trim().toLowerCase();
+ if(inRinomina&&document.activeElement&&(document.activeElement.id||"").startsWith("rinomina-"))return; // non ridisegnare sotto le dita
+ const visibili=ls.filter(l=>!q||l.nome.toLowerCase().includes(q));
+ const mostra=(q||tuttiICantieri)?visibili:visibili.slice(0,PRIMI);
+ $("lavori").innerHTML=ls.length?(mostra.length?mostra.map(rigaCantiere).join(""):`<tr class="vuota"><td colspan="7">Nessun cantiere con questo nome.</td></tr>`):`<tr class="vuota"><td colspan="7">Nessun cantiere ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</td></tr>`;
+ $("lista-conta").textContent=ls.length?(mostra.length<visibili.length?`${ls.length} in tutto · mostro i primi ${mostra.length}`:`${ls.length} in tutto`):"";
+ const nascosti=visibili.length-mostra.length;
+ $("altri").classList.toggle("hidden",!nascosti&&!(tuttiICantieri&&!q&&ls.length>PRIMI));
+ $("altri-btn").textContent=nascosti?`Mostra gli altri ${nascosti} cantieri ↓`:"Mostra solo i primi 5 ↑";
+ if(inRinomina){const i=$("rinomina-"+inRinomina);if(i){i.focus();i.select()}}}
+function filtra(){disegnaCantieri()}
+function mostraTutti(){tuttiICantieri=!tuttiICantieri;disegnaCantieri()}
+function rinomina(id){inRinomina=id;disegnaCantieri()}
+async function salvaNome(id,nome){inRinomina=null;nome=(nome||"").trim();const l=elencoCantieri.find(x=>x.lavoro===id);
+ if(!nome||!l||nome===l.nome){disegnaCantieri();return}
+ const r=await request(`/api/lavori/${id}/nome`,"PUT",{nome});l.nome=r.nome;disegnaCantieri();notify(`Cantiere rinominato: ${r.nome}`)}
+document.addEventListener("keydown",e=>{const i=e.target;if(!(i.id||"").startsWith("rinomina-"))return;
+ if(e.key==="Enter"){e.preventDefault();safe(()=>salvaNome(i.id.slice(9),i.value))}
+ if(e.key==="Escape"){e.preventDefault();inRinomina=null;disegnaCantieri()}});
+document.addEventListener("focusout",e=>{const i=e.target;if((i.id||"").startsWith("rinomina-")&&inRinomina)setTimeout(()=>{if(inRinomina===i.id.slice(9))safe(()=>salvaNome(i.id.slice(9),i.value))},150)});
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
@@ -185,6 +218,9 @@ function ricevuti(){$("ricevuti").innerHTML=stato.fase==="errore"?`<b>${esc(stat
 /* ---------- ordine della catena (come lo ZIP ordinato) ---------- */
 const CARTELLE=[["Costruttore",["packing_costruttore","dop_costruttore"]],["DDT",["ddt"]],["Certificati 3.1",["certificato_31","lettera_accompagnamento"]],["DoP e CE",["dop_ce_prodotto"]]];
 function vediPagina(pid){$("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");$("mopen").classList.add("hidden");$("mbody").innerHTML="";mostraModale();safe(()=>pagina(pid))}
+function urlPagina(pid){return `/api/lavori/${L}/pagine/${pid}.png?dritta=1${rotVer[pid]?"&v="+rotVer[pid]:""}`}
+const rotVer={};
+function apriPaginaPng(pid,nome,pagina){apri(urlPagina(pid),`${nome} · pagina ${pagina} (PNG raddrizzato)`)}
 function ordine(){if(!stato||!$("p-ordine").classList.contains("on"))return;
  const lette=stato.pagine.filter(x=>x.famiglia);const firma=lette.length+":"+stato.fase;if(firma===firmaOrdine)return;firmaOrdine=firma;
  const fogli=ps=>`<div class="fogli">${ps.map((x,k)=>`<img src="${img(x.pid)}" alt="" style="animation-delay:${Math.min(k,40)*25}ms" class="${x.orientamento?"girata":""}" title="${esc(x.file)} · pagina ${x.pagina}${x.orientamento?" · girata di "+x.orientamento+"°, raddrizzata":""}" role="button" tabindex="0" data-act="view-page" data-pid="${esc(x.pid)}">`).join("")}</div>`;
@@ -212,7 +248,7 @@ function famiglia(k){if(!stato)return;const ps=stato.pagine.filter(x=>x.famiglia
  $("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");mostraModale()}
 async function pagina(pid){const d=await api(`/api/lavori/${L}/pagine/${pid}`);const s=d.scheda||{};
  $("mtitle").textContent=`${d.pagina.file} · pagina ${d.pagina.pagina}`;
- $("mbody").innerHTML=`<p class="sub" style="margin:0 0 12px">${esc(s.motivo||"")}</p>${(s.avvisi||[]).map(a=>`<div class="pill o" style="margin:0 6px 8px 0">${esc(a)}</div>`).join("")}<img src="/api/lavori/${L}/pagine/${pid}.png" style="width:100%;border-radius:8px;border:1px solid var(--line)">`}
+ $("mbody").innerHTML=`<p class="sub" style="margin:0 0 12px">${esc(s.motivo||"")}</p>${(s.avvisi||[]).map(a=>`<div class="pill o" style="margin:0 6px 8px 0">${esc(a)}</div>`).join("")}<img src="${urlPagina(pid)}" style="width:100%;border-radius:8px;border:1px solid var(--line)">`}
 function apri(url,titolo){$("mtitle").textContent=titolo;$("mopen").href=url;$("mopen").classList.remove("hidden");
  $("mframe").src=url;$("mframe").classList.remove("hidden");$("mbody").classList.add("hidden");mostraModale()}
 function mostraModale(){const m=$("modal");if(!m.open)m.showModal()}
@@ -223,30 +259,40 @@ $("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};
 /* ---------- tabella dei dati (versione A): cella -> pagina evidenziata, documento e perché ---------- */
 let tab=null,celSel=null;
 const corto=f=>String(f||"").split("/").pop();
-async function mostraTabella(){const sez=$("tabella-dati");
- if(!sez.classList.contains("hidden")){sez.classList.add("hidden");$("vedi-tabella").textContent="▦ Vedi tabella";return}
- tab=await api(`/api/lavori/${L}/tabella`);sez.classList.remove("hidden");$("vedi-tabella").textContent="▦ Nascondi tabella";
- const docLink=d=>`<a class="doc" href="#" title="Apri il documento originale" data-act="open-original" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">📄 ${esc(corto(d.file))} · p. ${d.pagina}</a>`;
+async function mostraTabella(forza){const sez=$("tabella-dati");
+ if(!forza&&!sez.classList.contains("hidden")){sez.classList.add("hidden");$("vedi-tabella").textContent="▦ Vedi tabella";return}
+ tab=await api(`/api/lavori/${L}/tabella`);tab.rotazioni=tab.rotazioni||{};sez.classList.remove("hidden");$("vedi-tabella").textContent="▦ Nascondi tabella";
+ const docLink=d=>`<a class="doc" href="#" title="Apri questa pagina (PNG raddrizzato)" data-act="open-page" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">📄 ${esc(corto(d.file))} · p. ${d.pagina}</a>`;
  $("tdati").innerHTML=`<tr><th>N</th><th>Voce</th><th>Stato</th>${tab.colonne.map(c=>`<th>${esc(c)}</th>`).join("")}</tr>`+
-  tab.voci.map((v,i)=>`<tr><td>${v.n}</td><td>${esc(v.voce)}</td><td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td>${tab.colonne.map(c=>{const x=v.celle[c]||{v:"",documenti:[]};
-   return `<td class="cella" tabindex="0" data-i="${i}" data-c="${esc(c)}">${x.v?esc(x.v):'<span class="vuoto">—</span>'}${x.documenti.slice(0,2).map(docLink).join("")}</td>`}).join("")}</tr>`).join("");
+  tab.voci.map((v,i)=>`<tr id="riga-${v.n}"><td>${v.n}</td><td class="voce" title="${esc(v.voce)}">${esc(v.voce)}</td><td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td>${tab.colonne.map(c=>{const x=v.celle[c]||{v:"",documenti:[]};const altri=(x.documenti.length-2)+(x.altri||0);
+   return `<td class="cella" tabindex="0" data-i="${i}" data-c="${esc(c)}">${x.v?esc(x.v):'<span class="vuoto">—</span>'}${x.documenti.slice(0,2).map(docLink).join("")}${altri>0?`<span class="piu">+ altre ${altri} pagine</span>`:""}</td>`}).join("")}</tr>`).join("");
  $("tdati").onclick=e=>{if(e.target.closest("[data-act]"))return;const td=e.target.closest("td.cella");if(td)scegliCella(td)};
  $("tdati").onkeydown=e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches("td.cella")){e.preventDefault();scegliCella(e.target)}};
- const prima=$("tdati").querySelector('td.cella[data-c="COLATA"]')||$("tdati").querySelector("td.cella");
+ const prima=$("tdati").querySelector('td.cella[data-c="COLATA"] .doc')?.closest("td")||$("tdati").querySelector("td.cella .doc")?.closest("td")||$("tdati").querySelector("td.cella");
  if(prima)scegliCella(prima);else $("dettaglio").innerHTML='<div class="note">Nessuna voce nel risultato.</div>';
- sez.scrollIntoView({behavior:"smooth",block:"start"})}
+ if(!forza)sez.scrollIntoView({behavior:"smooth",block:"start"})}
 function scegliCella(td){$("tdati").querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));td.classList.add("sel");
  const v=tab.voci[td.dataset.i],c=td.dataset.c;celSel={v,c,k:0};dettaglio()}
+function vaiAllaVoce(n){const r=$("riga-"+n);if(!r)return;const td=r.querySelector('td.cella[data-c="COLATA"]')||r.querySelector("td.cella");if(td){scegliCella(td);td.scrollIntoView({behavior:"smooth",block:"center"})}}
+/* zona 0-1000 della pagina originale -> zona sulla pagina girata in senso orario di `gradi` (come provenienza.ruota_zona) */
+function ruotaZona(z,g){if(!z||z.length!==4)return z;const [x0,y0,x1,y1]=z;
+ if(g===90)return [1000-y1,x0,1000-y0,x1];if(g===180)return [1000-x1,1000-y1,1000-x0,1000-y0];if(g===270)return [y0,1000-x1,y1,1000-x0];return z}
 function dettaglio(){const {v,c,k}=celSel,x=v.celle[c]||{v:"",perche:"",documenti:[]},d=x.documenti[k];
- const pagina=d?`<div class="pagina"><img src="/api/lavori/${L}/pagine/${d.pid}.png" alt="pagina">${d.zona&&d.zona.length===4?`<div class="box" style="left:${d.zona[0]/10}%;top:${d.zona[1]/10}%;width:${(d.zona[2]-d.zona[0])/10}%;height:${(d.zona[3]-d.zona[1])/10}%"></div>`:""}</div>`
+ const z=d?ruotaZona(d.zona,(tab.rotazioni||{})[d.pid]||0):null;
+ const pagina=d?`<div class="pagina"><img src="${urlPagina(d.pid)}" alt="pagina">${z&&z.length===4?`<div class="box" style="left:${z[0]/10}%;top:${z[1]/10}%;width:${(z[2]-z[0])/10}%;height:${(z[3]-z[1])/10}%"></div>`:""}
+   <div class="strum"><button type="button" data-act="ruota" data-pid="${esc(d.pid)}" data-gradi="-90" title="Gira a sinistra di 90°: resta salvato">↶</button><button type="button" data-act="ruota" data-pid="${esc(d.pid)}" data-gradi="90" title="Gira a destra di 90°: resta salvato"><svg class="ic"><use href="#rotate"/></svg>Ruota</button><button type="button" data-act="open-page" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">⤢ Ingrandisci</button></div></div>`
   :'<div class="pagina"><div class="vuota">Per questo dato non c\'è una pagina nel fascicolo.</div></div>';
  const schede=x.documenti.length>1?`<div class="schede">${x.documenti.map((y,j)=>`<button class="btn s" style="height:28px;padding:0 10px${j===k?";border-color:var(--accent)":""}" data-act="doc-tab" data-k="${j}">${esc(corto(y.file))} · p. ${y.pagina}</button>`).join("")}</div>`:"";
- $("dettaglio").innerHTML=`${pagina}<div><h3>Voce ${v.n} · ${esc(v.voce)} → ${esc(c)}</h3><span class="pill ${STATI[v.stato]}">${v.stato}</span>
+ const rv=ris&&ris.voci?ris.voci.find(y=>y.n===v.n):null;
+ $("dettaglio").innerHTML=`<h3>Voce ${v.n} · ${esc(v.voce)} → ${esc(c)}</h3><span class="pill ${STATI[v.stato]}">${v.stato}</span>${pagina}
   <div class="k">Valore</div><div>${x.v?esc(x.v):"—"}</div>
-  <div class="k">Documento</div><div>${d?`<a href="#" data-act="open-original" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">📄 ${esc(d.file)} · pagina ${d.pagina} — apri il documento</a>`:"—"}</div>${schede}
+  <div class="k">Pagina</div><div>${d?`<a href="#" data-act="open-page" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">📄 ${esc(corto(d.file))} · pagina ${d.pagina} — apri la pagina</a><div class="link-pdf"><a href="#" data-act="open-original" data-pid="${esc(d.pid)}" data-pagina="${Number(d.pagina)||1}" data-nome="${esc(corto(d.file))}">PDF originale completo ↗</a></div>`:"—"}</div>${schede}
   <div class="k">Perché è stato usato</div><div>${esc(x.perche||"Risultato preparato con una versione precedente: rifai l'analisi per vedere il motivo.")}</div>
   ${d&&d.cit?`<div class="k">Testo letto sulla pagina</div><div class="cit">${esc(d.cit)}</div>`:""}
-  ${v.note&&v.note.length?`<div class="k">Note della voce</div><div>${esc(v.note.join(" "))}</div>`:""}</div>`}
+  ${rv&&rv.motivi&&rv.motivi.length?`<div class="k">Perché ${esc(v.stato)}</div><div style="font-size:13px">${esc(rv.motivi.join(". "))}.</div>`:""}
+  ${v.note&&v.note.length?`<div class="k">Note della voce</div><div style="font-size:13px">${esc(v.note.join(" "))}</div>`:""}`}
+async function ruotaPagina(pid,gradi){const r=await request(`/api/lavori/${L}/pagine/${pid}/ruota`,"POST",{gradi:Number(gradi)||90});
+ if(tab)tab.rotazioni[pid]=r.gradi;rotVer[pid]=Date.now();if(celSel)dettaglio();notify(r.gradi?`Pagina girata: ora è a ${r.gradi}°. La scelta resta salvata.`:"Pagina tornata al verso originale.")}
 function apriOriginale(pid,pagina,nome){apri(`/api/lavori/${L}/originale/${pid}#page=${pagina}`,`${nome} · pagina ${pagina}`)}
 
 /* ---------- risultato ---------- */
@@ -270,5 +316,57 @@ function fornitori(r){const per={};
   :`<div class="note">Nessun documento da chiedere.</div>`}
 function copiaRichiesta(i){navigator.clipboard.writeText(window._richieste[i]).then(()=>notify("Richiesta copiata: incollala in una mail al fornitore."),()=>notify("Copia non riuscita: seleziona il testo dall'Excel, foglio «Richieste ai fornitori»."))}
 async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
- ris=r;esito(r);fornitori(r);if(stato)passi();$("tabella-dati").classList.add("hidden");$("vedi-tabella").textContent="▦ Vedi tabella";
- $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("")}
+ ris=r;esito(r);fornitori(r);if(stato)passi();
+ $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<button type="button" class="stato ${c}${statoAperto===k?" on":""}" data-act="stato" data-stato="${k}" aria-expanded="${statoAperto===k}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k} <i>${statoAperto===k?"▾":"▸"}</i></div></button>`).join("");
+ if(statoAperto)pannelloStato(statoAperto,schedaAperta);
+ safe(()=>mostraTabella(true))}
+
+/* ---------- pannello degli stati: perché una voce è PROVATO / DEDOTTO / DA CONFERMARE / MANCANTE ---------- */
+let statoAperto=null,schedaAperta=0,voceScelta=null;
+const SPIEGA={
+ PROVATO:{t:"Il certificato 3.1 porta stampato o timbrato il numero del DDT con cui il materiale è arrivato: la catena è dimostrata sulla carta.",
+  p:"In parole semplici: la tabella del costruttore dice con quale DDT è arrivato il materiale; quel DDT è nel fascicolo; e sul certificato 3.1 dell'acciaieria c'è il timbro (o la scritta) del fornitore con lo stesso numero di DDT. Ogni anello della catena è scritto su un documento, senza interpretazioni.",
+  s3:"ok",s3t:"Sul certificato c'è il riferimento al DDT (timbro o scritta): l'anello è provato.",serve:"Niente da chiedere: la voce è completa.",tab4:"Cosa è stato verificato"},
+ DEDOTTO:{t:"Il materiale ha tutti i documenti, ma il legame tra DDT e certificato non è stampato sul certificato.",
+  p:"In parole semplici: per dire PROVATO serve che sul certificato 3.1 ci sia un timbro o una scritta con il numero del DDT. Qui il certificato c'è, è dell'acciaieria giusta e ha la colata, ma il collegamento con il DDT l'ho ricavato da un altro indizio (il nome del file, la lettera del distributore, una colata citata sul DDT). È un collegamento ragionevole, non una prova stampata: per questo la voce è DEDOTTO.",
+  s3:"deb",s3t:"Il certificato c'è, ma il numero del DDT non è stampato né timbrato sopra: lo collego da un indizio.",serve:"Diventa PROVATO se il fornitore timbra (o scrive) il numero del DDT sul certificato 3.1, oppure manda la lettera di accompagnamento che lo cita.",tab4:"Cosa serve per PROVATO"},
+ "DA CONFERMARE":{t:"I documenti ci sono, ma un dato è ambiguo e va confermato guardando l'originale.",
+  p:"In parole semplici: la catena si chiude, ma c'è un dubbio che non posso sciogliere da solo: sul certificato ci sono più colate per lo stesso profilo, il profilo è scritto in modo diverso sul DDT e sul certificato, oppure il DDT è dichiarato ma non è nel fascicolo. Il dato è segnato e aspetta una conferma.",
+  s3:"deb",s3t:"Il certificato c'è, ma il dato è ambiguo (più colate, profilo scritto diversamente, DDT non nel fascicolo).",serve:"Si conferma guardando l'originale o chiedendo al fornitore il DDT che manca; poi la voce passa a PROVATO o DEDOTTO.",tab4:"Cosa serve per confermare"},
+ MANCANTE:{t:"Manca un anello della catena, quasi sempre il certificato 3.1 del materiale.",
+  p:"In parole semplici: dalla tabella del costruttore so quale materiale è e con quale DDT è arrivato, ma nel fascicolo non c'è un certificato 3.1 intestato a quel fornitore con quella colata. Senza il certificato la tracciabilità non si chiude: va chiesto al fornitore indicato.",
+  s3:"ko",s3t:"Nessun certificato nel fascicolo per questo materiale (o non intestato al fornitore giusto).",serve:"Chiedi al fornitore il certificato 3.1 della colata indicata sul DDT; quando arriva usa «Aggiungi file» e rifaccio i collegamenti.",tab4:"Cosa chiedere"}};
+function pagInfo(pid){return stato&&stato.pagine?stato.pagine.find(p=>p.pid===pid):null}
+function miniatura(pid){const g=(tab&&tab.rotazioni||{})[pid]||0;const p=pagInfo(pid);
+ return `<img src="${img(pid)}" alt="" title="${esc(p?p.file.split("/").pop()+" · pagina "+p.pagina:pid)}" style="${g?`transform:rotate(${g}deg)`:""}" role="button" tabindex="0" data-act="open-page" data-pid="${esc(pid)}" data-pagina="${p?p.pagina:1}" data-nome="${esc(p?p.file.split("/").pop():pid)}">`}
+function vociDiStato(k){return (ris&&ris.voci||[]).filter(v=>v.stato===k)}
+function apriStato(k){if(statoAperto===k){statoAperto=null;$("pannello").classList.add("hidden");risultatoStati();return}
+ statoAperto=k;schedaAperta=0;voceScelta=null;risultatoStati();pannelloStato(k,0);$("pannello").scrollIntoView({behavior:"smooth",block:"nearest"})}
+function risultatoStati(){document.querySelectorAll("#stati .stato").forEach(b=>{const on=b.dataset.stato===statoAperto;b.classList.toggle("on",on);b.setAttribute("aria-expanded",on);b.querySelector("i").textContent=on?"▾":"▸"})}
+function flussoVoce(v,k){const S=SPIEGA[k],fam=f=>(v.pagine||[]).filter(pid=>{const p=pagInfo(pid);return p&&f.includes(p.famiglia)});
+ const pk=fam(["packing_costruttore"]),dd=fam(["ddt"]),ce=fam(["certificato_31","lettera_accompagnamento"]),dop=fam(["dop_costruttore","dop_ce_prodotto"]);
+ const mini=ps=>ps.length?`<div class="mini">${ps.slice(0,6).map(miniatura).join("")}</div>`:"";
+ const s2=v.ddt?(dd.length?"ok":"deb"):"ko";
+ return `<div class="flusso">
+  <div class="passo ${pk.length?"ok":"deb"}"><span class="n">1</span><div><b>Tabella del costruttore (packing list)</b><small>${pk.length?`La voce ${esc(v.voce)} compare nella tabella del costruttore${v.ddt?` con il DDT ${esc(v.ddt)}`:""}${v.fornitore?` di ${esc(v.fornitore)}`:""}.`:`Nessuna tabella del costruttore: la voce viene dai DDT ricevuti${v.fornitore?` da ${esc(v.fornitore)}`:""}.`}</small>${mini(pk)}</div></div>
+  <div class="passo ${s2}"><span class="n">2</span><div><b>DDT${v.ddt?" "+esc(v.ddt):""}${v.fornitore?" di "+esc(v.fornitore):""}</b><small>${!v.ddt?"Nessun DDT dichiarato per questa voce.":dd.length?"Trovato nel fascicolo: conferma che il materiale è arrivato con quel DDT.":"Dichiarato dal costruttore ma non presente nel fascicolo."}</small>${mini(dd)}</div></div>
+  <div class="passo ${ce.length?S.s3:"ko"}"><span class="n">3</span><div><b>Certificato 3.1 dell'acciaieria</b><small>${ce.length?esc(S.s3t):"Nessun certificato 3.1 collegato a questa voce nel fascicolo."}${v.motivi&&v.motivi.length?` <i>Motivo registrato:</i> ${esc(v.motivi.join("; "))}.`:""}</small>${mini(ce)}</div></div>
+  ${dop.length?`<div class="passo ok"><span class="n">4</span><div><b>DoP e marcatura CE</b><small>Dichiarazioni di prestazione collegate alla voce.</small>${mini(dop)}</div></div>`:""}
+  <div class="passo"><span class="n">=</span><div><b>Risultato: ${esc(k)}</b><small>${esc(S.serve)}</small></div></div></div>`}
+function pannelloStato(k,i){const S=SPIEGA[k];if(!S||!ris)return;const vv=vociDiStato(k);schedaAperta=i;
+ const pagine=[...new Set(vv.flatMap(v=>v.pagine||[]))];
+ if(voceScelta===null||!vv.some(v=>v.n===voceScelta))voceScelta=vv.length?vv[0].n:null;
+ const v=vv.find(x=>x.n===voceScelta);
+ const tabs=[`Perché ${k}`,"Il flusso dei documenti",`Le voci<small>${vv.length}</small>`,S.tab4,`Pagine usate<small>${pagine.length}</small>`];
+ let corpo="";
+ if(i===0)corpo=`<div class="pcorpo due-col"><div><h3>${esc(S.t)}</h3><p>${esc(S.p)}</p>${v?`<p><b style="color:var(--ink)">Esempio · voce ${v.n}, ${esc(v.voce)}${v.fornitore?" ("+esc(v.fornitore)+")":""}</b></p>${flussoVoce(v,k)}`:"<p>Nessuna voce in questo stato.</p>"}</div>
+  <div><h3>I 4 stati, in una riga ciascuno</h3><div class="legenda">${Object.keys(SPIEGA).map(s=>`<div><span class="pill ${STATI[s]}">${s}</span><span>${esc(SPIEGA[s].t)}</span></div>`).join("")}</div>
+  <p style="margin-top:14px"><b style="color:var(--ink)">Le altre schede:</b> «Il flusso dei documenti» mostra passo per passo le pagine di una voce a scelta; «Le voci» elenca le ${vv.length} voci ${esc(k)} con il motivo di ciascuna; «${esc(S.tab4)}» dice, voce per voce, che cosa fare; «Pagine usate» mostra le ${pagine.length} pagine coinvolte.</p></div></div>`;
+ else if(i===1)corpo=`<div class="pcorpo">${vv.length?`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px"><span class="k" style="margin:0">Voce</span><select class="sel-voce" data-change="voce-flusso" aria-label="Scegli la voce">${vv.map(x=>`<option value="${x.n}"${x.n===voceScelta?" selected":""}>${x.n} · ${esc(x.voce)}</option>`).join("")}</select><button class="btn s sm" data-act="vai-voce" data-n="${voceScelta}">Vedi nella tabella →</button></div>${flussoVoce(v,k)}`:"<p>Nessuna voce in questo stato.</p>"}</div>`;
+ else if(i===2)corpo=`<div class="pcorpo"><div class="elenco-voci">${vv.map(x=>`<button type="button" data-act="vai-voce" data-n="${x.n}"><span class="nv">${x.n}</span><span>${esc(x.voce)}<small>${esc([x.fornitore?"Fornitore: "+x.fornitore:"",x.ddt?"DDT "+x.ddt:"",(x.motivi||[])[0]||""].filter(Boolean).join(" · "))}</small></span><span class="pill ${STATI[k]}">${k}</span></button>`).join("")||"<p>Nessuna voce in questo stato.</p>"}</div></div>`;
+ else if(i===3)corpo=`<div class="pcorpo"><p>${esc(S.serve)}</p><div class="elenco-voci">${vv.map(x=>{const cosa=(x.richieste||[]).length?x.richieste.join("; "):k==="PROVATO"?(x.motivi||[]).join("; ")||"Catena completa.":(x.avvisi||[]).concat(x.motivi||[]).join("; ")||S.serve;
+   return `<button type="button" data-act="vai-voce" data-n="${x.n}"><span class="nv">${x.n}</span><span>${esc(x.voce)}<small>${esc(cosa)}${x.fornitore&&k!=="PROVATO"?` — chiedere a ${esc(x.fornitore)}`:""}</small></span><span class="pill ${STATI[k]}">${k}</span></button>`}).join("")||"<p>Nessuna voce in questo stato.</p>"}</div></div>`;
+ else corpo=`<div class="pcorpo">${pagine.length?`<div class="griglia-pg">${pagine.map(pid=>{const p=pagInfo(pid),f=p&&FAM[p.famiglia];return `<button type="button" data-act="open-page" data-pid="${esc(pid)}" data-pagina="${p?p.pagina:1}" data-nome="${esc(p?p.file.split("/").pop():pid)}">${miniatura(pid).replace(/ role="button"[^>]*?(?=>)/,"")}<div>${f?`<span class="fam" style="background:${f.c}"></span>${esc(f.n)} · `:""}${esc(p?p.file.split("/").pop()+" · p"+p.pagina:pid)}</div></button>`}).join("")}</div>`:"<p>Nessuna pagina collegata a queste voci.</p>"}</div>`;
+ $("pannello").classList.remove("hidden");
+ $("pannello").innerHTML=`<div class="tabs">${tabs.map((t,j)=>`<button type="button" class="${j===i?"on":""}" data-act="stato-tab" data-i="${j}">${t}</button>`).join("")}<div class="sp"></div><button type="button" data-act="stato" data-stato="${k}" title="Chiudi" aria-label="Chiudi il pannello">✕</button></div>${corpo}`}
+

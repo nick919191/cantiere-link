@@ -108,13 +108,13 @@ table.dati td.cella{cursor:pointer;vertical-align:top}table.dati td.cella:hover{
 table.dati td.sel{outline:2px solid var(--hl);outline-offset:-2px;border-radius:4px}
 table.dati .doc{display:block;margin-top:3px;font-size:11px;color:var(--accent);text-decoration:none;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 table.dati .doc:hover{text-decoration:underline}table.dati .vuoto{color:var(--soft)}
-.dettaglio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;padding:16px;margin:12px 0 18px}
+.dettaglio{padding:16px;position:sticky;top:12px}
 .dettaglio .pagina{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;align-self:start}
 .dettaglio .pagina img{display:block;width:100%}.dettaglio .vuota{padding:40px 16px;color:var(--muted);text-align:center}
 .dettaglio h3{margin:0 0 6px;font-size:15px}.dettaglio .k{color:var(--muted);font-size:12px;margin-top:12px}
 .dettaglio .cit{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--fill);padding:6px 8px;border-radius:6px;white-space:pre-wrap}
 .dettaglio .schede{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-@media(max-width:900px){.dettaglio{grid-template-columns:1fr}}
+@media(max-width:900px){.due{grid-template-columns:1fr}.dettaglio{position:static}}
 table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1900px}
 td{min-width:120px}td:first-child{min-width:40px}td.nota{min-width:380px}
 .fermo .scan{display:none}
@@ -175,7 +175,7 @@ button.pg{border:0;background:none;padding:0;text-align:left;color:var(--ink);fo
 .fogli img.girata{outline:2px solid var(--hl);outline-offset:1px}
 .freccia{align-self:center;color:var(--soft);font-size:20px}
 .esito .pill{font-size:12px}
-#p-risultato .stati{grid-template-columns:repeat(4,1fr);margin:14px 0 22px}
+#p-risultato .stati{grid-template-columns:repeat(4,1fr);margin:0 0 12px}
 .fornitori{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:22px}
 .fornitore{padding:16px}.fornitore h3{margin:0 0 6px;font-size:15px}
 .fornitore ul{margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.5}
@@ -201,6 +201,9 @@ button.pg{border:0;background:none;padding:0;text-align:left;color:var(--ink);fo
 <symbol id="ic-update" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
 <symbol id="ic-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 7a8 8 0 1 0 11.4 0"/></symbol>
 <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+<symbol id="pen" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16zM13 7l4 4"/></symbol>
+<symbol id="rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/></symbol>
 <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
 </defs></svg>
 
@@ -214,8 +217,8 @@ button.pg{border:0;background:none;padding:0;text-align:left;color:var(--ink);fo
   <section id="home" class="hidden">
     <div class="hhead"><div><h1>I tuoi cantieri</h1>
       <p class="sub" style="margin:0">Carichi i documenti del cantiere: CantiereLink li mette in ordine, legge i certificati e ti dice cosa manca e a chi chiederlo. Gli originali restano invariati.</p></div>
-      <div class="jobs-tools"><input class="cerca" id="cerca" placeholder="Cerca un cantiere" data-input="filtra-cantieri" aria-label="Cerca un cantiere"><button class="btn s" id="demo-button" data-act="demo" title="30 documenti inventati, piccoli e veloci da analizzare">Cantiere di prova</button><button class="btn s" data-act="trash">Cestino</button></div></div>
-    <div class="lavori" id="griglia">
+      <div class="jobs-tools"><input class="cerca" id="cerca" placeholder="Cerca un cantiere" data-input="filtra-cantieri" aria-label="Cerca un cantiere"><button class="btn s" id="demo-button" data-act="demo" title="30 documenti inventati, piccoli e veloci da analizzare">Cantiere di prova</button><button class="btn s" data-act="trash"><svg class="ic"><use href="#trash"/></svg>Cestino</button></div></div>
+    <div class="sopra">
       <div class="card nuovo">
         <div class="t"><svg class="ic"><use href="#ic-plus"/></svg> Nuovo cantiere</div>
         <input class="nome" id="nome" placeholder="Nome del cantiere (facoltativo)">
@@ -234,13 +237,19 @@ button.pg{border:0;background:none;padding:0;text-align:left;color:var(--ink);fo
         </div>
         <div class="err" id="uperr"></div>
       </div>
-      <div id="lavori" style="display:contents"></div>
+      <div class="come">
+        <div><span>1</span><div><b>Carichi i file</b>Tutti i PDF insieme, anche in disordine o girati.</div></div>
+        <div><span>2</span><div><b>Guardi il risultato</b>Per ogni materiale: stato, documenti e cosa manca, in una tabella che rimanda alle pagine.</div></div>
+        <div><span>3</span><div><b>Scarichi e chiedi</b>Un solo ZIP con Excel di tracciabilità, prove e documenti in ordine, più la richiesta pronta per ogni fornitore.</div></div>
+      </div>
     </div>
-    <div class="come">
-      <div><span>1</span><b>Carichi i file</b>Tutti i PDF insieme, anche in disordine o girati.</div>
-      <div><span>2</span><b>Guardi il risultato</b>Per ogni materiale: stato, documenti e cosa manca, in una tabella che rimanda alle pagine.</div>
-      <div><span>3</span><b>Scarichi e chiedi</b>Excel di tracciabilità, ZIP ordinato e richiesta pronta per ogni fornitore.</div>
+    <div class="lista-head"><h2 style="margin:0">Cantieri</h2><small id="lista-conta"></small></div>
+    <div class="card lista-wrap">
+      <table class="lista" aria-label="I tuoi cantieri"><thead><tr><th>Cantiere</th><th>Creato</th><th>Pagine</th><th>Token ChatGPT</th><th>Costo stimato</th><th>Avanzamento</th><th></th></tr></thead>
+      <tbody id="lavori"></tbody></table>
+      <div class="altri hidden" id="altri"><button class="btn s sm" data-act="mostra-tutti" id="altri-btn"></button></div>
     </div>
+    <p class="note" style="margin-top:10px"><svg class="ic"><use href="#info"/></svg><span>Costo stimato: il piano ChatGPT non espone un prezzo. La stima usa un listino per milione di token (modificabile in Impostazioni → Generali).</span></p>
   </section>
 
   <!-- LAVORO -->
@@ -289,19 +298,21 @@ button.pg{border:0;background:none;padding:0;text-align:left;color:var(--ink);fo
             <p class="sub" style="margin:0" id="ressub"></p>
             <div id="esito-avvisi"></div>
             <div class="acts">
-              <button class="btn" id="scarica" data-act="download" data-tipo="scarica"><svg class="ic"><use href="#down"/></svg>Scarica Excel e prove</button>
-              <button class="btn s" id="riordina" data-act="download" data-tipo="fascicolo-ordinato"><svg class="ic"><use href="#fold"/></svg>ZIP con i documenti in ordine</button>
-              <button class="btn s" id="vedi-tabella" data-act="toggle-table">▦ Vedi tabella</button>
+              <button class="btn" id="scarica" data-act="download" data-tipo="tutto"><svg class="ic"><use href="#down"/></svg>Scarica tutto<span class="sub2">· Excel, prove e ZIP in ordine</span></button>
+              <button class="btn s" id="vedi-tabella" data-act="toggle-table">▦ Nascondi tabella</button>
             </div>
-            <div class="note"><svg class="ic"><use href="#info"/></svg>Lettura e riconoscimento sono automatici e possono contenere errori. Verifica sempre l'Excel con i documenti originali.</div>
+            <div class="note"><svg class="ic"><use href="#info"/></svg>Un solo ZIP: dentro l'Excel di tracciabilità, le immagini-prova e i documenti rinominati in ordine di catena. Lettura e riconoscimento sono automatici e possono contenere errori: verifica sempre l'Excel con i documenti originali.</div>
           </div>
+          <div class="stati" id="stati" aria-label="Voci per stato: clicca uno stato per la spiegazione"></div>
+          <div class="card pannello hidden" id="pannello"></div>
           <section class="hidden" id="tabella-dati" aria-label="Tabella dei dati">
             <h2>Tabella dei dati</h2>
-            <p class="sub">Clicca una cella: sotto vedi la pagina con il dato evidenziato e perché è stato usato. Clicca 📄 per aprire il documento originale.</p>
-            <div class="card tabwrap scrollx" tabindex="0" aria-label="Tabella dei dati: scorri in orizzontale per vedere tutte le colonne"><table class="dati" id="tdati"></table></div>
-            <div class="card dettaglio" id="dettaglio"></div>
+            <p class="sub">Clicca una cella: a destra vedi la pagina raddrizzata con il dato evidenziato e perché è stato usato. 📄 apre solo quella pagina.</p>
+            <div class="due">
+              <div class="card tabwrap scrollx" tabindex="0" aria-label="Tabella dei dati: scorri in orizzontale per vedere tutte le colonne"><table class="dati" id="tdati"></table></div>
+              <div class="card dettaglio" id="dettaglio"></div>
+            </div>
           </section>
-          <div class="card stati" id="stati"></div>
           <h2>Da chiedere ai fornitori</h2>
           <div class="fornitori" id="fornitori"></div>
         </div>

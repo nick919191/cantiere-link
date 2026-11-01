@@ -72,6 +72,7 @@ _ANCORA = set()  # cantieri con file arrivati mentre la preparazione era già in
 _PREPARAZIONE: dict[str, dict] = {}  # avanzamento della preparazione: {"n": file fatti, "totale": file da fare}
 HOST_CONSENTITI = {"127.0.0.1", "localhost"}  # i test aggiungono "testserver" dalla fixture, non il codice
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+MAX_DOCUMENTI_CELLA = 6
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
 _TOKEN_DALLA_FINESTRA = False  # True quando desktop.py ha generato il token e lo consegna nel frammento dell'URL
@@ -140,7 +141,7 @@ def sessione():
 @app.get("/api/impostazioni")
 def impostazioni():
     prefs = configurazione.leggi()
-    return {k: prefs[k] for k in ("model", "reasoning", "theme")} | {
+    return {k: prefs[k] for k in ("model", "reasoning", "theme", "prezzo_ingresso", "prezzo_uscita")} | {
         "cartella": str(percorsi.RADICE),
         "registro": str(registro.percorso()),
     }
@@ -150,6 +151,8 @@ class Preferenze(BaseModel):
     model: str = Field(default="", max_length=150)
     reasoning: str = "low"
     theme: str = "system"
+    prezzo_ingresso: float = Field(default=1.15, ge=0, le=1000)
+    prezzo_uscita: float = Field(default=9.2, ge=0, le=1000)
 
 
 @app.put("/api/impostazioni")
@@ -610,6 +613,23 @@ async def carica(file: list[UploadFile], nome: str = Form("", max_length=200)):
     return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}
 
 
+class Nome(BaseModel):
+    nome: str = Field(default="", max_length=200)
+
+
+@app.put("/api/lavori/{id_lavoro}/nome")
+def rinomina(id_lavoro: str, value: Nome):
+    """Cambia il nome del cantiere anche dopo la creazione: tocca solo info.json."""
+    cartella = _cartella(id_lavoro)
+    nome = " ".join(value.nome.split())
+    if not nome:
+        raise HTTPException(400, "Il nome non può essere vuoto.")
+    info = lv._json_tollerante(cartella / "info.json", {})
+    info["nome"] = nome
+    configurazione.scrivi_json(cartella / "info.json", info)
+    return {"lavoro": id_lavoro, "nome": nome}
+
+
 @app.post("/api/lavori/prova")
 def crea_prova():
     """Cantiere di prova con 30 documenti inventati, pronto da analizzare."""
@@ -676,9 +696,102 @@ def eventi(id_lavoro: str, da: int = 0):
     return lv.eventi(_cartella(id_lavoro), da)
 
 
+def _rotazioni(c: Path) -> dict[str, int]:
+    """Rotazioni scelte a mano dall'utente (pid -> gradi), in aggiunta a quella letta dal motore."""
+    v = lv._json_tollerante(c / "rotazioni.json", {})
+    if not isinstance(v, dict):
+        return {}
+    return {k: int(g) for k, g in v.items() if isinstance(k, str) and g in (0, 90, 180, 270)}
+
+
+_VERSO_OCR: dict[tuple[str, str], int] = {}  # (cartella, pid) -> gradi stimati dalle righe dell'OCR
+
+
+def _verso_ocr(c: Path, pid: str) -> int:
+    """Pagina girata di lato secondo l'OCR: righe di testo alte e strette invece che larghe e basse.
+
+    L'OCR non dice da che parte è girata: si prova 90° (il caso più comune nei fascicoli visti); «Ruota» corregge.
+    """
+    chiave = (str(c), pid)
+    if chiave in _VERSO_OCR:
+        return _VERSO_OCR[chiave]
+    gradi = 0
+    try:
+        riquadri = _riquadri(c, pid)[1]
+        # contano solo i blocchi allungati: quelli quasi quadrati (loghi, timbri, celle) non dicono il verso
+        alti = sum(1 for x0, y0, x1, y1 in riquadri if (y1 - y0) > 1.5 * max(x1 - x0, 1))
+        larghi = sum(1 for x0, y0, x1, y1 in riquadri if (x1 - x0) > 1.5 * max(y1 - y0, 1))
+        if alti >= 2 and alti > 2 * larghi:
+            gradi = 90
+    except (OSError, ValueError, KeyError, TypeError):
+        gradi = 0
+    _VERSO_OCR[chiave] = gradi
+    return gradi
+
+
+def _gradi(c: Path, p: dict, manuale: int) -> int:
+    """Verso letto dal motore, altrimenti stimato dall'OCR, più la correzione manuale."""
+    auto = (lv.scheda_pagina(p) or {}).get("orientamento", 0)
+    auto = auto if auto in (90, 180, 270) else _verso_ocr(c, p["pid"])
+    return (auto + manuale) % 360
+
+
+def _gradi_pagina(c: Path, pid: str, manuali: dict[str, int] | None = None) -> int:
+    """Gradi totali (orari) per vedere la pagina dritta."""
+    info = next((p for p in lv.pagine(c) if p["pid"] == pid), None)
+    if not info:
+        raise HTTPException(404, "pagina non trovata")
+    manuali = _rotazioni(c) if manuali is None else manuali
+    return _gradi(c, info, manuali.get(pid, 0))
+
+
+def _gradi_tutte(c: Path) -> dict[str, int]:
+    """pid -> gradi orari, solo per le pagine da girare."""
+    manuali = _rotazioni(c)
+    gradi = {p["pid"]: _gradi(c, p, manuali.get(p["pid"], 0)) for p in lv.pagine(c)}
+    return {pid: g for pid, g in gradi.items() if g}
+
+
 @app.get("/api/lavori/{id_lavoro}/pagine/{pid}.png")
-def immagine(id_lavoro: str, pid: str):
-    return FileResponse(_dentro(_cartella(id_lavoro) / "pagine", f"{pid}.png"))
+def immagine(id_lavoro: str, pid: str, dritta: int = 0):
+    """La pagina come PNG. Con `dritta=1` è raddrizzata (verso letto dal motore + correzione manuale)."""
+    c = _cartella(id_lavoro)
+    originale = _dentro(c / "pagine", f"{pid}.png")
+    gradi = _gradi_pagina(c, pid) if dritta else 0
+    if not gradi:
+        return FileResponse(originale)
+    f = c / "pagine_dritte" / f"{pid}.{gradi}.png"
+    if not f.exists():
+        f.parent.mkdir(exist_ok=True)
+        temporaneo = f.with_name(f"{pid}.{uuid.uuid4().hex}.tmp")
+        with Image.open(originale) as img:
+            img.rotate(-gradi, expand=True).save(temporaneo, format="PNG")
+        try:
+            temporaneo.replace(f)
+        except OSError:
+            temporaneo.unlink(missing_ok=True)
+    return FileResponse(f)
+
+
+class Rotazione(BaseModel):
+    gradi: int = 90
+
+
+@app.post("/api/lavori/{id_lavoro}/pagine/{pid}/ruota")
+def ruota(id_lavoro: str, pid: str, value: Rotazione):
+    """Gira la pagina di altri 90° (o quanto indicato) quando il verso letto dal motore è sbagliato; resta salvato."""
+    if value.gradi not in (90, 180, 270, -90):
+        raise HTTPException(400, "gradi non validi")
+    c = _cartella(id_lavoro)
+    manuali = _rotazioni(c)
+    manuali[pid] = (manuali.get(pid, 0) + value.gradi) % 360
+    configurazione.scrivi_json(c / "rotazioni.json", manuali)
+    return {"pid": pid, "gradi": _gradi_pagina(c, pid, manuali)}
+
+
+@app.get("/api/lavori/{id_lavoro}/rotazioni")
+def rotazioni(id_lavoro: str):
+    return _gradi_tutte(_cartella(id_lavoro))
 
 
 @app.get("/api/lavori/{id_lavoro}/miniature/{pid}.png")
@@ -726,7 +839,13 @@ def tabella(id_lavoro: str):
                 f = fonti.get(fid)
                 if f and f.get("pid"):
                     documenti.append({k: f.get(k) for k in ("pid", "file", "pagina", "cit", "zona")})
-            celle[col] = {"v": cella.get("v", ""), "perche": cella.get("perche", ""), "documenti": documenti}
+            # Pochi documenti per cella: una packing list di 600 pagine rendeva la tabella pesantissima (Viollier).
+            celle[col] = {
+                "v": cella.get("v", ""),
+                "perche": cella.get("perche", ""),
+                "documenti": documenti[:MAX_DOCUMENTI_CELLA],
+                "altri": max(0, len(documenti) - MAX_DOCUMENTI_CELLA),
+            }
         voci.append(
             {
                 "n": v["n"],
@@ -736,7 +855,7 @@ def tabella(id_lavoro: str):
                 "celle": celle,
             }
         )
-    return {"colonne": COLONNE, "voci": voci}
+    return {"colonne": COLONNE, "voci": voci, "rotazioni": _gradi_tutte(_cartella(id_lavoro))}
 
 
 @app.get("/api/lavori/{id_lavoro}/originale/{pid}")
@@ -766,6 +885,30 @@ def collegamento_config():
 MAX_PAROLE = 400  # riquadri mostrati sulla pagina: oltre non si vede differenza e la pagina si appesantisce
 
 
+def _riquadri(c: Path, pid: str) -> tuple[str, list[list[int]]]:
+    """(origine, riquadri 0-1000) del testo della pagina: parole del PDF, oppure blocchi dell'OCR se già fatto."""
+    info = info_pagina(c, pid)
+    riquadri = [r[:4] for r in info.get("parole", [])]
+    if riquadri:
+        return "testo", riquadri
+    f = ocr.file_cache(info["impronta"])
+    w, h = info.get("larghezza") or 0, info.get("altezza") or 0
+    if f.exists() and w and h:
+        for b in json.loads(f.read_text(encoding="utf-8")).get("blocchi", []):
+            try:
+                riquadri.append(
+                    [
+                        round(1000 * b["top_left_x"] / w),
+                        round(1000 * b["top_left_y"] / h),
+                        round(1000 * b["bottom_right_x"] / w),
+                        round(1000 * b["bottom_right_y"] / h),
+                    ]
+                )
+            except (KeyError, TypeError):
+                continue
+    return ("ocr" if riquadri else ""), riquadri
+
+
 @app.get("/api/lavori/{id_lavoro}/pagine/{pid}/parole")
 def parole(id_lavoro: str, pid: str):
     """Riquadri del testo riconosciuto (0-1000 sull'immagine), per l'animazione della lettura nel documento in esame.
@@ -775,26 +918,7 @@ def parole(id_lavoro: str, pid: str):
     c = _cartella(id_lavoro)
     if not any(p["pid"] == pid for p in lv.pagine(c)):
         raise HTTPException(404, "pagina non trovata")
-    info = info_pagina(c, pid)
-    riquadri = [r[:4] for r in info.get("parole", [])]
-    origine = "testo" if riquadri else ""
-    if not riquadri:
-        f = ocr.file_cache(info["impronta"])
-        w, h = info.get("larghezza") or 0, info.get("altezza") or 0
-        if f.exists() and w and h:
-            for b in json.loads(f.read_text(encoding="utf-8")).get("blocchi", []):
-                try:
-                    riquadri.append(
-                        [
-                            round(1000 * b["top_left_x"] / w),
-                            round(1000 * b["top_left_y"] / h),
-                            round(1000 * b["bottom_right_x"] / w),
-                            round(1000 * b["bottom_right_y"] / h),
-                        ]
-                    )
-                except (KeyError, TypeError):
-                    continue
-            origine = "ocr" if riquadri else ""
+    origine, riquadri = _riquadri(c, pid)
     if len(riquadri) > MAX_PAROLE:
         passo = len(riquadri) / MAX_PAROLE
         riquadri = [riquadri[int(i * passo)] for i in range(MAX_PAROLE)]
@@ -847,6 +971,17 @@ def scarica(id_lavoro: str):
         raise HTTPException(404, "Excel non ancora pronto")
     risposta = _zip(uscita, escludi="fascicolo_ordinato")
     risposta.headers["Content-Disposition"] = f'attachment; filename="tracciabilita_{id_lavoro}_tracciabilita.zip"'
+    return risposta
+
+
+@app.get("/api/lavori/{id_lavoro}/tutto")
+def scarica_tutto(id_lavoro: str):
+    """Un solo ZIP: Excel, prove e la cartella fascicolo_ordinato con i documenti in ordine di catena."""
+    uscita = _cartella(id_lavoro) / "uscita"
+    if not (uscita / "tracciabilita.xlsx").exists():
+        raise HTTPException(404, "Excel non ancora pronto")
+    risposta = _zip(uscita)
+    risposta.headers["Content-Disposition"] = f'attachment; filename="tracciabilita_{id_lavoro}_completo.zip"'
     return risposta
 
 

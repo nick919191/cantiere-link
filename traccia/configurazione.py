@@ -30,14 +30,27 @@ def scrivi_json(path: Path, value: dict) -> None:
     tmp.replace(path)
 
 
-PREDEFINITE = {"model": "", "reasoning": "low", "theme": "system", "modello_mistral": "", "modello_deepseek": ""}
+PREDEFINITE = {
+    "model": "",
+    "reasoning": "low",
+    "theme": "system",
+    "modello_mistral": "",
+    "modello_deepseek": "",
+    # Stima del costo in euro per milione di token (il piano ChatGPT non espone un prezzo): listino API di riferimento.
+    "prezzo_ingresso": 1.15,
+    "prezzo_uscita": 9.2,
+}
 
 
 def _valide(value: dict) -> dict:
     """Scarta i campi del tipo sbagliato: un file modificato a mano non deve impedire l'avvio."""
     pulito = dict(value)
     for name, default in PREDEFINITE.items():
+        if isinstance(default, float) and type(pulito.get(name)) is int:
+            pulito[name] = float(pulito[name])
         if type(pulito.get(name)) is not type(default):
+            pulito[name] = default
+        if isinstance(default, float) and not 0 <= pulito[name] <= 1000:
             pulito[name] = default
     if pulito["theme"] not in ("system", "light", "dark"):
         pulito["theme"] = PREDEFINITE["theme"]
@@ -71,6 +84,8 @@ def aggiorna(value: dict) -> dict:
             "theme",
             "modello_mistral",
             "modello_deepseek",
+            "prezzo_ingresso",
+            "prezzo_uscita",
             "update_checks",
             "update_prerelease",
             "dismissed_update",
@@ -83,5 +98,9 @@ def aggiorna(value: dict) -> dict:
             raise ValueError("ragionamento non valido")
         if not isinstance(current["model"], str) or len(current["model"]) > 150:
             raise ValueError("modello non valido")
+        for name in ("prezzo_ingresso", "prezzo_uscita"):
+            if type(current[name]) not in (int, float) or not 0 <= current[name] <= 1000:
+                raise ValueError("prezzo non valido: un numero in euro per milione di token, da 0 a 1000")
+            current[name] = float(current[name])
         scrivi_json(directory() / "preferenze.json", current)
         return current
