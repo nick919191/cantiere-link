@@ -24,7 +24,7 @@ def test_domanda_in_coda_ha_la_precedenza_e_risposta_con_fonti(radice, capsys):
     )
     assert chat.in_attesa(cartella) == []
     risposta = chat.messaggi(cartella)[-1]
-    assert risposta["ruolo"] == "claude" and risposta["fonti"][0]["file"].endswith("cert777.pdf")
+    assert risposta["ruolo"] == "assistente" and risposta["fonti"][0]["file"].endswith("cert777.pdf")
     assert len(pagine) > 1
 
 

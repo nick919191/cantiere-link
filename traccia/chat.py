@@ -18,6 +18,8 @@ from .preparazione import info_pagina
 
 MAX_DOMANDA = 2000
 MAX_RISULTATI = 8
+RUOLO_RISPOSTA = "assistente"
+RUOLI_RISPOSTA = (RUOLO_RISPOSTA, "claude")  # "claude": storici scritti dalle versioni precedenti
 _LOCK = threading.RLock()
 
 
@@ -132,7 +134,7 @@ def rispondi(cartella: Path, qid: str, risposta: dict) -> list[str]:
         cartella,
         {
             "id": f"r{qid[1:]}",
-            "ruolo": "claude",
+            "ruolo": RUOLO_RISPOSTA,
             "domanda": qid,
             "testo": testo,
             "fonti": valide,

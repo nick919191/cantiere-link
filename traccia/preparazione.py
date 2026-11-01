@@ -1,6 +1,6 @@
 """Preparazione (deterministica): file caricati -> una immagine PNG e una scheda tecnica per ogni pagina.
 
-Per ogni pagina: PNG a 150 dpi (quella che legge Claude), testo nativo del PDF con la posizione di ogni parola
+Per ogni pagina: PNG a 150 dpi (quella che legge l'agente), testo nativo del PDF con la posizione di ogni parola
 (serve a calcolare le zone esatte), impronta del PNG (chiave dell'archivio), pagina bianca sì/no.
 Gli originali non si toccano: gli ZIP si aprono in ingresso/estratti/.
 """

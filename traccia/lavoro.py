@@ -191,7 +191,7 @@ def prossimo_lavoro() -> dict | None:
             da = [p["pid"] for p in s["pagine"] if p["stato"] == "da_leggere"]
             segna_tentativi(cartella, da)
             lotti = [da[i : i + DIMENSIONE_LOTTO] for i in range(0, len(da), DIMENSIONE_LOTTO)]
-            evento(cartella, tipo="lettura", testo=f"Claude legge {len(da)} pagine in {len(lotti)} lotti")
+            evento(cartella, tipo="lettura", testo=f"L'agente legge {len(da)} pagine in {len(lotti)} lotti")
             return {"lavoro": cartella.name, "lotti": lotti}
         if s["fase"] == "composizione":
             return {"lavoro": cartella.name, "componi": True}

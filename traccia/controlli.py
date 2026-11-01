@@ -1,4 +1,4 @@
-"""Controlli Python sulla scheda scritta da Claude, prima di congelarla in archivio.
+"""Controlli Python sulla scheda scritta dall'agente, prima di congelarla in archivio.
 
 Una scheda entra solo se: ha la forma giusta, ha tutti i campi della sua famiglia, ogni valore ha una citazione
 che sta nella trascrizione (o nel testo nativo) e il valore sta nella citazione. Le zone, quando la pagina ha
@@ -71,7 +71,7 @@ def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
 
 
 def valida(scheda, testo_nativo: str = "") -> list[str]:
-    """Errori in italiano, da restituire a Claude per la correzione. Lista vuota = scheda valida."""
+    """Errori in italiano, da restituire all'agente per la correzione. Lista vuota = scheda valida."""
     if not isinstance(scheda, dict):
         return ["la scheda deve essere un oggetto JSON"]
     errori = [f"manca la chiave {k!r}" for k in CHIAVI if k not in scheda]
@@ -170,7 +170,7 @@ def zona_esatta(parole: list[list], valore: str, citazione: str) -> list[int] | 
 
 
 def aggiungi_zone_esatte(scheda: dict, parole: list[list]) -> None:
-    """Sulle pagine con testo nativo la zona di ogni valore diventa esatta; altrimenti resta quella di Claude."""
+    """Sulle pagine con testo nativo la zona di ogni valore diventa esatta; altrimenti resta quella dell'agente."""
 
     def tratta(v: dict) -> None:
         z = zona_esatta(parole, v.get("v", ""), v.get("cit", ""))

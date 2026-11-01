@@ -66,7 +66,7 @@ def scrivi(percorso: Path, risultato: dict, prove: dict, servizio: dict) -> None
         for c in COLONNE:
             for fid in v["colonne"][c]["fonti"]:
                 f = fonti[fid]
-                esatta = "esatta" if f["esatta"] else ("indicata da Claude" if f["zona"] else "")
+                esatta = "esatta" if f["esatta"] else ("indicata dall'agente" if f["zona"] else "")
                 provenienza.append(
                     [
                         v["n"],

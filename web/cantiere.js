@@ -82,7 +82,7 @@ function vola(x){const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingCli
 const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["Sta guardando","b"],
  scheda:["Letta","g"],ritaglio:["Ritaglio","o"],nota:["Agente","b"],correzione:["Correzione","o"],errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
 function evento(e){
- if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace("Claude guarda ","");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
+ if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace(/^\w+ guarda /,"");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
  if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
  if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
  if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" data-act="open-proof" data-url="/api/ritagli/${encodeURIComponent(e.ritaglio)}" data-title="Ritaglio: ${esc(e.testo)}">`);while($("crops").children.length>4)$("crops").lastChild.remove()}

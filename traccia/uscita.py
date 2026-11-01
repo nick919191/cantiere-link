@@ -137,7 +137,7 @@ def componi(cartella: Path) -> dict:
             avvisi.append(f"{_dove([pid], info)}: {a}")
 
     metodo = [
-        "Lettura: Claude con la visione, una volta per pagina, con le istruzioni della cartella (versione "
+        "Lettura: agente ChatGPT con la visione, una volta per pagina, con le istruzioni della cartella (versione "
         f"{percorsi.versione_lettura()}); ogni valore ha pagina, citazione e zona.",
         "Controlli Python: citazione presente nella trascrizione, valore dentro la citazione, una colata per voce.",
         "A ritroso: tabella/packing del costruttore -> DDT del commerciante -> certificato 3.1 -> colata.",

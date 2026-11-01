@@ -1,6 +1,6 @@
 """Famiglie di documento e campi della scheda.
 
-Una sola fonte: le righe "testata:" e "righe:" dei file istruzioni/famiglie/*.md, cioè le stesse che legge Claude.
+Una sola fonte: le righe "testata:" e "righe:" dei file istruzioni/famiglie/*.md, cioè le stesse che legge l'agente.
 """
 
 import re

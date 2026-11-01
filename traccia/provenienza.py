@@ -66,7 +66,7 @@ def pagina_cella(titolo: str, colonna: str, valore: str, fonti: list[dict], rita
         precisione = (
             "zona esatta (testo del PDF)"
             if f["esatta"]
-            else ("zona indicata da Claude" if zona else "zona non indicata")
+            else ("zona indicata dall'agente" if zona else "zona non indicata")
         )
         rit = "".join(
             f'<a href="{html.escape(r)}"><img src="{html.escape(r)}" alt="ritaglio"></a>'
@@ -77,7 +77,7 @@ def pagina_cella(titolo: str, colonna: str, valore: str, fonti: list[dict], rita
             f'<div class="cit">«{html.escape(f["cit"] or f["valore"])}»</div>'
             f'<div class="pag"><img src="{html.escape(f["img"])}" alt="pagina">{box}</div>'
             + (
-                f'<div class="meta" style="margin-top:12px">Ritagli usati da Claude su questa pagina</div>'
+                f'<div class="meta" style="margin-top:12px">Ritagli usati dall\'agente su questa pagina</div>'
                 f'<div class="rit">{rit}</div>'
                 if rit
                 else ""
