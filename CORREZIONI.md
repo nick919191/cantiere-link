@@ -1,7 +1,8 @@
 # Correzioni della review 2026-10 — branch `fix/review-2026-10`
 
 Base: `main` (`0e2f2f0`, v0.3.0). Riferimenti agli id di `REPORT.md`. Ogni riga: file toccati, test aggiunto
-(che prima della correzione falliva), esito. Partenza 86 test; arrivo 138 test, `ruff check` e `ruff format --check` puliti.
+(che prima della correzione falliva), esito. Partenza 86 test; arrivo 147 test (138 dopo le correzioni di codice, +9 con la UX), `ruff check` e
+`ruff format --check` puliti. La parte UX è stata fatta per ultima, su richiesta, nei tre commit finali.
 
 ## Blocco 1
 
@@ -15,7 +16,7 @@ Base: `main` (`0e2f2f0`, v0.3.0). Riferimenti agli id di `REPORT.md`. Ogni riga:
 | M1 | `_stop_richiesto` alzato solo da `stop()`: errore di lotto → `error=True`, `stopped=False` | `traccia/agente.py` | `tests/test_agente_stati.py` | fatto |
 | M2 | `traccia/registro.py`: `RotatingFileHandler` su `<cartella dati>/log/app.log`; `logging.exception` negli `except` muti; percorso in `/api/impostazioni` e Diagnostica | `traccia/registro.py`, `traccia/server.py`, `traccia/agente.py`, `traccia/aggiornamenti.py`, `web/app.js` | `tests/test_agente_stati.py` (traccia nel registro, percorso esposto) | fatto |
 | B1, U9 | "agente"/"ChatGPT" in Metodo, Provenienza, pagine di prova, evento di lettura; ruolo chat scritto `assistente`, letto anche `claude`; via il `replace("Claude guarda ")` | `traccia/uscita.py`, `traccia/excel.py`, `traccia/provenienza.py`, `traccia/lavoro.py`, `traccia/chat.py`, `web/cantiere.js` (+ docstring) | `tests/test_testi_agente.py` | fatto; `cli.py` non toccato (vedi note) |
-| U1 | Fine lavoro leggibile | — | — | **saltata (UX)** |
+| U1 | A fase `pronto` i risultati («Scarica Excel e prove», conteggi) vengono subito sotto la barra; «documento in esame», contenitori e diario in un `<details>` ripiegato (riapribile); bottone secondario «Rileggi pagine mancanti» solo se restano pagine non lette; animazione delle pagine spenta a lavoro finito o a scheda nascosta, residui rimossi | `web/index.html`, `web/cantiere.js` | `tests/test_frontend.py::test_u1_…` | fatto, verificato nel browser |
 
 ## Blocco 2
 
@@ -31,7 +32,9 @@ Base: `main` (`0e2f2f0`, v0.3.0). Riferimenti agli id di `REPORT.md`. Ogni riga:
 | S4 | `requirements.lock` con hash (universale, marker per sistema) usato con `--require-hashes` da `avvia.py`, updater e CI; `pyproject.toml` con `pywebview`; lock nello zip di release | `requirements.lock`, `avvia.py`, `traccia/aggiornamenti.py`, `pyproject.toml`, `tools/package_release.py` | `tests/test_supply_chain.py` | fatto |
 | S5 | `permissions: contents: read`, action a SHA, `pyinstaller==6.22.3`, `innosetup --version=6.7.1`, pytest/ruff fissi, job `pip-audit` | `.github/workflows/test.yml`, `.github/workflows/installers.yml` | `tests/test_supply_chain.py::test_workflow_pinnati_a_sha_con_permessi_minimi_e_versioni_fisse` | fatto |
 | S1 | Piano firma release (minisign/cosign, Authenticode, notarizzazione): solo documento | `docs/FIRMA-RELEASE.md` | presenza verificata in `tests/test_supply_chain.py` | fatto (non implementato, come richiesto) |
-| U2, U4, U6 | Struttura risultati, "Da verificare", chat chiusa | — | — | **saltate (UX)** |
+| U2 | Tabella e catena «Collegamenti a ritroso» scorrono dentro il proprio contenitore (`.scrollx`, `tabindex=0`) con ombra ai bordi che segnala le colonne nascoste (`--scroll-shadow`, anche nel tema scuro) | `web/index.html`, `web/app.css` | `tests/test_frontend.py::test_u2_…` | fatto, verificato a 1000 px |
+| U4 | Sezione «Da verificare (n)» in cima ai risultati: voci DA CONFERMARE/MANCANTI con stato, motivi, «Manca: DDT / certificato 3.1 / colata», «Vedi i collegamenti» (scorre alla riga) e «Chiedi in chat» con la domanda già scritta, mai inviata da sola | `web/index.html`, `web/cantiere.js`, `web/app.js` | `tests/test_frontend.py::test_u4_…` | fatto, verificato nel browser |
+| U6 | Chat chiusa all'avvio a ogni larghezza; si riapre dal bottone in alto o da «Chiedi in chat» | `web/app.js` | `tests/test_frontend.py::test_u6_…` | fatto |
 
 ## Blocco 3
 
@@ -55,13 +58,20 @@ Base: `main` (`0e2f2f0`, v0.3.0). Riferimenti agli id di `REPORT.md`. Ogni riga:
 | S10 | Whitelist su `tipo_proposto`, `tipo_materiale`, `servizio`; limiti a `trascrizione` (100k), `motivo` (1000), `avvisi` (20×300) | `traccia/controlli.py` | `tests/test_rifiniture.py::test_s10_…` | fatto; `componente` solo limitato in lunghezza (vedi note) |
 | S11 | `segni[].zona` validata; ritagli solo per nome di file; `INDICE.xlsx` celle di testo | `traccia/controlli.py`, `traccia/uscita.py`, `traccia/riordino.py` | `tests/test_rifiniture.py::test_s11_…` | fatto |
 | §2.5 | Test mancanti: `agente.rispondi` con mock, transizioni avvia/run/stop, `/scarica`, `/fascicolo-ordinato`, `/risultato`, `/miniature`, `/conversazioni`, `POST /chat`, lifespan, contenuto fogli Excel, concorrenza (pagine duplicate, upload+analizza), TIFF, ZIP corrotto, ordinamento, `avvia.prepare`, `_prepare_environment` | `tests/` | — | fatto |
-| U7, U8, U11, U12, U14 | Etichette, icone, accessibilità, font | — | — | **saltate (UX)** |
+| U7 | Nome del file, anteprima e scheda sempre della stessa pagina («In lettura: …», «Letta: …», «Lettura completata»); titolo «Ultima pagina letta» | `web/cantiere.js`, `web/index.html` | `tests/test_frontend.py::test_u7_…` | fatto |
+| U8 | Pill «Agente fermo» / «Agente al lavoro» / «Errore» (via «Ferma» e «Da verificare»); bottone «Avvia lettura» → «Riprendi lettura» → «Rileggi pagine mancanti»; stessi nomi nei messaggi di `agente.py`, `uscita.py`, README e guida | `web/`, `traccia/agente.py`, `traccia/uscita.py`, `README.md`, `docs/guide.js` | `tests/test_frontend.py::test_u8_…` | fatto; valore PARTE D'OPERA non toccato (vedi note) |
+| U11 | Icone SVG inline (`<symbol>`) al posto dei glifi Unicode in barra, chat, impostazioni; logo a catena al posto della «T» | `web/index.html`, `web/app.js`, `web/app.css` | `tests/test_frontend.py::test_u11_…` | fatto |
+| U12 | Card cantieri, contenitori, caselle della catena, celle con prova e ritagli raggiungibili da tastiera (`role=button`/`<button>`, Invio/Spazio); anello `role=progressbar` con `aria-valuenow`; prova in `<dialog>` nativo (focus trap, Esc, backdrop) | `web/index.html`, `web/cantiere.js`, `web/app.js` | `tests/test_frontend.py::test_u12_…` | fatto, verificato (Invio su una casella apre la prova, Esc chiude) |
+| U14 | Tolto `Inter` (mai caricato, e la CSP non permetterebbe Google Fonts): font di sistema dichiarato, anche in `docs/guide.css` | `web/index.html`, `web/app.css`, `docs/guide.css` | `tests/test_frontend.py::test_u14_…` | fatto |
 
 ## Punti saltati o contestati
 
-- **UX (U1, U2, U4, U6, U7, U8, U11, U12, U14)**: saltate su richiesta; si fanno in un passaggio successivo. Vincolo
-  per quel passaggio: con la CSP attiva niente script o handler inline (usare `data-act` e i listener in `app.js`).
-  U13 è stata fatta perché accoppiata a M6 e invisibile (solo cadenza del poll).
+- **UX**: fatta per ultima (tre commit, uno per blocco) sul design system esistente, senza librerie e rispettando la
+  CSP (nessuno script o handler inline). Dalle demo è stata presa la checklist «Da verificare» (A) e lo scroll interno
+  della tabella (B); non sono stati introdotti né lo stepper né l'ispettore laterale al posto della modale.
+- **U8, valore PARTE D'OPERA** («TABELLA DI TRACCIABILITA' MATERIALI - HEB 200»): lo compone `motore.py` con
+  titolo della distinta + etichetta della voce e finisce anche nell'Excel; cambiarlo è una scelta sul formato
+  dell'uscita, non di interfaccia. Lasciato com'è; la lista «Da verificare» mostra etichetta e parte d'opera separate.
 - **B1, flusso legacy**: `cli.py` filtra ancora lo storico chat con `ruolo == "claude"`; le risposte nuove si scrivono
   come `assistente` e non entrano nelle 3 righe di storico del flusso CLI. Non corretto perché `cli.py` è escluso dalle
   modifiche. Lettura e composizione del flusso legacy non cambiano.
