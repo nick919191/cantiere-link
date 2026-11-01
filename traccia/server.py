@@ -55,6 +55,10 @@ _PREPARING = set()
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
+# Nessuno script o handler inline nell'app: la CSP fa da rete di sicurezza all'escaping. Gli stili inline restano
+# (attributi style nell'interfaccia e nelle pagine di prova). La demo statica in demo/ ha ancora script inline.
+_CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+_CSP_DEMO = _CSP + "; script-src 'self' 'unsafe-inline'"
 
 
 @app.middleware("http")
@@ -72,9 +76,19 @@ async def locale(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Content-Security-Policy"] = _CSP_DEMO if request.url.path.startswith("/demo/") else _CSP
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.exception_handler(Exception)
+async def errore_interno(_request: Request, _exc: Exception):
+    """Qualunque errore inatteso arriva al browser come JSON con `detail`, mai come testo grezzo."""
+    return JSONResponse(
+        {"detail": "Errore interno dell’applicazione. Riprova; se il problema resta, chiudi e riapri l’app."},
+        status_code=500,
+    )
 
 
 @app.exception_handler(chatgpt.AgentError)

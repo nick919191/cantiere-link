@@ -141,8 +141,8 @@ td.src:hover{background:var(--accent-bg)}
 
 <div class="desktop" id="desktop"><main class="workspace" id="workspace"><div class="app">
   <div class="top">
-    <div class="logo" onclick="vai('')">T</div><div class="brand" onclick="vai('')">CantiereLink</div>
-    <div class="crumb" id="crumb"></div><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings())" aria-label="Impostazioni">⚙</button><button class="icon-button" onclick="toggleChat()" aria-label="Apri o chiudi chat"><svg class="ic"><use href="#ic-chat"/></svg></button>
+    <div class="logo" data-act="home">T</div><div class="brand" data-act="home">CantiereLink</div>
+    <div class="crumb" id="crumb"></div><div class="sp"></div><button class="icon-button" data-act="settings" aria-label="Impostazioni">⚙</button><button class="icon-button" data-act="toggle-chat" aria-label="Apri o chiudi chat"><svg class="ic"><use href="#ic-chat"/></svg></button>
   </div>
 
   <!-- HOME -->
@@ -154,7 +154,7 @@ td.src:hover{background:var(--accent-bg)}
       <div class="big"><svg class="ic" style="width:28px;height:28px"><use href="#up"/></svg></div>
       <div style="font-weight:600;font-size:17px">Trascina qui i file</div>
       <div style="color:var(--muted);font-size:14px;margin:6px 0 16px">oppure</div>
-      <button class="btn" type="button" onclick="event.stopPropagation();sel.click()">Scegli i file</button>
+      <button class="btn" type="button" data-act="pick-files">Scegli i file</button>
       <input type="file" id="sel" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden">
     </div>
     <div class="files" id="files"></div>
@@ -164,12 +164,12 @@ td.src:hover{background:var(--accent-bg)}
       <div class="upbar hidden" id="upbar"><i></i></div><span class="note" id="uptxt" style="margin:0"></span>
     </div>
     <div class="err" id="uperr"></div>
-    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><div class="jobs-tools"><button class="btn s" id="demo-button" onclick="safe(createDemo)" title="30 documenti inventati, piccoli e veloci da analizzare">Crea cantiere di prova</button><button class="btn s" onclick="safe(showTrash)">Cestino</button></div></div>
+    <div class="jobs-heading"><h2 style="margin-top:34px">I tuoi lavori</h2><div class="jobs-tools"><button class="btn s" id="demo-button" data-act="demo" title="30 documenti inventati, piccoli e veloci da analizzare">Crea cantiere di prova</button><button class="btn s" data-act="trash">Cestino</button></div></div>
     <div class="lavori" id="lavori"></div>
   </section>
 
   <!-- LAVORO -->
-  <section id="lavoro" class="hidden"><div class="agent-banner"><span class="pill n" id="agent-pill">Agente</span><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><input type="file" id="add-files" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden" onchange="safe(()=>addFiles([...this.files]))"><button id="add-button" class="btn s" onclick="$('add-files').click()" title="Le pagine già lette non vengono rilette">Aggiungi file</button><button id="stop-button" class="btn s hidden" onclick="safe(stopAgent)">Interrompi</button><button id="analyze-button" class="btn" onclick="safe(analyze)">Analizza / riprendi</button></div>
+  <section id="lavoro" class="hidden"><div class="agent-banner"><span class="pill n" id="agent-pill">Agente</span><span id="agent-state" aria-live="polite">Collegamento all’agente…</span><input type="file" id="add-files" multiple accept=".pdf,.zip,.png,.jpg,.jpeg,.tif,.tiff,.bmp" class="hidden" data-change="add-files"><button id="add-button" class="btn s" data-act="add-files" title="Le pagine già lette non vengono rilette">Aggiungi file</button><button id="stop-button" class="btn s hidden" data-act="stop">Interrompi</button><button id="analyze-button" class="btn" data-act="analyze">Analizza / riprendi</button></div>
     <div class="card prog">
       <svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="var(--fill)" stroke-width="7"/>
         <circle id="ringv" cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round"
@@ -222,161 +222,32 @@ td.src:hover{background:var(--accent-bg)}
 
 </main><div class="splitter" id="splitter" role="separator" aria-label="Larghezza chat" aria-orientation="vertical" aria-valuemin="310" aria-valuemax="600" aria-valuenow="390" tabindex="0"></div>
 <aside class="sidechat" id="sidechat" aria-label="Chat del cantiere">
-  <header class="chat-toolbar"><button class="conversation-title" id="conversation-title" onclick="safe(showHistory)">Chat del cantiere <span>⌄</span></button><button class="icon-button" onclick="newConversation()" aria-label="Nuova conversazione">＋</button><button class="icon-button" onclick="safe(showHistory)" aria-label="Cronologia">↶</button><button class="icon-button" onclick="toggleChat()" aria-label="Chiudi chat">×</button></header>
+  <header class="chat-toolbar"><button class="conversation-title" id="conversation-title" data-act="history">Chat del cantiere <span>⌄</span></button><button class="icon-button" data-act="new-conversation" aria-label="Nuova conversazione">＋</button><button class="icon-button" data-act="history" aria-label="Cronologia">↶</button><button class="icon-button" data-act="toggle-chat" aria-label="Chiudi chat">×</button></header>
   <div class="chat-scope"><span></span><span id="chat-scope-name">Nessun cantiere</span></div>
   <div class="history-popover hidden" id="history"><div class="popover-label">CONVERSAZIONI DEL CANTIERE</div><div id="history-list"></div></div>
   <div class="conversation" id="conversation" role="log" aria-live="polite" aria-label="Messaggi"></div>
   <div class="composer-area">
-    <div class="suggestions"><button onclick="safe(()=>ask('Quali documenti mancano?'))">Cosa manca?</button><button onclick="safe(()=>ask('Quali voci sono da confermare?'))">Da confermare</button></div>
+    <div class="suggestions"><button data-act="ask" data-text="Quali documenti mancano?">Cosa manca?</button><button data-act="ask" data-text="Quali voci sono da confermare?">Da confermare</button></div>
     <div class="composer-card">
       <div class="context-chips" id="context-chips"></div>
       <label class="sr-only" for="question">Domanda sul cantiere</label><textarea id="question" placeholder="Chiedi qualcosa sul cantiere. Usa @ per una fonte…" rows="2" maxlength="2000"></textarea>
-      <div class="composer-footer"><button class="icon-button" onclick="pickContext()" aria-label="Aggiungi fonte al contesto">＋</button><div class="sp"></div><button class="send-button" id="send-question" onclick="safe(()=>ask())" aria-label="Invia domanda">↑</button></div>
+      <div class="composer-footer"><button class="icon-button" data-act="pick-context" aria-label="Aggiungi fonte al contesto">＋</button><div class="sp"></div><button class="send-button" id="send-question" data-act="ask" aria-label="Invia domanda">↑</button></div>
     </div>
-    <div class="agent-toolbar"><button class="agent-icon" onclick="safe(()=>openSettings('account'))" aria-label="Account e agente">◎</button><label class="sr-only" for="model">Modello</label><select id="model" onchange="updateModel(this.value)"><option value="">Automatico</option></select><label class="sr-only" for="effort">Ragionamento</label><select id="effort" onchange="updateEffort(this.value)"><option value="">Predefinito</option><option value="low">Basso</option><option value="medium">Medio</option><option value="high">Alto</option></select><div class="sp"></div><button class="icon-button" onclick="safe(()=>openSettings('models'))" aria-label="Impostazioni modello">⚙</button></div>
-    <div class="demo-caption"><span id="chat-plan">ChatGPT non collegato</span> <button id="stop-agent" class="text-button hidden" onclick="safe(stopAgent)">Interrompi</button></div>
+    <div class="agent-toolbar"><button class="agent-icon" data-act="settings" data-section="account" aria-label="Account e agente">◎</button><label class="sr-only" for="model">Modello</label><select id="model" data-change="model"><option value="">Automatico</option></select><label class="sr-only" for="effort">Ragionamento</label><select id="effort" data-change="effort"><option value="">Predefinito</option><option value="low">Basso</option><option value="medium">Medio</option><option value="high">Alto</option></select><div class="sp"></div><button class="icon-button" data-act="settings" data-section="models" aria-label="Impostazioni modello">⚙</button></div>
+    <div class="demo-caption"><span id="chat-plan">ChatGPT non collegato</span> <button id="stop-agent" class="text-button hidden" data-act="stop">Interrompi</button></div>
   </div>
 </aside></div>
-<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><div class="settings-header"><h2 id="settings-title">Impostazioni</h2><div class="sp"></div><button class="icon-button" onclick="closeSettings()" aria-label="Chiudi impostazioni">×</button></div><div class="settings-layout"><nav class="settings-nav" aria-label="Sezioni impostazioni"><label class="sr-only" for="settings-search">Cerca impostazioni</label><input id="settings-search" type="search" placeholder="Cerca impostazioni…" oninput="filterSettings(this.value)"><button data-section="general" onclick="settingsSection('general')"><span>◐</span>Generali</button><button data-section="account" onclick="settingsSection('account')"><span>◎</span>Account e agente</button><button data-section="models" onclick="settingsSection('models')"><span>✧</span>Modelli</button><button data-section="storage" onclick="settingsSection('storage')"><svg class="ic"><use href="#fold"/></svg>Documenti e dati</button><button data-section="shortcuts" onclick="settingsSection('shortcuts')"><span>⌘</span>Scorciatoie</button><button data-section="diagnostics" onclick="settingsSection('diagnostics')"><span>⌁</span>Diagnostica</button><button data-section="updates" onclick="settingsSection('updates')"><span>↻</span>Aggiornamenti</button><a class="guide-nav" href="/guida/" target="_blank" rel="noopener">Guida interattiva ↗</a><button onclick="safe(closeApp)"><span>⏻</span>Chiudi applicazione</button><div class="settings-nav-foot">CantiereLink<br><span>App locale · Mac e Windows</span></div></nav><section id="settings-content" class="settings-content"></section></div><footer class="settings-foot">Credenziali nel portachiavi del sistema.<div class="sp"></div><button class="text-button" onclick="closeSettings()">Fine</button></footer></dialog>
-<aside id="update-notice" class="update-notice hidden" role="status"><span id="update-notice-text"></span><button class="btn s" onclick="safe(()=>openSettings('updates'))">Vedi novità</button><button class="text-button" onclick="safe(dismissUpdate)">Più tardi</button></aside>
-<dialog id="trash-dialog" class="trash-dialog"><h2 id="trash-title">Cestino</h2><div id="trash-body"></div><div class="acts"><button class="btn s" onclick="$('trash-dialog').close()">Chiudi</button><button class="btn hidden" id="trash-confirm" onclick="safe(moveToTrash)">Sposta nel cestino</button></div></dialog>
+<dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title"><div class="settings-header"><h2 id="settings-title">Impostazioni</h2><div class="sp"></div><button class="icon-button" data-act="close-settings" aria-label="Chiudi impostazioni">×</button></div><div class="settings-layout"><nav class="settings-nav" aria-label="Sezioni impostazioni"><label class="sr-only" for="settings-search">Cerca impostazioni</label><input id="settings-search" type="search" placeholder="Cerca impostazioni…" data-input="filter-settings"><button data-section="general" data-act="section"><span>◐</span>Generali</button><button data-section="account" data-act="section"><span>◎</span>Account e agente</button><button data-section="models" data-act="section"><span>✧</span>Modelli</button><button data-section="storage" data-act="section"><svg class="ic"><use href="#fold"/></svg>Documenti e dati</button><button data-section="shortcuts" data-act="section"><span>⌘</span>Scorciatoie</button><button data-section="diagnostics" data-act="section"><span>⌁</span>Diagnostica</button><button data-section="updates" data-act="section"><span>↻</span>Aggiornamenti</button><a class="guide-nav" href="/guida/" target="_blank" rel="noopener">Guida interattiva ↗</a><button data-act="close-app"><span>⏻</span>Chiudi applicazione</button><div class="settings-nav-foot">CantiereLink<br><span>App locale · Mac e Windows</span></div></nav><section id="settings-content" class="settings-content"></section></div><footer class="settings-foot">Credenziali nel portachiavi del sistema.<div class="sp"></div><button class="text-button" data-act="close-settings">Fine</button></footer></dialog>
+<aside id="update-notice" class="update-notice hidden" role="status"><span id="update-notice-text"></span><button class="btn s" data-act="settings" data-section="updates">Vedi novità</button><button class="text-button" data-act="dismiss-update">Più tardi</button></aside>
+<dialog id="trash-dialog" class="trash-dialog"><h2 id="trash-title">Cestino</h2><div id="trash-body"></div><div class="acts"><button class="btn s" data-act="close-trash">Chiudi</button><button class="btn hidden" id="trash-confirm" data-act="move-to-trash">Sposta nel cestino</button></div></dialog>
 <div id="toast" class="toast hidden" role="status"></div>
 <div class="modal" id="modal"><div class="card sheet">
   <div class="bar2"><b id="mtitle" style="flex:1"></b><a class="btn s" id="mopen" target="_blank" style="height:32px;padding:0 12px"><svg class="ic"><use href="#ext"/></svg>Apri</a>
-  <button class="btn s" style="height:32px;padding:0 12px" onclick="chiudi()"><svg class="ic"><use href="#x"/></svg></button></div>
+  <button class="btn s" style="height:32px;padding:0 12px" data-act="close-modal"><svg class="ic"><use href="#x"/></svg></button></div>
   <iframe id="mframe" class="hidden"></iframe><div class="body hidden" id="mbody"></div>
 </div></div>
 
-<script>
-const FAM={
- packing_costruttore:{n:"Tabella del costruttore",c:"var(--violet)"},ddt:{n:"DDT",c:"var(--accent)"},
- certificato_31:{n:"Certificati 3.1",c:"var(--green)"},dop_costruttore:{n:"DoP del costruttore",c:"var(--teal)"},
- dop_ce_prodotto:{n:"DoP e CE di prodotto",c:"var(--orange)"},lettera_accompagnamento:{n:"Lettere",c:"#5e5ce6"},
- da_escludere:{n:"Non pertinenti",c:"var(--soft)"},illeggibile:{n:"Illeggibili",c:"var(--red)"}};
-const STATI={PROVATO:"g",DEDOTTO:"b","DA CONFERMARE":"o",MANCANTE:"r"};
-const COL=["PRODUTTORE","COLATA","TIPO DI ACCIAIO","CE/DoP ACCIAIERIA","CERT 3.1 ACCIAIERIA","COMMERCIANTE / CENTRO TRASF.","CE/DoP CENTRO","DDT COMMERCIANTE","COSTRUTTORE","CE/DoP COSTRUTTORE","DDT COSTRUTTORE","PARTE D'OPERA"];
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const api=async(p,o)=>{const r=await fetch(p,o);const d=await r.json();if(!r.ok)throw new Error(d.detail||"Operazione non riuscita");return d;};
-let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),timer=null,risultatoCaricato=false,inizio=true;
-
-function vai(id){location.hash=id?"#/"+id:"";}
-window.onhashchange=route;
-function route(){clearInterval(timer);const m=location.hash.match(/^#\/([\w-]+)$/);
- if(m){L=m[1];$("home").classList.add("hidden");$("lavoro").classList.remove("hidden");apriLavoro()}
- else{L=null;$("lavoro").classList.add("hidden");$("home").classList.remove("hidden");$("crumb").innerHTML="";casa()}}
-
-/* ---------- home ---------- */
-let scelti=[];
-const sel=$("sel"),drop=$("drop");
-drop.onclick=()=>sel.click();sel.onchange=()=>aggiungi([...sel.files]);
-["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("on")}));
-["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("on")}));
-drop.addEventListener("drop",ev=>aggiungi([...ev.dataTransfer.files]));
-function aggiungi(f){scelti=scelti.concat(f);mostraFile()}
-function mostraFile(){$("files").innerHTML=scelti.map(f=>`<div class="card file"><svg class="ic" style="color:var(--accent)"><use href="#doc"/></svg><div>${esc(f.name)}<small>${(f.size/1048576).toFixed(1)} MB</small></div></div>`).join("");
- $("send").classList.toggle("hidden",!scelti.length)}
-$("annulla").onclick=()=>{scelti=[];sel.value="";mostraFile()};
-$("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.forEach(f=>fd.append("file",f));fd.append("nome",$("nome").value.trim());
- const x=new XMLHttpRequest();x.open("POST","/api/lavori");x.setRequestHeader("X-Traccia-Token",localToken);$("upbar").classList.remove("hidden");$("invia").disabled=true;$("uperr").textContent="";
- x.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);$("upbar").firstChild.style.width=p+"%";$("uptxt").textContent=`Invio ${p}% · ${(e.loaded/1048576).toFixed(0)} di ${(e.total/1048576).toFixed(0)} MB`}};
- x.onload=()=>{$("invia").disabled=false;if(x.status===200){const r=JSON.parse(x.responseText);scelti=[];mostraFile();vai(r.lavoro)}
-  else $("uperr").textContent="Invio non riuscito. Riprova; se il problema resta, i file potrebbero essere troppo grandi."};
- x.onerror=()=>{$("invia").disabled=false;$("uperr").textContent="La piattaforma non risponde: controlla che l’app sia aperta."};x.send(fd)};
-const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
-function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
-function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" onclick="vai('${l.lavoro}')"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" onclick="event.stopPropagation();confirmTrash('${l.lavoro}',this)" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
-
-/* ---------- lavoro ---------- */
-function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
- $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
- $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
- $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" onclick="famiglia('${k}')"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
- aggiorna();timer=setInterval(aggiorna,1500)}
-async function aggiorna(){if(!L)return;
- try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").textContent="Lavoro non trovato";return}
- $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
- const p=stato.fase==="pronto"?100:stato.percentuale;
- $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
- $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
- const fatte=stato.lette+stato.non_lette.length;
- $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
- $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";
- $("bartok").textContent=tokens(stato.consumo);
- const ord=["preparazione","lettura","composizione","pronto"],i=ord.indexOf(stato.fase);
- $("phase").innerHTML=["Ricevuti","Preparazione","Lettura e smistamento","Collegamento a ritroso","Excel"].map((t,j)=>`<span class="${j<=i||stato.fase==="pronto"?"ok":""} ${j===i+1&&stato.fase!=="pronto"?"on":""}">${t}</span>`).join("");
- $("lookdot").style.visibility=stato.fase==="pronto"?"hidden":"visible";
- $("lookpage").classList.toggle("fermo",stato.fase==="pronto");
- // pagine nei contenitori
- const nuove=stato.pagine.filter(x=>x.famiglia&&!giaVisti.has(x.pid));
- nuove.forEach((x,k)=>{giaVisti.add(x.pid);if(inizio)metti(x);else setTimeout(()=>vola(x),k*180)});
- Object.keys(FAM).forEach(k=>{$("bin-"+k).querySelector(".n").textContent=stato.per_famiglia[k]||0});
- // eventi
- const ev=await api(`/api/lavori/${L}/eventi?da=${ultimoEv}`).catch(()=>[]);
- ultimoEv+=ev.length;ev.forEach(evento);
- const ultimo=ev.length?ev[ev.length-1].t:null;if(ultimo)window._ultimoT=ultimo;
- $("idle").classList.toggle("hidden",!(stato.fase==="lettura"&&window._ultimoT&&Date.now()/1000-window._ultimoT>180));
- inizio=false;
- if(stato.fase==="pronto"&&!risultatoCaricato){risultatoCaricato=true;risultato()}}
-function img(pid){return `/api/lavori/${L}/miniature/${pid}.png`}
-function metti(x){const st=$("bin-"+x.famiglia).querySelector(".stack");if(st.children.length<18)st.insertAdjacentHTML("beforeend",`<img src="${img(x.pid)}" alt="">`)}
-function vola(x){const bin=$("bin-"+x.famiglia),src=$("lookpage").getBoundingClientRect(),dst=bin.getBoundingClientRect();
- const el=document.createElement("img");el.className="flyer";el.src=img(x.pid);document.body.appendChild(el);
- const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
- a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
-const TIPI={ricevuti:["Ricevuti","n"],file:["Preparazione","n"],pagina:null,lettura:["Lettura","b"],lettura_pagina:["Sta guardando","b"],
- scheda:["Letta","g"],ritaglio:["Ritaglio","o"],nota:["Agente","b"],correzione:["Correzione","o"],errore:["Errore","r"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
-function evento(e){
- if(e.tipo==="lettura_pagina"&&e.pid){mostraPagina(e.pid);$("lookfile").textContent=e.testo.replace("Claude guarda ","");$("thought").innerHTML=`<b>Lettura.</b> Trascrivo la pagina e riconosco il tipo di documento…`}
- if(e.tipo==="scheda"&&e.pid){mostraPagina(e.pid,true);const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${f?f.n:e.famiglia}.</b> ${esc(e.testo)}`}
- if(e.tipo==="nota"){$("thought").innerHTML=`<b>Agente.</b> ${esc(e.testo)}`}
- if(e.tipo==="ritaglio"&&e.ritaglio){$("crops").insertAdjacentHTML("afterbegin",`<img src="/api/ritagli/${encodeURIComponent(e.ritaglio)}" title="${esc(e.testo)}" onclick="apri('/api/ritagli/${encodeURIComponent(e.ritaglio)}','Ritaglio: ${esc(e.testo)}')">`);while($("crops").children.length>4)$("crops").lastChild.remove()}
- const t=TIPI[e.tipo];if(!t)return;
- let testo=e.testo||"";if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
- if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
- $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
- while($("feed").children.length>8)$("feed").lastChild.remove()}
-let pagMostrata=null;
-async function mostraPagina(pid,conZone){const box=$("lookpage");
- if(pagMostrata!==pid){pagMostrata=pid;box.innerHTML=`<img src="/api/lavori/${L}/pagine/${pid}.png" alt="pagina"><div class="scan"></div>`}
- if(!conZone)return;
- try{const d=await api(`/api/lavori/${L}/pagine/${pid}`);if(pagMostrata!==pid||!d.scheda)return;
-  const zone=[];const s=d.scheda;Object.values(s.testata||{}).forEach(v=>v.v&&v.zona&&v.zona.length&&zone.push(v.zona));
-  (s.timbri||[]).forEach(t=>t.zona&&t.zona.length&&zone.push(t.zona));(s.righe||[]).slice(0,6).forEach(r=>r.colata&&r.colata.zona&&r.colata.zona.length&&zone.push(r.colata.zona));
-  box.querySelectorAll(".box").forEach(b=>b.remove());
-  zone.slice(0,12).forEach(([x0,y0,x1,y1],k)=>setTimeout(()=>box.insertAdjacentHTML("beforeend",`<div class="box" style="left:${x0/10}%;top:${y0/10}%;width:${(x1-x0)/10}%;height:${(y1-y0)/10}%"></div>`),k*120))}catch(e){}}
-
-/* ---------- famiglie ---------- */
-function famiglia(k){if(!stato)return;const ps=stato.pagine.filter(x=>x.famiglia===k);
- $("mtitle").textContent=`${FAM[k].n} · ${ps.length} pagine`;$("mopen").classList.add("hidden");
- $("mbody").innerHTML=ps.length?`<div class="grid-pg">${ps.map(x=>`<div class="pg" onclick="pagina('${x.pid}')"><img src="${img(x.pid)}" alt=""><div>${esc(x.file)} · p${x.pagina}</div></div>`).join("")}</div>`:`<div class="note">Nessuna pagina in questa famiglia.</div>`;
- $("mframe").classList.add("hidden");$("mbody").classList.remove("hidden");$("modal").classList.add("on")}
-async function pagina(pid){const d=await api(`/api/lavori/${L}/pagine/${pid}`);const s=d.scheda||{};
- $("mtitle").textContent=`${d.pagina.file} · pagina ${d.pagina.pagina}`;
- $("mbody").innerHTML=`<p class="sub" style="margin:0 0 12px">${esc(s.motivo||"")}</p>${(s.avvisi||[]).map(a=>`<div class="pill o" style="margin:0 6px 8px 0">${esc(a)}</div>`).join("")}<img src="/api/lavori/${L}/pagine/${pid}.png" style="width:100%;border-radius:8px;border:1px solid var(--line)">`}
-function apri(url,titolo){$("mtitle").textContent=titolo;$("mopen").href=url;$("mopen").classList.remove("hidden");
- $("mframe").src=url;$("mframe").classList.remove("hidden");$("mbody").classList.add("hidden");$("modal").classList.add("on")}
-function chiudi(){$("modal").classList.remove("on");$("mframe").src="about:blank"}
-$("modal").onclick=e=>{if(e.target.id==="modal")chiudi()};document.onkeydown=e=>{if(e.key==="Escape")chiudi()};
-
-/* ---------- risultato ---------- */
-async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}catch(e){return}
- $("res").classList.remove("hidden");
- $("ressub").textContent=`${stato.pagine_totali} pagine da ${stato.file} file · ${r.voci.length} voci · ogni dato ha il collegamento alla pagina da cui viene.`;
- $("scarica").href=`/api/lavori/${L}/scarica`;$("riordina").href=`/api/lavori/${L}/fascicolo-ordinato`;
- $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("");
- const prova=(v,c)=>v.colonne[c].fonti.length?`/api/lavori/${L}/uscita/prove/v${String(v.n).padStart(3,"0")}_c${String(COL.indexOf(c)+1).padStart(2,"0")}.html`:null;
- const manca=s=>/non nel fascicolo|Non presente/i.test(s||"");
- const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
- $("chain").innerHTML=r.voci.map((v,i)=>{const C=v.colonne;const cert=C["CERT 3.1 ACCIAIERIA"].v,ddt=C["DDT COMMERCIANTE"].v,col=C["COLATA"].v;
-  return `<div class="vrow" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" onclick="selectVoice(${v.n})">Chiedi in chat ↗</button></div>
-  ${nodo(v,"DDT COMMERCIANTE",ddt.replace(/^DDT n\. /,"DDT "),C["COMMERCIANTE / CENTRO TRASF."].v,manca(ddt)?"miss":"")}
-  ${nodo(v,"CERT 3.1 ACCIAIERIA",cert,C["PRODUTTORE"].v,manca(cert)?"miss":(v.stato==="DA CONFERMARE"?"warn":""))}
-  ${nodo(v,"COLATA",col||(v.colate_possibili.length?v.colate_possibili.length+" colate":"—"),v.colate_possibili.join(" / "),v.stato==="MANCANTE"?"miss":(!col?"warn":""))}
-  <div><span class="pill ${STATI[v.stato]}">${v.stato}</span><div class="why">${esc(v.note.slice(0,2).join(" "))}</div></div></div>`}).join("");
- $("tab").innerHTML=`<tr><th>N</th>${COL.map(c=>`<th>${esc(c)}</th>`).join("")}<th>STATO</th><th>NOTE</th></tr>`+r.voci.map(v=>`<tr><td>${v.n}</td>${COL.map(c=>{const u=prova(v,c);return `<td class="${u?"src":""}" ${u?`onclick="apri('${u}','${esc(c)} · voce ${v.n}')"`:""}>${esc(v.colonne[c].v)}</td>`}).join("")}<td><span class="pill ${STATI[v.stato]}">${v.stato}</span></td><td class="nota" style="color:var(--muted)">${esc(v.note.join(" "))}</td></tr>`).join("")}
-</script>
+<script src="/web/cantiere.js"></script>
 <script src="/web/app.js"></script>
 </body>
 </html>
