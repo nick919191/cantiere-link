@@ -142,7 +142,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         "Trascrivi anche il testo completo dei timbri e i relativi riferimenti."
     )
     for giro in range(1, GIRI_AUTOMATICI + 1):
-        da_leggere = [p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p)]
+        da_leggere = _senza_doppioni(p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p))
         if not da_leggere:
             break
         if giro > 1:
@@ -161,6 +161,14 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
             "che non corrispondono al testo della pagina, quindi la scheda non è stata accettata. Premi "
             "«Analizza / riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
+
+
+def _senza_doppioni(pages) -> list[dict]:
+    """Una sola copia per impronta: la lettura in archivio vale per tutte le pagine identiche."""
+    viste: dict[str, dict] = {}
+    for p in pages:
+        viste.setdefault(p["impronta"], p)
+    return list(viste.values())
 
 
 def _esaurita(cartella: Path, page: dict) -> bool:

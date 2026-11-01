@@ -7,6 +7,7 @@ chiusa a metà riprende da sola: le pagine con una lettura in archivio non si ri
 import json
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from . import configurazione, consumi, percorsi
@@ -35,9 +36,16 @@ def salva_lettura(impronta: str, scheda: dict) -> None:
     f.parent.mkdir(parents=True, exist_ok=True)
     if f.exists():  # congelata: mai riscritta
         return
-    temporaneo = f.with_suffix(".tmp")
+    # Nome del temporaneo univoco: due copie della stessa pagina lette da lotti paralleli non si pestano i piedi.
+    temporaneo = f.with_name(f"{f.stem}.{uuid.uuid4().hex}.tmp")
     temporaneo.write_text(json.dumps(scheda, ensure_ascii=False, indent=1), encoding="utf-8")
-    temporaneo.replace(f)
+    if f.exists():  # l'altro lotto è arrivato prima: la sua lettura resta, questa si scarta
+        temporaneo.unlink(missing_ok=True)
+        return
+    try:
+        temporaneo.replace(f)
+    except (FileExistsError, FileNotFoundError, PermissionError):
+        temporaneo.unlink(missing_ok=True)
 
 
 def cartella_ritagli() -> Path:
