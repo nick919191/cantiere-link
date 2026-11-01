@@ -1,4 +1,4 @@
-"""Motore di regole 0.7.2: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.3: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
@@ -19,6 +19,10 @@ Regole (conoscenza/05_regole_di_stato.md):
         voce per file di packing anche se il titolo cambia da pagina a pagina.
   0.7.2 (da Valentino) 'FERRO U 200' è l'UPN 200; le righe di riferimento del DDT ('RIF. COMM', 'CERTIFICATI:') non
         sono voci; il nome del file o della cartella del certificato che cita il DDT è un ponte (DEDOTTO).
+  0.7.3 (da Gstaad) bulloneria con parole inglesi/tedesche e codici ISO; 'PIATTI IN LAMIERA SPESSORE 10 MM'; date con
+        punti; timbro a penna ripreso per data e emittente; copia del certificato senza numero unita; lettera del
+        distributore riconosciuta dal protocollo nel nome del file; tubi affini solo con le stesse misure; nessuna
+        voce fantasma da un certificato già ancorato a un DDT del fascicolo.
 """
 
 import hashlib
@@ -27,7 +31,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.7.2"
+VERSIONE = "0.7.3"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 
@@ -256,11 +260,20 @@ def _affine(a: str, b: str) -> bool:
         m = re.fullmatch(r"TUBO (\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)", altro)
         return bool(m and piatto[0] is not None and {float(m.group(1)), float(m.group(2))} == {piatto[0], piatto[1]})
     pa, pb = a.split(" ", 1), b.split(" ", 1)
+    if pa[0] != pb[0]:
+        return False
+    if pa[0] == "TUBO":  # 'TUBO 150x100' e 'TUBO 150x100x6' sì; 'TUBO 100x100x3' e 'TUBO 100x100x5' no
+        da_, db_ = (
+            [float(x) for x in re.findall(r"\d+(?:\.\d+)?", pa[1] if len(pa) > 1 else "")],
+            [float(x) for x in re.findall(r"\d+(?:\.\d+)?", pb[1] if len(pb) > 1 else "")],
+        )
+        n = min(len(da_), len(db_))
+        return n >= 2 and da_[:n] == db_[:n]
     ma, mb = (
         re.search(r"\d+(?:\.\d+)?", pa[1] if len(pa) > 1 else ""),
         re.search(r"\d+(?:\.\d+)?", pb[1] if len(pb) > 1 else ""),
     )
-    return pa[0] == pb[0] and bool(ma and mb) and float(ma.group()) == float(mb.group())
+    return bool(ma and mb) and float(ma.group()) == float(mb.group())
 
 
 def _righe_affini(cert: dict, voce: dict, riga_ddt: dict | None) -> list[dict]:
@@ -293,6 +306,15 @@ def _scegli_segnata(cert: dict, righe: list[dict]) -> tuple[list[dict], str | No
             f"colata {rimasta} scelta perché le altre sono barrate a mano: controllare l'originale"
         )
     return righe, None
+
+
+def _segno_su_una_colata(cert: dict, righe: list[dict]) -> bool:
+    """True se un segno che sceglie (freccia, spunta...) sta su una sola delle colate di queste righe."""
+    colate = {r["colata"] for r in righe if r["colata"]}
+    scelte = {
+        s["colata"] for s in cert.get("segni", []) if s["tipo"] in SEGNI_CHE_SCELGONO and s.get("colata") in colate
+    }
+    return len(scelte) == 1
 
 
 def _per_colata(righe: list[dict]) -> list[dict]:
@@ -371,14 +393,24 @@ class Motore:
             }
             for lt in self.p["lettere"]
             if nz.cita_ddt(lt["ddt_citato"], numero_ddt)
-            and self.pid_file.get(lt["pid"]) in file_cert
             and (
-                any(nz.stesso_numero(n, cert["numero"]) in STESSO for n in lt.get("certificati", []))
+                (
+                    self.pid_file.get(lt["pid"]) in file_cert
+                    and (
+                        any(nz.stesso_numero(n, cert["numero"]) in STESSO for n in lt.get("certificati", []))
+                        or any(
+                            nz.stessa_colata(r["colata"], c["colata"])
+                            for r in lt.get("righe", [])
+                            if r.get("colata")
+                            for c in cert["righe"]
+                        )
+                    )
+                )
+                # il distributore cita il suo protocollo ('RN2000689815'), che è nel nome del file del certificato
                 or any(
-                    nz.stessa_colata(r["colata"], c["colata"])
-                    for r in lt.get("righe", [])
-                    if r.get("colata")
-                    for c in cert["righe"]
+                    n and len(n) >= 6 and n.lower() in (f or "").lower()
+                    for n in lt.get("certificati", [])
+                    for f in file_cert
                 )
             )
         ]
@@ -589,10 +621,14 @@ class Motore:
         if not affini:
             return None, [], False, False
         if len(affini) > 1:
-            # Un file con più certificati dà a tutti il ponte "dal nome": vince chi ha un timbro o una lettera; a
-            # parità, chi ha il profilo esatto (non ricavato, non scritto diversamente).
+            # Più certificati legati allo stesso DDT: vince quello su cui il costruttore ha segnato a mano una sola
+            # colata del profilo; poi chi ha un timbro o una lettera (il ponte "dal nome" lo danno tutti i certificati
+            # di un file); a parità, chi ha il profilo esatto (non ricavato, non scritto diversamente).
+            segnati = [x for x in affini if _segno_su_una_colata(x[0], x[1])]
             forti = [x for x in affini if any(not p.get("dal_nome") for p in self.ponti(x[0], voce["ddt"]))]
-            if len(forti) == 1:
+            if len(segnati) == 1:
+                affini = segnati
+            elif len(forti) == 1:
                 affini = forti
             else:
                 esatti = [x for x in (forti or affini) if not x[2] and not x[3]]
@@ -630,6 +666,26 @@ class Motore:
                 scartati.append(f"certificato {c['numero']}: classe diversa dal DDT")
             if compatibili:
                 candidati.append((c, compatibili, ricavato))
+        if doc_ddt:
+            # intestato a un altro commerciante del fascicolo (la bulloneria Reyher per i dadi di Viteria): fuori
+            altri = [
+                d["emittente"]
+                for d in self.ddt_noti
+                if d["emittente"] and not _stessa(self.p, d["emittente"], doc_ddt["emittente"])
+            ]
+            restanti = []
+            for x in candidati:
+                cliente = x[0]["cliente"]
+                altro = (
+                    cliente
+                    and not _stessa(self.p, cliente, doc_ddt["emittente"])
+                    and next((a for a in altri if _stessa(self.p, cliente, a)), None)
+                )
+                if altro:
+                    scartati.append(f"certificato {x[0]['numero']}: intestato a {altro}, non a {doc_ddt['emittente']}")
+                else:
+                    restanti.append(x)
+            candidati = restanti
         if voce["ddt"]:
             con_ponte = [x for x in candidati if self.ponti(x[0], voce["ddt"])]
             if len(con_ponte) == 1:
@@ -1032,9 +1088,18 @@ def _voci_dai_certificati(prove: dict, usati: set[str]) -> list[dict]:
     """C12: un certificato non usato il cui timbro cita un DDT che non è nel fascicolo diventa una voce DA
     CONFERMARE con la richiesta del DDT al commerciante del timbro: così si vede che manca un DDT."""
     numeri = [d["numero"] for d in prove["ddt"] if not d.get("incoerente")]  # un DDT letto male non "c'è"
+    pid_file = {f["pid"]: f["file"] for f in prove["fonti"].values()}
     voci = []
     for c in prove["certificati"]:
         if c["id"] in usati or not c["righe"]:
+            continue
+        # Un certificato che un timbro o il nome del file legano a un DDT del fascicolo appartiene a quel DDT: gli
+        # altri timbri (vendite precedenti del commerciante, copie riusate) non chiedono DDT che non c'entrano.
+        nel_nome = [n for pid in c["pagine"] for n in nz.ddt_nel_nome(pid_file.get(pid) or "")]
+        ancorato = any(nz.cita_ddt(n, x) for n in nel_nome for x in numeri) or any(
+            t.get("ddt_citato") and any(nz.cita_ddt(t["ddt_citato"], x) for x in numeri) for t in c["timbri"]
+        )
+        if ancorato:
             continue
         citati: dict[str, dict] = {}
         for t in c["timbri"]:

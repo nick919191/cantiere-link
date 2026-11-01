@@ -364,3 +364,56 @@ def test_certificato_spezzato_su_due_pagine_con_refuso_nel_produttore_resta_uno(
     # in due file diversi restano due certificati
     pagine2 = [{"pid": "p1", "file": "a.pdf", "pagina": 1}, {"pid": "p2", "file": "b.pdf", "pagina": 1}]
     assert len(costruisci(pagine2, {"p1": c1, "p2": c2})["certificati"]) == 2
+
+
+def test_copia_del_certificato_senza_numero_si_unisce_a_quello_con_il_numero():
+    """0.7.3 (Gstaad): seconda copia del certificato Duferco con il numero non letto ma stessa colata e stesso
+    produttore: un certificato solo, con i timbri e i segni di entrambe le copie."""
+    from fascicolo_inventato import V, certificato, timbro
+
+    c1 = certificato("4323 2026", [("HEA 140", "S275J0+AR", "158548")], produttore="TRAVI E PROFILATI SPA")
+    c2 = certificato("", [("HEA 140", "S275J0+AR", "158548"), ("HEB 500", "S355J2", "158670")], [timbro("5004")])
+    c2["testata"]["produttore"] = V("Travi e Profilati di Pallanzeno")
+    pagine = [{"pid": "p1", "file": "a.pdf", "pagina": 1}, {"pid": "p2", "file": "b.pdf", "pagina": 1}]
+    prove = costruisci(pagine, {"p1": c1, "p2": c2})
+    assert len(prove["certificati"]) == 1
+    c = prove["certificati"][0]
+    assert c["numero"] == "4323 2026" and c["pagine"] == ["p1", "p2"] and len(c["timbri"]) == 1
+    assert {r["chiave"] for r in c["righe"]} == {"HEA 140", "HEB 500"}
+
+
+def test_timbro_a_penna_letto_male_ripreso_per_data_e_emittente():
+    """0.7.3 (Gstaad): '480' per '4870' sul timbro FVS del 29/05/26; il DDT FVS di quel giorno è uno solo."""
+    from fascicolo_inventato import V, certificato, ddt, timbro
+
+    t = timbro("480", a_mano=True)
+    t["chi"], t["data_ddt"] = "FVS S.p.a.", "29/05/26"
+    cert = certificato("202572745", [("UPN 160", "S275JR", "CE259891")], [t])
+    d = ddt("4870", ["UNP 160"], emittente="FERRAMENTA VILLAFRANCA SIDERURGICA SPA")
+    d["testata"]["data"] = V("29/05/2026")
+    altro = ddt("4563", ["IPE 140"], emittente="FERRAMENTA VILLAFRANCA SIDERURGICA SPA")
+    pagine = [{"pid": f"p{i}", "file": f"{i}.pdf", "pagina": 1} for i in range(3)]
+    prove = costruisci(pagine, {"p0": cert, "p1": d, "p2": altro})
+    tb = prove["certificati"][0]["timbri"][0]
+    assert tb["ddt_citato"] == "4870" and tb["ddt_letto"] == "480"
+
+
+def test_due_copie_dello_stesso_certificato_in_file_diversi_con_produttore_letto_diverso():
+    """0.7.3 (Gstaad): 219179 letto 'METINVEST FERRIERA VALSIDER' in un file e 'FERRERA VALSIDER' in un altro, data
+    uguale ma produttore no: stessa colata nelle righe, un certificato solo."""
+    from fascicolo_inventato import certificato
+
+    c1 = certificato(
+        "219179", [("LAMIERA 5x1500x3000", "S355J2", "A02/25300264")], produttore="METINVEST FERRIERA VALSIDER"
+    )
+    c2 = certificato(
+        "219179",
+        [("LAMIERA 4x1500x3000", "S355J2", "A02/25300260"), ("LAMIERA 5x1500x3000", "S355J2", "A02/25300264")],
+        produttore="FERRERA VALSIDER SPA",
+    )
+    pagine = [{"pid": "p1", "file": "a.pdf", "pagina": 1}, {"pid": "p2", "file": "b.pdf", "pagina": 1}]
+    prove = costruisci(pagine, {"p1": c1, "p2": c2})
+    assert len(prove["certificati"]) == 1 and {r["chiave"] for r in prove["certificati"][0]["righe"]} == {
+        "LAMIERA 4",
+        "LAMIERA 5",
+    }

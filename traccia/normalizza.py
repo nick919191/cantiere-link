@@ -19,6 +19,17 @@ _DECIMALE = re.compile(r"\d+\.\d+")
 # Parole che dicono "lamiera" (anche 'SP.012X2450X6000', 'L.DA TRENO', 'PLATES') e parole che dicono "tubo".
 _PAROLA_LAMIERA = re.compile(r"\bLAM|COIL|\bSTRIPS?\b|\bPLATES?\b|\bL\.?\s*DA\s+TRENO|\bSP\.\s*\d|\bSPESS")
 _PAROLA_TUBO = re.compile(r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b")
+_VITE_PAROLA = re.compile(r"\b(?:VIT[EI]|BULLON[EI]|BOLTS?|SCREWS?|HEX\.?\s*SCR)\b")
+_VITE_CODICE = re.compile(r"\b(?:ISO|DIN|UNI|I)\s*-?\s*(?:4014|4017|4762|931|933|5737|5739)\b")
+_DADO_PAROLA = re.compile(r"\b(?:DAD[OI]|NUTS?)\b")
+_DADO_CODICE = re.compile(r"\b(?:ISO|DIN|UNI|I)\s*-?\s*(?:4032|4033|4034|4035|7040|7041|7042|934|985)\b")
+_RONDELLA_PAROLA = re.compile(r"\b(?:RONDELL[AE]|WASHERS?|SCHEIBEN?)\b")
+_RONDELLA_CODICE = re.compile(
+    r"\b(?:ISO|DIN|UNI|I)\s*-?\s*(?:7089|7090|7091|7093|7094|125|126|127|9021|1440)\b"
+    r"|\b(?:7089|7090|7091|7093|7094)\b\s*(?:-|STEEL\b|ST\.)"
+)
+# Misura nominale della rondella dopo il codice: '7090 - 10', 'I 7090 st. CE 10 (10,5 x 20 x 2)', '7089 steel 12'.
+_RONDELLA_NOMINALE = re.compile(r"\b(?:7089|7090|7091|7093|7094|125|126|127|9021)\b[^\d(]*?(\d{1,2})\b")
 _PAROLA_PIATTO = re.compile(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGH?[IO]\b")
 # Una lamiera ha una sola misura piccola (spessore) e due grandi (larghezza, lunghezza).
 SPESSORE_MAX, LATO_MIN = 60, 500
@@ -88,19 +99,24 @@ def profilo(descrizione):
         a, b, c = m.groups()
         return f"ANGOLARE {a} {a} {b}" if c is None else f"ANGOLARE {a} {b} {c}"
 
-    # Bulloneria: la vite prima del dado ("viti ... + dado" e' una vite; "bulloni M12x50" pure).
-    m = re.search(r"\b(?:VIT[EI]|BULLON[EI])\b.*?\bM(\d+)\s*X\s*(\d+)", s)
-    if m:
-        return f"VITE M{m.group(1)}x{m.group(2)}"
-    m = re.search(r"\bDAD[OI]\b.*?\bM(\d+)\b", s)
-    if m:
-        return f"DADO M{m.group(1)}"
-    m = re.search(r"\bRONDELL[AE]\b.*?\b(\d{4})\s*-?\s*(\d+)", s)
-    if m:
-        return f"RONDELLA {m.group(1)}-{m.group(2)}"
-    m = re.search(r"\bRONDELL[AE]\b.*?\bM(\d+)\b", s)
-    if m:
-        return f"RONDELLA M{m.group(1)}"
+    # Bulloneria, anche in inglese e tedesco e con i codici ISO/DIN dei distributori ('I 4017 8.8U CE nut M 12 x 50',
+    # 'HEX BOLT-ISO4017 ... M12X50', 'Scheibe ISO 7090 - 10', '7089 steel 10 (10,5 x 20 x 2)'). La vite prima del
+    # dado ("viti ... + dado" e' una vite; "bulloni M12x50" pure): una misura con la lunghezza (M12x50) e' una vite.
+    rondella = _RONDELLA_PAROLA.search(s) or _RONDELLA_CODICE.search(s)
+    if rondella:
+        m = re.search(r"\bRONDELL[AE]\b.*?\b(\d{4})\s*-?\s*(\d+)", s)
+        if m:
+            return f"RONDELLA {m.group(1)}-{m.group(2)}"
+        m = re.search(r"\bM\s*(\d+)\b", s) or _RONDELLA_NOMINALE.search(s)
+        if m:
+            return f"RONDELLA M{numero(m.group(1))}"
+    m = re.search(r"\bM\s*(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)\b", s)
+    if m and (_VITE_PAROLA.search(s) or _VITE_CODICE.search(s) or _DADO_PAROLA.search(s)):
+        return f"VITE M{numero(m.group(1))}x{numero(m.group(2))}"
+    if _DADO_PAROLA.search(s) or _DADO_CODICE.search(s):
+        m = re.search(r"\bM\s*(\d+)\b", s)
+        if m:
+            return f"DADO M{m.group(1)}"
 
     # Lamiere e coils: conta solo lo spessore. 'LAMIERA 60-10' è un piatto 60x10 (scrittura di distinta).
     if _PAROLA_LAMIERA.search(s) and not _PAROLA_TUBO.search(s) and not _PAROLA_PIATTO.search(s):
@@ -134,6 +150,9 @@ def profilo(descrizione):
         m = _DUE_DIM.search(s)
         if m:
             return f"PIATTO {numero(m.group(1))}x{numero(m.group(2))}"
+        m = re.search(r"\bSPESSORE\s+(\d+(?:\.\d+)?)\s*MM\b", s)  # 'PIATTI IN LAMIERA SPESSORE 10 MM'
+        if m:
+            return f"LAMIERA {numero(m.group(1))}"
     if re.search(r"\bTUB[OI]\b", s) and misure.get("LT") and misure.get("AL") and misure.get("SP"):
         return f"TUBO {numero(misure['LT'])}x{numero(misure['AL'])}x{numero(misure['SP'])}"
     if re.search(r"\bANG(?:OLAR[EI]|OL[OI]|LE|\.)?\b|\bELLE\b", s):
@@ -434,12 +453,15 @@ def stesso_numero(dichiarato, letto):
     return None
 
 
-_DDT_NEL_NOME = re.compile(r"(?i)(?<![a-z])d\.?d\.?t\.?\s*(?:n\.?|nr\.?|num\.?)?\s*[:._-]?\s*(\d[\d./-]*\d|\d)")
+_DDT_NEL_NOME = re.compile(
+    r"(?i)(?<![a-z])d\.?d\.?t\.?(?:\s+[a-z.&']+){0,3}\s*(?:n\.?|nr\.?|num\.?)?\s*[:._-]?\s*(\d[\d./-]*\d|\d)"
+)
 
 
 def ddt_nel_nome(percorso):
     """Numeri di DDT citati nel nome del file o delle cartelle ('certificato ddt 5681 280325.pdf' -> ['5681'],
-    'CERTIFICATI COPERTURA/DDT1062/[Untitled].pdf' -> ['1062']). Solo numeri preceduti da 'DDT'."""
+    'CERTIFICATI COPERTURA/DDT1062/[Untitled].pdf' -> ['1062'], 'DDT FVS SPA 4870_PROFILO.pdf' -> ['4870']). Solo
+    numeri preceduti da 'DDT', al massimo tre parole in mezzo (il nome del commerciante)."""
     return [m.group(1) for m in _DDT_NEL_NOME.finditer(percorso or "")]
 
 
@@ -505,8 +527,9 @@ def data_iso(data):
     m = re.search(r"\b(\d{2})/(\d{2})/(\d{4})\b", data or "")
     if m:
         return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
-    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b", data or "")  # a penna: '18/5/22'
+    # a penna o all'estera: '18/5/22', '20.05.26', '10-12-2024'
+    m = re.search(r"(?<![\d.])(\d{1,2})([./-])(\d{1,2})\2(\d{4}|\d{2})(?![\d.])", data or "")
     if m:
-        anno = m.group(3) if len(m.group(3)) == 4 else "20" + m.group(3)
-        return f"{anno}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+        anno = m.group(4) if len(m.group(4)) == 4 else "20" + m.group(4)
+        return f"{anno}-{int(m.group(3)):02d}-{int(m.group(1)):02d}"
     return data or ""

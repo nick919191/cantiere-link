@@ -659,3 +659,78 @@ def test_tra_piu_certificati_con_il_ponte_dal_nome_vince_il_timbro_poi_il_profil
         per_voce["PIATTO 150x10"]["stato"] == "DEDOTTO"
         and per_voce["PIATTO 150x10"]["colonne"]["COLATA"]["v"] == "K2003"
     )
+
+
+def test_lettera_del_distributore_riconosciuta_dal_protocollo_nel_nome_del_file():
+    """0.7.3 (Gstaad): la lettera Reyher cita il DDT e il protocollo 'RN2000689815', che è nel nome del file del
+    certificato (il cui numero è un altro): è un ponte. La bulloneria si normalizza anche in inglese."""
+    from fascicolo_inventato import V, certificato, ddt, scheda
+
+    f = "845_RN2000689815_0082391771_000080.pdf"
+    lettera = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("F. REYHER Nchfg. GmbH & Co. KG"), "ddt_citato": V("82391771")},
+        [{"posizione": V("60"), "articolo": V("4017.08204.0120.050"), "certificato": V("RN2000689815")}],
+    )
+    # qualità vuota sul certificato: il DDT inventato dice S275JR su ogni riga e la classe 8.8 lo scarterebbe
+    cert = certificato("YF25RY498-46019", [("HEX BOLT-ISO4017 ISO FIT-M12X50-8.8U", "", "B1-2503163")])
+    fogli = [
+        (
+            "ddt.pdf",
+            1,
+            ddt("82391771", ["I 4017 8.8U CE nut M 12 x 50 --- HDG SB"], emittente="F. REYHER Nchfg. GmbH & Co. KG"),
+        ),
+        ("845_RN2000692061_0082391771_000070.pdf", 1, lettera),  # la lettera sta nel file del protocollo dopo
+        (f, 2, cert),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "VITE M12x50")
+    assert v["stato"] == "PROVATO" and v["colonne"]["COLATA"]["v"] == "B1-2503163"
+
+
+def test_certificato_ancorato_a_un_ddt_del_fascicolo_non_genera_voci_fantasma():
+    """0.7.3 (Gstaad): certificato con due timbri, uno per il DDT 2323 (nel fascicolo), uno di una vendita
+    precedente (DDT 3330, assente): niente voce 'dal certificato' che chieda il DDT 3330."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    cert = certificato(
+        "219179", [("LAMIERA 5x1500x3000", "S275JR", "A52/1")], [timbro("3330", a_mano=True), timbro("2323")]
+    )
+    r = _senza_packing([("ddt.pdf", 1, ddt("2323", ["LAMIERA SP.5 1500X3000"])), ("c.pdf", 1, cert)])
+    assert [v["origine"] for v in r["voci"]] == ["dai_ddt"] and r["voci"][0]["stato"] == "PROVATO"
+    # tubi: stesse misure in comune o niente
+    from traccia.motore import _affine
+
+    assert _affine("TUBO 150x100", "TUBO 150x100x6") and not _affine("TUBO 100x100x3", "TUBO 100x100x5")
+
+
+def test_certificato_intestato_a_un_altro_commerciante_non_vale_per_esclusione():
+    """0.7.3 (Gstaad): i dadi M12 di Viteria non hanno certificato; quello dei dadi Reyher (intestato a Reyher, altro
+    commerciante del fascicolo) non si prende 'per esclusione'."""
+    from fascicolo_inventato import certificato, ddt
+
+    c = certificato("YF25", [("HEX NUT-ISO4032-M12-8", "", "J431110101")])
+    c["testata"]["cliente"]["v"] = "F. REYHER Nchfg. GmbH & Co. KG"
+    fogli = [
+        ("v.pdf", 1, ddt("2026/10188", ["DADI ES. CLASSE 8 M 12 tZn"], emittente="VITERIA EUGANEA SpA")),
+        ("r.pdf", 1, ddt("82391771", ["I 4017 8.8U CE nut M 12 x 50"], emittente="F. REYHER Nchfg. GmbH & Co. KG")),
+        ("c.pdf", 1, c),
+    ]
+    r = _senza_packing(fogli)
+    dadi = _voce(r, "DADO M12")
+    assert dadi["stato"] == "MANCANTE" and any("intestato a" in s for s in dadi["scartati"])
+
+
+def test_tra_due_certificati_timbrati_per_lo_stesso_ddt_vale_quello_con_il_segno_a_mano():
+    """0.7.3 (Gstaad): due certificati CELSA con l'UPN 160, entrambi timbrati per il DDT 4563: vale quello con la
+    spunta sulla riga."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    a = certificato(
+        "04461778", [("UPN 160", "S275JR", "CE259891"), ("UPN 100", "S275JR", "CE637667")], [timbro("4563")]
+    )
+    a["segni"] = [{"tipo": "spunta", "riga": 0}]
+    b = certificato("202572745", [("UPN 160", "S275JR", "CE260286")], [timbro("4563")])
+    r = _senza_packing([("d.pdf", 1, ddt("4563", ["UNP 160"])), ("a.pdf", 1, a), ("b.pdf", 1, b)])
+    v = _voce(r, "UPN 160")
+    assert v["stato"] == "PROVATO" and v["colonne"]["COLATA"]["v"] == "CE259891"

@@ -136,6 +136,36 @@ Che cosa resta DA CONFERMARE, e perché è giusto così:
   bianca: le voci "dal certificato" chiedono quei DDT.
 - 23 MANCANTE: tubi, tondi, lamiere e altri materiali dei DDT senza alcun certificato nel fascicolo.
 
+## Gstaad con la 0.7.2 e correzioni 0.7.3 (01/11/2026, analisi fatta dall'utente nell'app, 209 chiamate)
+
+Primo fascicolo con packing (1 pagina, 19 righe), lettere del distributore (Reyher, 11) e bulloneria. 252 pagine in
+57 file, molti doppi (gli stessi PDF in `1. Certificates`, `2. DDT` e `4. DDT`). Attenzione: nella cartella `2. DDT`
+i file sono rinominati sfalsati di uno (`DDT 3562.pdf` contiene il DDT 3506, `DDT 5004.pdf` il 4870, `DDT 10188
+VITERIA EUGANEA_M12.pdf` il 5004 su due pagine): l'app ha letto il contenuto giusto, i nomi sono sbagliati. Nessun
+atteso di confronto: verifica sui documenti. Correzioni (motore 0.7.3):
+
+| Caso | Prima | Causa | Correzione | Dopo |
+|---|---|---|---|---|
+| Bulloneria Reyher (`I 4017 8.8U CE nut M 12 x 50`, `HEX BOLT-ISO4017 ... M12X50`, `Scheibe ISO 7090 - 10`, `7089 steel 12 (13 x 24 x 2,5)`) | 5 MANCANTE, rondelle lette come tubi | solo parole italiane | `profilo`: codici ISO/DIN con prefisso, BOLT/NUT/WASHER/SCHEIBE, `M 12 x 50` con spazi; la misura con lunghezza è una vite anche se c'è scritto "nut" | 1 PROVATO, 4 DEDOTTO |
+| `PIATTI IN LAMIERA SPESSORE 10 MM` (packing) | 3 MANCANTE | la parola PIATTI escludeva il ramo lamiera | `SPESSORE n MM` nel ramo piatto -> `LAMIERA n` | 2 DEDOTTO, 1 DA CONFERMARE (due colate) |
+| DDT 4563 letto due volte (`20.05.26` e `20/05/2026`, emittente vuoto su una copia) | DDT "non nel fascicolo" | `data_iso` solo con le barre; la copia vuota restava vuota | date con punti e trattini; la copia letta meglio riempie i campi vuoti | 1 DDT |
+| Timbro FVS a penna `480` del 29/05/26 per il DDT 4870, `1503` del 20/05/26 per il 4563 | voci fantasma, certificati non agganciati | cifre mancanti, `quasi_uguale` non basta | timbro a penna: stesso giorno e stesso emittente del timbro -> quel DDT, con avviso (`ddt_letto`) | agganciati |
+| Copia del certificato Duferco 4323 con il numero non letto (ha il timbro stampato e la colata evidenziata) | HEA 140 DA CONFERMARE "più certificati timbrati" | due certificati per uno | copie unite: stesso numero (o non letto) e una colata in comune; stesso numero e stessa data | PROVATO |
+| Certificati Reyher: la lettera cita il protocollo `RN2000689815`, che sta nel nome del file del certificato, non il numero del certificato | nessun ponte | la lettera valeva solo nello stesso file con il numero | protocollo della lettera nel nome del file del certificato = ponte, anche da un altro file | BULLONI M12X50 PROVATO |
+| 12 voci "dal certificato" (timbri di vendite precedenti del commerciante, copie riusate) | 12 DA CONFERMARE fantasma | C12 su ogni timbro non riconosciuto | un certificato già ancorato a un DDT del fascicolo (timbro o nome del file) non genera voci dagli altri timbri | 1 (Megasider 1870, davvero assente) |
+| Dadi M12 di Viteria | "più certificati possibili" (dadi Reyher) | certificato intestato a un altro commerciante preso per esclusione | intestato a un altro commerciante del fascicolo -> scartato | MANCANTE (giusto: nessun certificato, la lettera Viteria dà solo la colata) |
+| UNP 160 del DDT 4563: due certificati CELSA timbrati per lo stesso DDT | DA CONFERMARE | pari merito | spareggio: vince il certificato con il segno a mano su una sola colata del profilo, poi il timbro, poi il profilo esatto | DEDOTTO (04461778, spunta su CE259891) |
+| `TUBO 100x100x3` preso per il `100x100x5` | affinità per la sola prima misura | `_affine`: per i tubi le misure in comune devono coincidere (`150x100` e `150x100x6` sì, `100x100x3` e `100x100x5` no) | |
+
+Gstaad: da 31 voci (3 PROVATO, 4 DEDOTTO, 15 DA CONFERMARE, 9 MANCANTE) a 20 (5, 11, 3, 1). Valentino con la 0.7.3:
+da 62 (1, 13, 25, 23) a 60 (1, 15, 20, 24): due voci fantasma in meno, i timbri Poletti `283`/`593` ripresi per data
+come DDT 2983, una LAMIERA 4 passa a MANCANTE perché il suo certificato risulta timbrato per un altro DDT (giusto).
+Viollier e Codogno invariati. Test: 234 (da 225).
+
+Resta DA CONFERMARE: Megasider 3674ZG26 (DDT FVS 1870 non nel fascicolo, piatti non dichiarati), LAMIERA 8 del DDT
+2323 (certificato 235408 con due colate, timbro a penna senza numero), PROFILO 100X100X5 (certificato Pirefiltubi
+senza numero, timbro `480` del 24/03/26 illeggibile). MANCANTE: dadi M12 Viteria.
+
 # Correzioni della review 2026-10
 
 > **Integrazione con la 0.5 (versione 0.5.1).** Le correzioni qui sotto sono nate sul branch `fix/review-2026-10`, su base

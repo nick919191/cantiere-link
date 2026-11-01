@@ -183,3 +183,28 @@ def test_largo_piatto():
     assert nz.profilo("LARGHI PIATTI 160x10") == "PIATTO 160x10"
     assert nz.profilo("Largo Piatto spigolo vivo 200,00*10,00") == "PIATTO 200x10"  # asterisco come 'x'
     assert nz.profilo("PL10*80") == "PIATTO 80x10" and nz.profilo("L60*6") == "ANGOLARE 60 60 6"
+
+
+def test_bulloneria_in_inglese_tedesco_e_con_codici_iso():
+    """0.7.3 (Gstaad): distributori di bulloneria scrivono i codici ISO al posto delle parole."""
+    assert nz.profilo("I 4017 8.8U CE nut M 12 x 50 --- HDG SB acc. to EN 15048") == "VITE M12x50"
+    assert nz.profilo("HEX BOLT-ISO4017 ISO FIT-M12X50-8.8U") == "VITE M12x50"
+    assert nz.profilo("ISO4017-M10x40-8.8U-tZn") == "VITE M10x40"
+    assert nz.profilo("HEX NUT-ISO4032-M12-8") == "DADO M12" and nz.profilo("ISO4032-M10-8-tZn") == "DADO M10"
+    assert nz.profilo("DADI ES. CLASSE 8 M 12 tZn") == "DADO M12"
+    assert nz.profilo("Scheibe ISO 7090 - 10 20,00 x 10,50 x 2,00") == "RONDELLA M10"
+    assert nz.profilo("I 7090 st. CE 10 (10,5 x 20 x 2 ) --- 300 HV") == "RONDELLA M10"
+    assert nz.profilo("7089 steel 12 (13 x 24 x 2,5) S") == "RONDELLA M12"
+    assert nz.profilo("RONDELLE M10") == "RONDELLA M10" and nz.profilo("BULLONI M12X50") == "VITE M12x50"
+    assert nz.chiave_larga("RONDELLA M10") == nz.chiave_larga("RONDELLA 7089-10") == "RONDELLA 10"
+    assert nz.profilo("TUBO 125x5") == "TUBO 125x5"  # 125 non è un codice DIN se non è preceduto dalla norma
+
+
+def test_lamiera_detta_piatti_date_con_punti_e_ddt_nel_nome_con_parole():
+    assert nz.profilo("PIATTI IN LAMIERA SPESSORE 10 MM") == "LAMIERA 10"
+    assert nz.data_iso("20.05.26") == "2026-05-20" and nz.data_iso("10-12-2024") == "2024-12-10"
+    assert nz.data_iso("04.02.25") == "2025-02-04" and nz.data_iso("20/05/2026") == "2026-05-20"
+    assert nz.ddt_nel_nome("4. DDT/DDT FVS SPA 4870_PROFILO 100X100X5.pdf") == ["4870"]
+    assert nz.ddt_nel_nome("DDT ROSSI SIDERURGICA 3596_HEB 120.pdf") == ["3596"]
+    assert nz.ddt_nel_nome("DDT SIDER.VI 2323_LAMIERA SPESSORE 5, 8, 10 MM.pdf") == ["2323"]
+    assert nz.ddt_nel_nome("DDT aggiuntivi/BC 28 RESPEDIL VALENTINO INT.5.pdf") == []

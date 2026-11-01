@@ -194,6 +194,12 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 if pid not in doc["pagine"]:
                     doc["pagine"].append(pid)
                     doc["copie"] += 1
+                # la copia letta meglio riempie i campi vuoti della prima (emittente non letto su una scansione)
+                for k, v in (("emittente", emittente), ("destinatario", destinatario)):
+                    if v and not doc[k]:
+                        doc[k] = v
+                if data and not doc["data_iso"]:
+                    doc["data_iso"], doc["data"] = data, _v(t.get("data"))
             elif not numero and seguito:
                 doc = seguito
                 doc["pagine"].append(pid)
@@ -404,6 +410,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 }
             )
 
+    _copie_senza_numero(certificati, stessa)
     _timbri_a_penna_per_data(ddt, certificati, stessa)
     for c in certificati:
         totali = {n for _, n in c["pagine_di"]}
@@ -448,6 +455,42 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
     }
 
 
+def _copie_senza_numero(certificati: list[dict], stessa) -> None:
+    """Copie dello stesso certificato lette in file diversi: stesso numero (o numero non letto su una), una colata in
+    comune, produttore compatibile. Le pagine, i timbri, i segni e le righe nuove si uniscono al primo."""
+    for c in list(certificati):
+        if c not in certificati or not c["righe"]:
+            continue
+        colate = {r["colata"] for r in c["righe"] if r["colata"]}
+        gemelli = [
+            g
+            for g in certificati
+            if g is not c
+            and g["numero"]
+            and (not c["numero"] or nz.numero_normale(c["numero"]) == nz.numero_normale(g["numero"]))
+            and (
+                colate & {r["colata"] for r in g["righe"]}
+                or (c["numero"] and c["data_iso"] and c["data_iso"] == g["data_iso"])
+            )
+            # con lo stesso numero e una colata in comune il produttore non serve (letto con un refuso su una copia)
+            and (c["numero"] or not c["produttore"] or not g["produttore"] or stessa(c["produttore"], g["produttore"]))
+        ]
+        if len(gemelli) != 1:
+            continue
+        g = gemelli[0]
+        if not g["produttore"]:
+            g["produttore"] = c["produttore"]
+        g["pagine"] += [p for p in c["pagine"] if p not in g["pagine"]]
+        g["copie"] += 1
+        g["timbri"] += c["timbri"]
+        g["segni"] += c["segni"]
+        g["avvisi"] += c["avvisi"]
+        g["ce_dop"] += [x for x in c["ce_dop"] if x not in g["ce_dop"]]
+        note = {(r["chiave"], r["colata"]) for r in g["righe"]}
+        g["righe"] += [r for r in c["righe"] if (r["chiave"], r["colata"]) not in note]
+        certificati.remove(c)
+
+
 def _timbri_a_penna_per_data(ddt: list[dict], certificati: list[dict], stessa) -> None:
     """Numero del DDT scritto a penna sul timbro e letto male ('1002' per '1062'): se nessun DDT del fascicolo lo
     porta, ma uno solo ha la stessa data del timbro e un numero che differisce per una cifra (e, se serve a
@@ -460,7 +503,12 @@ def _timbri_a_penna_per_data(ddt: list[dict], certificati: list[dict], stessa) -
             if any(nz.cita_ddt(n, d["numero"]) for d in ddt):
                 continue
             data = nz.data_iso(t["data_ddt"])
-            candidati = [d for d in ddt if d["data_iso"] and d["data_iso"] == data and nz.quasi_uguale(n, d["numero"])]
+            stesso_giorno = [d for d in ddt if d["data_iso"] and d["data_iso"] == data]
+            # stesso giorno e numero quasi uguale ('1002' per '1062'), oppure stesso giorno e stesso emittente del
+            # timbro ('480' per '4870' sul timbro FVS, DDT FVS di quel giorno)
+            candidati = [d for d in stesso_giorno if nz.quasi_uguale(n, d["numero"])]
+            if not candidati and t.get("chi"):
+                candidati = [d for d in stesso_giorno if d["emittente"] and stessa(t["chi"], d["emittente"])]
             if len(candidati) > 1 and t.get("chi"):
                 candidati = [d for d in candidati if d["emittente"] and stessa(t["chi"], d["emittente"])]
             if len(candidati) != 1:
