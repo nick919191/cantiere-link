@@ -86,6 +86,30 @@ def test_aggiunta_file_rifiutata_mentre_agente_legge_quel_cantiere(radice, monke
     assert r.status_code == 409 and "Interrompi" in r.json()["detail"]
 
 
+def test_upload_aggiuntivo_occupa_il_cantiere_durante_la_ricezione(radice, monkeypatch):
+    client = _client()
+    r = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))])
+    lavoro = r.json()["lavoro"]
+    _attendi_preparazione(client, lavoro)
+    visto = {}
+    vero = server._ricevi
+
+    async def ricezione_lenta(file, ingresso):
+        visto["occupato"] = lavoro in server._PREPARING
+        with pytest.raises(chatgpt.AgentError, match="caricamento"):
+            server.analizza(lavoro)  # «Analizza» mentre l'upload è ancora in corso
+        return await vero(file, ingresso)
+
+    monkeypatch.setattr(server, "_ricevi", ricezione_lenta)
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("a.pdf", pdf_con_testo(["y"]), "application/pdf"))])
+    assert r.status_code == 200 and visto["occupato"]
+    stato = _attendi_preparazione(client, lavoro)
+    assert stato["pagine_totali"] == 2 and lavoro not in server._PREPARING
+    # un upload rifiutato (nessun PDF) libera subito il cantiere
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("note.txt", b"x", "text/plain"))])
+    assert r.status_code == 400 and lavoro not in server._PREPARING
+
+
 def test_token_dichiarati_dal_servizio_vengono_contati(radice, monkeypatch):
     events = [
         {"type": "response.output_text.delta", "delta": "{}"},

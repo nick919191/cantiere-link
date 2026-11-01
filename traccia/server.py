@@ -192,7 +192,7 @@ def interrompi():
 def analizza(id_lavoro: str):
     _idle()
     if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
+        raise chatgpt.AgentError("Attendi il completamento del caricamento o della preparazione delle pagine.")
     agente.avvia(_cartella(id_lavoro))
     return {"started": True}
 
@@ -275,7 +275,7 @@ def trash_job(id_lavoro: str):
     if agent["busy"] and agent.get("job") == id_lavoro:
         raise chatgpt.AgentError("L’agente sta analizzando questo cantiere: premi «Interrompi», poi elimina.")
     if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
+        raise chatgpt.AgentError("Attendi il completamento del caricamento o della preparazione delle pagine.")
     try:
         return cestino.sposta(id_lavoro)
     except ValueError as exc:
@@ -465,22 +465,29 @@ async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
     """Aggiunge documenti a un cantiere esistente: le pagine già lette non si rileggono."""
     cartella = _cartella(id_lavoro)
     if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
+        raise chatgpt.AgentError("Un caricamento o la preparazione delle pagine è già in corso: attendi la fine.")
     agent = agente.stato()
     if agent["busy"] and agent.get("job") == id_lavoro:
         raise chatgpt.AgentError(
             "L’agente sta analizzando questo cantiere: premi «Interrompi» prima di aggiungere file."
         )
-    ingresso = cartella / "ingresso"
-    ingresso.mkdir(exist_ok=True)
-    accettati, scartati = await _ricevi(file, ingresso)
-    info_file = cartella / "info.json"
-    info = json.loads(info_file.read_text(encoding="utf-8"))
-    info["file"] = info.get("file", []) + accettati
-    info["scartati"] = info.get("scartati", []) + scartati
-    configurazione.scrivi_json(info_file, info)
-    lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
-    _prepara_in_sfondo(id_lavoro, cartella)
+    # Il cantiere è occupato da subito, non solo durante la preparazione: l'upload può durare minuti e nel
+    # frattempo «Analizza» o un secondo «Aggiungi file» riscriverebbero pagine.json sotto i piedi dell'agente.
+    _PREPARING.add(id_lavoro)
+    try:
+        ingresso = cartella / "ingresso"
+        ingresso.mkdir(exist_ok=True)
+        accettati, scartati = await _ricevi(file, ingresso)
+        info_file = cartella / "info.json"
+        info = json.loads(info_file.read_text(encoding="utf-8"))
+        info["file"] = info.get("file", []) + accettati
+        info["scartati"] = info.get("scartati", []) + scartati
+        configurazione.scrivi_json(info_file, info)
+        lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
+        _prepara_in_sfondo(id_lavoro, cartella)  # rilascia il cantiere a preparazione finita
+    except BaseException:
+        _PREPARING.discard(id_lavoro)
+        raise
     return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati}
 
 
