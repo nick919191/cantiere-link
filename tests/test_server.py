@@ -44,3 +44,18 @@ def test_csp_presente_e_errori_interni_in_json(radice, monkeypatch):
     r = client.get(f"/api/lavori/{lavoro}/stato")
     assert r.status_code == 500 and r.headers["content-type"].startswith("application/json")
     assert "detail" in r.json() and "imprevisto" not in r.text
+
+
+def test_zero_pagine_leggibili_da_fase_errore(radice):
+    client = TestClient(app)
+    client.headers["X-Traccia-Token"] = client.get("/api/sessione").json()["token"]
+    r = client.post("/api/lavori", files=[("file", ("finto.pdf", b"non sono un pdf", "application/pdf"))])
+    lavoro = r.json()["lavoro"]
+    for _ in range(100):
+        stato = client.get(f"/api/lavori/{lavoro}/stato").json()
+        if not stato["preparing"] and stato["fase"] != "preparazione":
+            break
+        time.sleep(0.1)
+    assert stato["fase"] == "errore" and stato["pagine_totali"] == 0 and "leggibile" in stato["motivo"]
+    voce = client.get("/api/lavori").json()[0]
+    assert voce["fase"] == "errore" and voce["motivo"] == stato["motivo"]

@@ -19,6 +19,12 @@ def test_gradi_con_alternative():
     assert nz.gradi("S 355 J2") == {"S355J2"}
 
 
+def test_data_iso_anche_dentro_il_testo_della_colonna():
+    assert nz.data_iso("05/06/2026") == "2026-06-05"
+    assert nz.data_iso("DDT n. 123 del 01/02/2026") == "2026-02-01"  # M8: la colonna DDT ordinata per data
+    assert nz.data_iso("senza data") == "senza data" and nz.data_iso(None) == ""
+
+
 def test_numeri_di_documento():
     assert nz.stesso_numero("1234", "1234 2021") == "uguale"  # numero + anno stampati separati
     assert nz.stesso_numero("731", "00731") == "uguale"

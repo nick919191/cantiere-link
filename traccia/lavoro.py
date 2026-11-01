@@ -147,8 +147,11 @@ def stato(cartella: Path) -> dict:
         dettagli.append(voce)
     preparata = (cartella / "pagine.json").exists()
     composto = _json_tollerante(cartella / "uscita" / "riepilogo.json", {}) or None
+    motivo = ""
     if not preparata:
         fase = "preparazione"
+    elif not elenco:
+        fase, motivo = "errore", "Nessuna pagina leggibile nei file caricati: controlla formato e contenuto."
     elif da_leggere:
         fase = "lettura"
     elif composto and composto.get("impronta") == impronta_letture(cartella):
@@ -161,6 +164,7 @@ def stato(cartella: Path) -> dict:
         "nome": info.get("nome", cartella.name),
         "creato": info.get("creato", ""),
         "fase": fase,
+        "motivo": motivo,
         "pagine_totali": totale,
         "file": len({p["file"] for p in elenco}),
         "lette": lette,

@@ -37,10 +37,10 @@ $("invia").onclick=()=>{if(!scelti.length)return;const fd=new FormData();scelti.
   else $("uperr").textContent=dettaglio(x)||`Invio non riuscito (HTTP ${x.status}). Riprova; se il problema resta, i file potrebbero essere troppo grandi.`};
  x.onerror=()=>{$("invia").disabled=false;$("uperr").textContent="La piattaforma non risponde: controlla che l’app sia aperta."};x.send(fd)};
 function dettaglio(x){try{const d=JSON.parse(x.responseText).detail;return typeof d==="string"?d:""}catch(e){return ""}}
-const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato"};
+const FASI={preparazione:"Preparazione delle pagine",lettura:"Lettura in corso",composizione:"Collegamento a ritroso",pronto:"Completato",errore:"Nessuna pagina leggibile"};
 function tok(n){n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+"k":String(n)}
 function tokens(c){if(!c||!c.chiamate)return "";return `Token ${tok(c.ingresso)} in · ${tok(c.uscita)} out · ${c.chiamate} chiamate`}
-function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":"b"}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
+function casa(){api("/api/lavori").then(ls=>{$("lavori").innerHTML=ls.length?ls.map(l=>`<div class="card lav" data-act="open-job" data-job="${esc(l.lavoro)}"><div class="lav-head"><div class="t">${esc(l.nome)}</div><button class="btn s trash-job" data-act="confirm-trash" data-job="${esc(l.lavoro)}" aria-label="Sposta cantiere nel cestino">Elimina</button></div><div class="m">${esc(l.creato)} · ${l.pagine_totali} pagine${l.consumo&&l.consumo.chiamate?" · "+tokens(l.consumo):""}</div><div style="margin-top:8px"><span class="pill ${l.fase==="pronto"?"g":l.fase==="errore"?"r":"b"}" title="${esc(l.motivo||"")}">${FASI[l.fase]||l.fase} ${l.fase==="pronto"||l.fase==="errore"?"":"· "+l.percentuale+"%"}</span></div></div>`).join(""):`<div class="note">Nessun lavoro ancora. Carica i tuoi documenti oppure crea un cantiere di prova.</div>`}).catch(()=>{})}
 
 /* ---------- lavoro ---------- */
 function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;inizio=true;pagMostrata=null;
@@ -53,7 +53,7 @@ async function aggiorna(){if(!L)return;
  $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;
  const p=stato.fase==="pronto"?100:stato.percentuale;
  $("barv").style.width=p+"%";$("ringv").style.strokeDashoffset=169.6*(1-p/100);$("ringt").textContent=p+"%";
- $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato"}[stato.fase];
+ $("titolo").textContent={preparazione:"Preparo le pagine",lettura:"Pagine da analizzare con l’agente",composizione:"Collego a ritroso e preparo l'Excel",pronto:"Lavoro completato",errore:stato.motivo||"Nessuna pagina leggibile"}[stato.fase];
  const fatte=stato.lette+stato.non_lette.length;
  $("bart").textContent=`${fatte} di ${stato.pagine_totali} pagine · ${stato.file} file`;
  $("bare").textContent=stato.non_lette.length?`${stato.non_lette.length} pagine non lette`:"";

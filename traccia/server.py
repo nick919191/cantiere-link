@@ -372,7 +372,8 @@ def elenco():
         except (OSError, ValueError):
             # Una cartella non leggibile (permessi) o un JSON corrotto non devono nascondere gli altri cantieri.
             continue
-        voci.append({k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")})
+        chiavi = ("lavoro", "nome", "creato", "fase", "motivo", "pagine_totali", "percentuale", "consumo")
+        voci.append({k: s[k] for k in chiavi})
     return voci
 
 
