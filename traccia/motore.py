@@ -260,12 +260,14 @@ class Motore:
         classe_ddt = nz.classe((riga_ddt or {}).get("qualita") or voce.get("qualita"))
 
         cert, righe, ricavato, ponti = None, [], False, []
+        ambiguo = False  # più certificati candidati: non è un'assenza (MANCANTE) ma un dubbio (DA CONFERMARE)
         if voce["certificato"]:
             trovati = [c for c in self.p["certificati"] if nz.stesso_numero(voce["certificato"], c["numero"])]
             if not trovati:
                 motivi.append(f"il costruttore dichiara il certificato {voce['certificato']}: non è nel fascicolo")
                 richieste.append(f"certificato {voce['certificato']}")
             elif len(trovati) > 1:
+                ambiguo = True
                 motivi.append("più certificati con lo stesso numero: identificazione non univoca")
             else:
                 cert = trovati[0]
@@ -273,11 +275,13 @@ class Motore:
                     avvisi.append(f"il costruttore scrive {voce['certificato']}, il certificato porta {cert['numero']}")
                 righe, ricavato = _righe_cert(cert, voce, riga_ddt)
         else:
-            cert, righe, ricavato = self._cerca_per_profilo(voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi)
+            cert, righe, ricavato, ambiguo = self._cerca_per_profilo(
+                voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi
+            )
 
         if voce["ddt"] and not doc_ddt:
             richieste.append(f"DDT {voce['ddt']}")
-        stato = self._stato(voce, cert, righe, doc_ddt, riga_ddt, ricavato, motivi, avvisi)
+        stato = self._stato(voce, cert, righe, doc_ddt, riga_ddt, ricavato, ambiguo, motivi, avvisi)
         if self.p.get("non_lette") or self.p.get("file_non_letti"):
             stato = DA_CONFERMARE
             avvisi.append("fascicolo non letto completamente: esito provvisorio, assenze non accertate")
@@ -307,6 +311,7 @@ class Motore:
         }
 
     def _cerca_per_profilo(self, voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi):
+        """(certificato, righe, ricavato, ambiguo): ambiguo=True quando più certificati restano possibili."""
         candidati = []
         for c in self.p["certificati"]:
             righe, ricavato = _righe_cert(c, voce, riga_ddt)
@@ -318,12 +323,12 @@ class Motore:
         if voce["ddt"]:
             con_ponte = [x for x in candidati if self.ponti(x[0], voce["ddt"])]
             if len(con_ponte) == 1:
-                return con_ponte[0]
+                return (*con_ponte[0], False)
             if len(con_ponte) > 1:
                 motivi.append(
                     "più certificati timbrati per questo DDT: " + ", ".join(sorted(x[0]["numero"] for x in con_ponte))
                 )
-                return None, [], False
+                return None, [], False, True
             restanti = []
             for x in candidati:
                 altrove = self.timbrato_altrove(x[0], voce["ddt"])
@@ -334,21 +339,21 @@ class Motore:
             candidati = restanti
         if not candidati:
             motivi.append("nessun certificato nel fascicolo per questo materiale")
-            return None, [], False
+            return None, [], False, False
         intestati = [x for x in candidati if doc_ddt and _stessa(x[0]["cliente"], doc_ddt["emittente"])]
         scelti = intestati or candidati
         if len(scelti) > 1:
             motivi.append("più certificati possibili: " + ", ".join(sorted(x[0]["numero"] for x in scelti)))
-            return None, [], False
+            return None, [], False, True
         if not intestati:
             motivi.append(
                 "abbinato per esclusione: unico certificato con questo profilo, senza intestazione al commerciante"
             )
-        return scelti[0]
+        return (*scelti[0], False)
 
-    def _stato(self, voce, cert, righe, doc_ddt, riga_ddt, ricavato, motivi, avvisi) -> str:
+    def _stato(self, voce, cert, righe, doc_ddt, riga_ddt, ricavato, ambiguo, motivi, avvisi) -> str:
         if not cert:
-            return MANCANTE if not any(m.startswith("più ") for m in motivi) else DA_CONFERMARE
+            return DA_CONFERMARE if ambiguo else MANCANTE
         colate = _per_colata(righe)
         ponti = self.ponti(cert, voce["ddt"]) if voce["ddt"] else []
         altrove = self.timbrato_altrove(cert, voce["ddt"]) if voce["ddt"] else []

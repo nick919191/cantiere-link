@@ -9,6 +9,8 @@ import pypdfium2 as pdfium
 from openpyxl import Workbook
 from PIL import Image
 
+from .preparazione import PDFIUM
+
 CARTELLE = {
     "packing_costruttore": "01_Costruttore",
     "dop_costruttore": "01_Costruttore",
@@ -97,28 +99,29 @@ def crea(cartella_lavoro: Path, pagine: list[dict], schede: dict[str, dict], des
             )
             + ".pdf"
         )
-        uscita = pdfium.PdfDocument.new()
-        sorgenti = []  # aperte fino al salvataggio: le pagine importate le usano
-        for p, gradi in doc["pagine"]:
-            sorgente = cartella_lavoro / "ingresso" / p["file"]
-            if sorgente.suffix.lower() == ".pdf":
-                src = pdfium.PdfDocument(sorgente)
-                uscita.import_pages(src, [p["pagina"] - 1])
-            else:  # immagine: diventa una pagina PDF
-                buf = io.BytesIO()
-                with Image.open(cartella_lavoro / "pagine" / f"{p['pid']}.png") as img:
-                    img.convert("RGB").save(buf, format="PDF", resolution=150)
-                src = pdfium.PdfDocument(buf.getvalue())
-                uscita.import_pages(src, [0])
-            sorgenti.append(src)
-            ultima = uscita[len(uscita) - 1]
-            ultima.set_rotation((ultima.get_rotation() + gradi) % 360)
-            ultima.close()
         (destinazione / cartella).mkdir(exist_ok=True)
-        uscita.save(destinazione / cartella / nome)
-        uscita.close()
-        for s in sorgenti:
-            s.close()
+        with PDFIUM:
+            uscita = pdfium.PdfDocument.new()
+            sorgenti = []  # aperte fino al salvataggio: le pagine importate le usano
+            for p, gradi in doc["pagine"]:
+                sorgente = cartella_lavoro / "ingresso" / p["file"]
+                if sorgente.suffix.lower() == ".pdf":
+                    src = pdfium.PdfDocument(sorgente)
+                    uscita.import_pages(src, [p["pagina"] - 1])
+                else:  # immagine: diventa una pagina PDF
+                    buf = io.BytesIO()
+                    with Image.open(cartella_lavoro / "pagine" / f"{p['pid']}.png") as img:
+                        img.convert("RGB").save(buf, format="PDF", resolution=150)
+                    src = pdfium.PdfDocument(buf.getvalue())
+                    uscita.import_pages(src, [0])
+                sorgenti.append(src)
+                ultima = uscita[len(uscita) - 1]
+                ultima.set_rotation((ultima.get_rotation() + gradi) % 360)
+                ultima.close()
+            uscita.save(destinazione / cartella / nome)
+            uscita.close()
+            for s in sorgenti:
+                s.close()
         indice.append([f"{cartella}/{nome}", doc["file"], ", ".join(str(p["pagina"]) for p, _ in doc["pagine"])])
     wb = Workbook()
     ws = wb.active
@@ -126,6 +129,8 @@ def crea(cartella_lavoro: Path, pagine: list[dict], schede: dict[str, dict], des
     ws.append(["NUOVO NOME", "FILE ORIGINALE", "PAGINE ORIGINALI"])
     for r in indice:
         ws.append(r)
+        for cella in ws[ws.max_row]:
+            cella.data_type = "s"  # un nome di file che inizia con "=" non deve diventare una formula
     for col, w in zip("ABC", (70, 60, 20), strict=True):
         ws.column_dimensions[col].width = w
     wb.save(destinazione / "INDICE.xlsx")

@@ -176,7 +176,7 @@ def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):
         with lock:
             attivi[0] += 1
             picco[0] = max(picco[0], attivi[0])
-        time.sleep(0.15)
+        time.sleep(0.6)  # più del tempo per preparare un lotto anche a computer carico
         with lock:
             attivi[0] -= 1
         schede = {}

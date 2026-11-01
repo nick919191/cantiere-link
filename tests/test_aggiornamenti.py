@@ -301,3 +301,17 @@ def test_versioni_di_prova_solo_se_scelte(updates, monkeypatch):
     configurazione.aggiorna({"update_prerelease": True})
     item, messaggio = upd._fetch()
     assert item["version"] == "0.9.1" and item["prova"] and "prova" in messaggio
+
+
+def test_versione_installata_cancellata_a_mano_non_blocca_l_app(updates):
+    """M4: puntatore a una cartella sparita -> copia originale, stato leggibile, rollback possibile."""
+    configurazione.scrivi_json(updates / "attiva.json", {"active": "v0.4.0-aaaaaaaaaaaa", "previous": None})
+    assert avvia.selected(folder=configurazione.directory()) == avvia.BASE
+    stato = upd.status()
+    assert "copia originale" in stato["message"] and stato["can_rollback"] and not stato["restart"]
+    client = TestClient(server.app)
+    client.headers["X-Traccia-Token"] = client.get("/api/sessione").json()["token"]
+    assert client.get("/api/aggiornamenti").status_code == 200
+    assert client.post("/api/agente/interrompi").status_code == 200  # _idle() non lancia 409
+    upd.rollback()
+    assert upd.pointer()["active"] is None

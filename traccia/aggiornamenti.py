@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import platform
 import re
@@ -21,6 +22,7 @@ from filelock import FileLock
 
 from . import VERSIONE_APP, configurazione, percorsi
 
+log = logging.getLogger(__name__)
 _lock = threading.RLock()
 _state = {"busy": False, "checking": False, "message": "", "available": None, "checked_at": None}
 MAX_ARCHIVE = 250 * 1024 * 1024
@@ -82,7 +84,16 @@ def status():
         result = dict(_state)
     native = package_kind() == "installer"
     saved = {} if native else pointer()
-    active = _installed(saved["active"])[1] if saved.get("active") else None
+    active = None
+    if saved.get("active"):
+        try:
+            active = _installed(saved["active"])[1]
+        except UpdateError:
+            # Cartella della versione cancellata a mano: avvia.py usa la copia originale; qui non si blocca nulla.
+            result["message"] = result["message"] or (
+                "La versione installata non è più presente: è in uso la copia originale. "
+                "Puoi installare di nuovo l’aggiornamento o tornare alla precedente."
+            )
     result.update(
         version=VERSIONE_APP,
         repository=metadata()["repository"],
@@ -326,21 +337,28 @@ def extract(archive, target, item):
         raise UpdateError("I file del pacchetto non corrispondono al manifest.")
 
 
+def _requisiti(root):
+    """Come avvia.requisiti: lockfile con hash se la release lo contiene, altrimenti requirements.txt."""
+    lock = root / "requirements.lock"
+    if lock.exists():
+        return lock, ["--require-hashes", "-r", str(lock)]
+    return root / "requirements.txt", ["-r", str(root / "requirements.txt")]
+
+
 def _prepare_environment(root):
     python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
+    elenco, argomenti = _requisiti(root)
     commands = [
         [sys.executable, "-m", "venv", str(root / ".venv")],
-        [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(root / "requirements.txt")],
+        [str(python), "-m", "pip", "install", "--disable-pip-version-check", *argomenti],
         [str(python), "-c", "from traccia.server import app; assert app"],
     ]
     for command in commands:
         subprocess.run(
             command, cwd=root, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags
         )
-    (root / ".venv/requirements.sha256").write_text(
-        hashlib.sha256((root / "requirements.txt").read_bytes()).hexdigest()
-    )
+    (root / ".venv/requirements.sha256").write_text(hashlib.sha256(elenco.read_bytes()).hexdigest())
 
 
 def install(expected_version):
@@ -403,6 +421,8 @@ def install(expected_version):
                         available=None, message="Aggiornamento pronto. Chiudi l’app e riapri il consueto Avvia."
                     )
         except Exception as exc:
+            if not isinstance(exc, UpdateError):
+                log.exception("Installazione dell'aggiornamento %s non riuscita", expected_version)
             with _lock:
                 _state["message"] = (
                     str(exc)
@@ -427,7 +447,10 @@ def rollback():
         if not saved.get("active") and not saved.get("previous"):
             raise UpdateError("Nessuna versione precedente disponibile.")
         if saved.get("previous"):
-            _installed(saved["previous"])
+            try:
+                _installed(saved["previous"])
+            except UpdateError:
+                saved["previous"] = None  # anche la precedente è sparita: si torna alla copia originale
         configurazione.scrivi_json(
             directory() / "attiva.json",
             {

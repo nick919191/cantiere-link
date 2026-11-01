@@ -252,6 +252,6 @@ def gruppo(chiave):
 
 
 def data_iso(data):
-    """'05/06/2026' -> '2026-06-05'; altrimenti il testo com'e'."""
-    m = re.match(r"(\d{2})/(\d{2})/(\d{4})", data or "")
+    """'05/06/2026' -> '2026-06-05', anche dentro 'DDT n. 123 del 05/06/2026'; altrimenti il testo com'e'."""
+    m = re.search(r"\b(\d{2})/(\d{2})/(\d{4})\b", data or "")
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else (data or "")

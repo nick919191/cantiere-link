@@ -4,12 +4,11 @@ Serve come demo da rifar girare: aziende, numeri, colate e date non esistono. Le
 perché l'analisi con ChatGPT consumi pochi token (ogni pagina è un'immagine più il testo nativo).
 """
 
-import json
 import time
 import uuid
 from pathlib import Path
 
-from . import percorsi
+from . import configurazione, percorsi
 from .pdf_semplice import A5, pdf_con_testo
 
 NOME = "Cantiere di prova (demo)"
@@ -136,11 +135,8 @@ def crea() -> tuple[str, Path]:
     for nome, righe in documenti():
         (ingresso / nome).write_bytes(pdf_con_testo(righe, A5, corpo=9))
         nomi.append(nome)
-    (cartella / "info.json").write_text(
-        json.dumps(
-            {"nome": NOME, "creato": time.strftime("%d/%m/%Y %H:%M"), "file": nomi, "scartati": [], "demo": True},
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    configurazione.scrivi_json(
+        cartella / "info.json",
+        {"nome": NOME, "creato": time.strftime("%d/%m/%Y %H:%M"), "file": nomi, "scartati": [], "demo": True},
     )
     return id_lavoro, cartella

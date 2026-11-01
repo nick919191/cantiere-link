@@ -220,3 +220,43 @@ def test_formato_precedente_in_una_voce_resta_leggibile(monkeypatch):
     monkeypatch.setattr(chatgpt, "_vault", lambda: portachiavi)
     portachiavi.voci[(chatgpt.SERVICE, "profiles")] = json.dumps({"active": None, "profiles": {"p": {}}})
     assert chatgpt._read() == {"active": None, "profiles": {"p": {}}}
+
+
+def test_rete_fuori_dal_lock_e_timeout_del_lock_gestito(vault, monkeypatch):
+    """M3: durante il rinnovo del token status() non aspetta; un lock di file occupato dà AgentError, non 500."""
+    vault.update(
+        {
+            "active": "c",
+            "profiles": {"c": {**tokens(), "expires_at": 0, "subject": "s", "scopes": ["chatgpt.tokens.use.direct"]}},
+        }
+    )
+    chiamate, esiti = [], []
+
+    def request(method, url, **kwargs):
+        chiamate.append(url)
+        worker = threading.Thread(target=lambda: esiti.append(chatgpt.status()["connected"]))
+        worker.start()
+        worker.join(timeout=3)
+        assert not worker.is_alive(), "status() bloccato dal lock durante la chiamata di rete"
+        time.sleep(0.05)
+        return {"access_token": "nuovo", "refresh_token": "ruotato", "token_type": "Bearer", "expires_in": 3600}
+
+    monkeypatch.setattr(chatgpt, "_request", request)
+    monkeypatch.setattr(chatgpt, "_identity", lambda *_a: {"sub": "s"})
+    thread = [threading.Thread(target=chatgpt.access_token) for _ in range(4)]
+    for t in thread:
+        t.start()
+    for t in thread:
+        t.join()
+    assert len(chiamate) == 1 and esiti == [True]  # un solo rinnovo per quattro lotti paralleli
+    assert chatgpt.access_token() == "nuovo"
+
+    occupato = chatgpt._filelock()
+    occupato.acquire()
+    try:
+        monkeypatch.setattr(chatgpt, "_filelock", lambda: chatgpt.FileLock(occupato.lock_file, timeout=0.1))
+        assert chatgpt.status()["connected"] is False and "riprova" in chatgpt.status()["message"]
+        with pytest.raises(chatgpt.AgentError, match="riprova"):
+            chatgpt.access_token()
+    finally:
+        occupato.release()

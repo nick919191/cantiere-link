@@ -15,9 +15,12 @@ VUOTO = {"chiamate": 0, "ingresso": 0, "uscita": 0}
 
 def _leggi(f: Path) -> dict:
     try:
-        return {**VUOTO, **json.loads(f.read_text(encoding="utf-8"))}
+        dati = json.loads(f.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return dict(VUOTO)
+    if not isinstance(dati, dict):
+        return dict(VUOTO)
+    return {k: dati[k] if isinstance(dati.get(k), int) else v for k, v in VUOTO.items()}
 
 
 def _aggiungi(f: Path, ingresso: int, uscita: int) -> None:

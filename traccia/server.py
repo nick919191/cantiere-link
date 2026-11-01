@@ -4,12 +4,13 @@ Il servizio locale collega il browser all’agente ChatGPT e conserva originali 
 """
 
 import hashlib
-import io
 import json
+import logging
 import os
 import re
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -19,9 +20,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from . import (
     agente,
@@ -35,15 +37,19 @@ from . import (
     demo_cantiere,
     ocr,
     percorsi,
+    registro,
 )
 from . import cerca as ricerca
 from . import lavoro as lv
 from .motore import COLONNE
 from .preparazione import info_pagina, prepara
 
+log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifecycle(_app):
+    registro.configura()
     stop_checks = threading.Event()
 
     def update_checks():
@@ -51,7 +57,7 @@ async def lifecycle(_app):
             try:
                 aggiornamenti.check()
             except Exception:
-                pass
+                log.exception("Controllo aggiornamenti non riuscito")
             stop_checks.wait(3600)
 
     threading.Thread(target=update_checks, daemon=True).start()
@@ -64,15 +70,34 @@ app = FastAPI(title="CantiereLink", docs_url=None, redoc_url=None, lifespan=life
 _PREPARING = set()
 _ANCORA = set()  # cantieri con file arrivati mentre la preparazione era già in corso: si ripassa
 _PREPARAZIONE: dict[str, dict] = {}  # avanzamento della preparazione: {"n": file fatti, "totale": file da fare}
+HOST_CONSENTITI = {"127.0.0.1", "localhost"}  # i test aggiungono "testserver" dalla fixture, non il codice
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
+_TOKEN_DALLA_FINESTRA = False  # True quando desktop.py ha generato il token e lo consegna nel frammento dell'URL
+
+
+def imposta_token(token: str) -> None:
+    """Token scelto da desktop.py prima dell'avvio: /api/sessione si spegne e nessun altro processo locale lo legge."""
+    global _TOKEN, _TOKEN_DALLA_FINESTRA
+    _TOKEN, _TOKEN_DALLA_FINESTRA = token, True
+
+
+def impronta_istanza() -> str:
+    """Identifica questa istanza in /api/salute senza esporre il token."""
+    return hashlib.sha256(_TOKEN.encode()).hexdigest()[:16]
+
+
+# Nessuno script o handler inline nell'app: la CSP fa da rete di sicurezza all'escaping. Gli stili inline restano
+# (attributi style nell'interfaccia e nelle pagine di prova). La demo statica in demo/ ha ancora script inline.
+_CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'"
+_CSP_DEMO = _CSP + "; script-src 'self' 'unsafe-inline'"
 
 
 @app.middleware("http")
 async def locale(request: Request, call_next):
     host = request.url.hostname
-    if host not in ("127.0.0.1", "localhost") and not (host == "testserver" and request.client.host == "testclient"):
+    if host not in HOST_CONSENTITI:
         return JSONResponse({"detail": "Host non autorizzato"}, status_code=403)
     origin = request.headers.get("origin")
     if origin and (urlsplit(origin).netloc != request.headers.get("host") or urlsplit(origin).scheme != "http"):
@@ -84,9 +109,20 @@ async def locale(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Content-Security-Policy"] = _CSP_DEMO if request.url.path.startswith("/demo/") else _CSP
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.exception_handler(Exception)
+async def errore_interno(request: Request, exc: Exception):
+    """Qualunque errore inatteso arriva al browser come JSON con `detail`, mai come testo grezzo."""
+    log.error("Errore interno su %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        {"detail": "Errore interno dell’applicazione. Riprova; se il problema resta, chiudi e riapri l’app."},
+        status_code=500,
+    )
 
 
 @app.exception_handler(chatgpt.AgentError)
@@ -96,13 +132,18 @@ async def agent_error(_request: Request, exc: chatgpt.AgentError):
 
 @app.get("/api/sessione")
 def sessione():
+    if _TOKEN_DALLA_FINESTRA:
+        raise HTTPException(404, "La sessione si apre soltanto dalla finestra dell’app.")
     return {"token": _TOKEN}
 
 
 @app.get("/api/impostazioni")
 def impostazioni():
     prefs = configurazione.leggi()
-    return {k: prefs[k] for k in ("model", "reasoning", "theme")} | {"cartella": str(percorsi.RADICE)}
+    return {k: prefs[k] for k in ("model", "reasoning", "theme")} | {
+        "cartella": str(percorsi.RADICE),
+        "registro": str(registro.percorso()),
+    }
 
 
 class Preferenze(BaseModel):
@@ -357,7 +398,7 @@ def trash_job(id_lavoro: str):
     if agent["busy"] and agent.get("job") == id_lavoro:
         raise chatgpt.AgentError("L’agente sta analizzando questo cantiere: premi «Interrompi», poi elimina.")
     if id_lavoro in _PREPARING:
-        raise chatgpt.AgentError("Attendi il completamento della preparazione delle pagine.")
+        raise chatgpt.AgentError("Attendi il completamento del caricamento o della preparazione delle pagine.")
     try:
         return cestino.sposta(id_lavoro)
     except ValueError as exc:
@@ -432,7 +473,7 @@ def _dentro(base: Path, relativo: str) -> Path:
 
 @app.get("/api/salute")
 def salute():
-    return {"ok": True, "application": "tracciabilita-materiali"}
+    return {"ok": True, "application": "tracciabilita-materiali", "istanza": impronta_istanza()}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -458,10 +499,11 @@ def elenco():
             if not (c / "info.json").exists():
                 continue
             s = lv.stato(c, leggero=True)
-        except OSError:
-            # Una cartella non leggibile (permessi) non deve nascondere tutti gli altri cantieri.
+        except (OSError, ValueError):
+            # Una cartella non leggibile (permessi) o un JSON corrotto non devono nascondere gli altri cantieri.
             continue
-        voce = {k: s[k] for k in ("lavoro", "nome", "creato", "fase", "pagine_totali", "percentuale", "consumo")}
+        chiavi_voce = ("lavoro", "nome", "creato", "fase", "motivo", "pagine_totali", "percentuale", "consumo")
+        voce = {k: s[k] for k in chiavi_voce}
         # Conteggi per stato solo se l'Excel corrisponde alle letture attuali: la home li mostra sulla scheda.
         voce["conteggio"] = (s["riepilogo"] or {}).get("conteggio") if s["fase"] == "pronto" else None
         voci.append(voce)
@@ -488,12 +530,20 @@ async def _ricevi(file: list[UploadFile], ingresso: Path) -> tuple[list[str], li
             destinazione = ingresso / ("documento_" + destinazione.name)
         if destinazione.exists():
             destinazione = destinazione.with_name(uuid.uuid4().hex[:8] + "_" + destinazione.name)
-        with destinazione.open("xb") as output:
-            while dati := await f.read(1024 * 1024):
-                totale += len(dati)
-                if totale > _MAX_BYTE:
-                    raise HTTPException(413, "Caricamento troppo grande. Suddividi i file in fascicoli più piccoli.")
-                output.write(dati)
+        # Un .part non è visibile alla preparazione, che può girare mentre arriva un file aggiunto.
+        parziale = destinazione.with_name(destinazione.name + ".part")
+        try:
+            with parziale.open("xb") as output:
+                while dati := await f.read(1024 * 1024):
+                    totale += len(dati)
+                    if totale > _MAX_BYTE:
+                        raise HTTPException(
+                            413, "Caricamento troppo grande. Suddividi i file in fascicoli più piccoli."
+                        )
+                    output.write(dati)
+            parziale.replace(destinazione)
+        finally:
+            parziale.unlink(missing_ok=True)
         await f.close()
         accettati.append(destinazione.name)
     if not accettati:
@@ -524,6 +574,7 @@ def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
                     break
             lv.evento(cartella, tipo="preparate", testo=f"{len(lv.pagine(cartella))} pagine pronte")
         except Exception:
+            log.exception("Preparazione del cantiere %s non riuscita", id_lavoro)
             lv.evento(
                 cartella, tipo="errore", testo="Preparazione non riuscita: controlla formato e dimensioni dei file."
             )
@@ -536,7 +587,7 @@ def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
 
 
 @app.post("/api/lavori")
-async def carica(file: list[UploadFile], nome: str = Form("")):
+async def carica(file: list[UploadFile], nome: str = Form("", max_length=200)):
     id_lavoro = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     cartella = percorsi.lavoro(id_lavoro)
     percorsi.lavori().mkdir(parents=True, exist_ok=True)
@@ -550,17 +601,9 @@ async def carica(file: list[UploadFile], nome: str = Form("")):
         temporary.rename(cartella)
     finally:
         shutil.rmtree(temporary, ignore_errors=True)
-    (cartella / "info.json").write_text(
-        json.dumps(
-            {
-                "nome": nome or id_lavoro,
-                "creato": time.strftime("%d/%m/%Y %H:%M"),
-                "file": accettati,
-                "scartati": scartati,
-            },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
+    configurazione.scrivi_json(
+        cartella / "info.json",
+        {"nome": nome or id_lavoro, "creato": time.strftime("%d/%m/%Y %H:%M"), "file": accettati, "scartati": scartati},
     )
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file ricevuti", file=accettati, scartati=scartati)
     _prepara_in_sfondo(id_lavoro, cartella)
@@ -604,7 +647,7 @@ async def aggiungi_file(id_lavoro: str, file: list[UploadFile]):
     info = json.loads(info_file.read_text(encoding="utf-8"))
     info["file"] = info.get("file", []) + accettati
     info["scartati"] = info.get("scartati", []) + scartati
-    info_file.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+    configurazione.scrivi_json(info_file, info)
     lv.evento(cartella, tipo="ricevuti", testo=f"{len(accettati)} file aggiunti", file=accettati, scartati=scartati)
     _prepara_in_sfondo(id_lavoro, cartella)
     return {"lavoro": id_lavoro, "accettati": accettati, "scartati": scartati, "doppi": doppi}
@@ -646,9 +689,14 @@ def miniatura(id_lavoro: str, pid: str):
     f = c / "miniature" / f"{pid}.png"
     if not f.exists():
         f.parent.mkdir(exist_ok=True)
+        temporaneo = f.with_name(f"{pid}.{uuid.uuid4().hex}.tmp")  # mai una PNG a metà servita a un'altra richiesta
         with Image.open(originale) as img:
             img.thumbnail((160, 160))
-            img.save(f, format="PNG")
+            img.save(temporaneo, format="PNG")
+        try:
+            temporaneo.replace(f)
+        except OSError:
+            temporaneo.unlink(missing_ok=True)
     return FileResponse(f)
 
 
@@ -771,20 +819,25 @@ def file_uscita(id_lavoro: str, relativo: str):
     return FileResponse(_dentro(_cartella(id_lavoro) / "uscita", relativo))
 
 
-def _zip(base: Path, escludi: str | None = None, solo: str | None = None) -> StreamingResponse:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(base.rglob("*")):
-            rel = f.relative_to(base).as_posix()
-            if (
-                f.is_file()
-                and not rel.endswith(".json")
-                and (not escludi or not rel.startswith(escludi))
-                and (not solo or rel.startswith(solo))
-            ):
-                z.write(f, rel[len(solo) + 1 :] if solo else rel)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/zip")
+def _zip(base: Path, escludi: str | None = None, solo: str | None = None) -> FileResponse:
+    """Zip su file temporaneo, non in RAM: FileResponse lo invia a pezzi e lo cancella a fine risposta."""
+    fd, percorso = tempfile.mkstemp(prefix="cantierelink-", suffix=".zip")
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(percorso, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(base.rglob("*")):
+                rel = f.relative_to(base).as_posix()
+                if (
+                    f.is_file()
+                    and not rel.endswith(".json")
+                    and (not escludi or not rel.startswith(escludi))
+                    and (not solo or rel.startswith(solo))
+                ):
+                    z.write(f, rel[len(solo) + 1 :] if solo else rel)
+    except BaseException:
+        os.remove(percorso)
+        raise
+    return FileResponse(percorso, media_type="application/zip", background=BackgroundTask(os.remove, percorso))
 
 
 @app.get("/api/lavori/{id_lavoro}/scarica")

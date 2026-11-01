@@ -3,6 +3,7 @@
 import base64
 import io
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -14,10 +15,12 @@ from . import chatgpt, configurazione, consumi, percorsi
 from . import lavoro as lv
 from .controlli import aggiungi_zone_esatte, valida
 from .preparazione import info_pagina, prepara
-from .uscita import componi
+from .uscita import ExcelAperto, componi
 
+log = logging.getLogger(__name__)
 _lock = threading.RLock()
-_cancel = threading.Event()
+_cancel = threading.Event()  # ferma i lotti: lo alza stop() oppure l'errore di un lotto
+_stop_richiesto = threading.Event()  # lo alza soltanto stop(): distingue "interrotta" da "errore"
 _tentativi_lock = threading.Lock()
 PAGINE_IN_PARALLELO = 6  # lotti contemporanei a ChatGPT: ogni pagina è indipendente dalle altre
 PAGINE_PER_LOTTO = 6  # pagine per chiamata: le istruzioni si inviano una volta per lotto, non per pagina
@@ -57,6 +60,7 @@ def stop() -> dict:
     with _lock:
         if not _state["busy"]:
             return {"message": "Nessuna operazione in corso."}
+        _stop_richiesto.set()
         _cancel.set()
         _state.update(stopping=True, message="Interruzione in corso: attendo la risposta della pagina corrente…")
     return {"message": "Interruzione richiesta. Le pagine già lette restano salvate: riprendi quando vuoi."}
@@ -104,6 +108,7 @@ def avvia(cartella: Path, poi=None) -> None:
         if not chatgpt.status().get("plan_enabled"):
             raise chatgpt.AgentError("Collega ChatGPT e abilita l’utilizzo del piano nelle impostazioni.")
         _cancel.clear()
+        _stop_richiesto.clear()
         _state.update(
             busy=True,
             job=cartella.name,
@@ -122,10 +127,13 @@ def avvia(cartella: Path, poi=None) -> None:
             _state.update(message="Operazione completata.")
             riuscita = True
         except Exception as exc:
-            message = (
-                str(exc) if isinstance(exc, chatgpt.AgentError) else "Operazione non completata. Riprova dal cantiere."
-            )
-            _state.update(message=message, error=not _cancel.is_set(), stopped=_cancel.is_set())
+            interrotta = _stop_richiesto.is_set()
+            if isinstance(exc, chatgpt.AgentError | ExcelAperto):
+                message = str(exc)
+            else:
+                message = "Operazione non completata. Riprova dal cantiere."
+                log.exception("Agente sul cantiere %s: errore inatteso", cartella.name)
+            _state.update(message=message, error=not interrotta, stopped=interrotta)
             lv.evento(cartella, tipo="errore", testo=message)
         finally:
             with _lock:
@@ -158,7 +166,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         "Trascrivi anche il testo completo dei timbri e i relativi riferimenti."
     )
     for giro in range(1, GIRI_AUTOMATICI + 1):
-        da_leggere = [p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p)]
+        da_leggere = _senza_doppioni(p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p))
         if not da_leggere:
             break
         if giro > 1:
@@ -180,24 +188,34 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         )
 
 
+def _senza_doppioni(pages) -> list[dict]:
+    """Una sola copia per impronta: la lettura in archivio vale per tutte le pagine identiche."""
+    viste: dict[str, dict] = {}
+    for p in pages:
+        viste.setdefault(p["impronta"], p)
+    return list(viste.values())
+
+
 def _esaurita(cartella: Path, page: dict) -> bool:
     return lv.tentativi(cartella).get(page["pid"], 0) >= lv.MAX_TENTATIVI
 
 
 def _leggi_tutte(cartella: Path, da_leggere: list[dict], instructions: str, model: str, effort: str, giro: int):
     lotti = [da_leggere[i : i + PAGINE_PER_LOTTO] for i in range(0, len(da_leggere), PAGINE_PER_LOTTO)]
-    fatte = 0
+    fatte, rifiutate = 0, 0
     avanzamento("lettura", 0, len(da_leggere))
     with ThreadPoolExecutor(max_workers=PAGINE_IN_PARALLELO, thread_name_prefix="lettura") as pool:
         futures = {pool.submit(_leggi_lotto, cartella, lotto, instructions, model, effort): lotto for lotto in lotti}
         try:
             for future in as_completed(futures):
-                future.result()  # rilancia l'errore del lotto (interruzione compresa)
-                fatte += len(futures[future])
-                avanzamento("lettura", fatte, len(da_leggere))
+                accettate = future.result()  # rilancia l'errore del lotto (interruzione compresa)
+                fatte += accettate
+                rifiutate += len(futures[future]) - accettate
+                avanzamento("lettura", fatte + rifiutate, len(da_leggere))
                 _state.update(
-                    message=f"Lette {fatte} di {len(da_leggere)} pagine "
-                    f"(lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta"
+                    message=f"Lette {fatte} di {len(da_leggere)} pagine"
+                    + (f", {rifiutate} da rileggere" if rifiutate else "")
+                    + f" (lotti da {PAGINE_PER_LOTTO}, {PAGINE_IN_PARALLELO} alla volta"
                     + (", secondo tentativo)" if giro > 1 else ")")
                 )
         except BaseException:
@@ -215,8 +233,12 @@ def immagine_per_modello(png: Path) -> dict:
     return {"type": "input_image", "image_url": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()}
 
 
-def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: str, effort: str) -> None:
-    """Un lotto di pagine in una richiesta a ChatGPT; ogni scheda è controllata e salvata da sola. Gira in un thread."""
+def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: str, effort: str) -> int:
+    """Un lotto di pagine in una richiesta a ChatGPT; ogni scheda è controllata e salvata da sola. Gira in un thread.
+
+    Ritorna quante schede sono state accettate. Una risposta già ricevuta si salva anche se nel frattempo l'utente ha
+    premuto «Interrompi»: il messaggio promette di attendere la pagina corrente, e il piano è già stato speso.
+    """
     _check()
     infos = {p["pid"]: info_pagina(cartella, p["pid"]) for p in lotto}
     for p in lotto:
@@ -243,7 +265,7 @@ def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: st
         )
         content.append(immagine_per_modello(cartella / "pagine" / f"{p['pid']}.png"))
     result = _chiama(cartella, instructions + ISTRUZIONI_LOTTO, [{"role": "user", "content": content}], model, effort)
-    _check()
+    accettate = 0
     try:
         data = _json(result)
         schede = data.get("schede")
@@ -280,4 +302,6 @@ def _leggi_lotto(cartella: Path, lotto: list[dict], instructions: str, model: st
             letto_il=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         )
         lv.salva_lettura(info["impronta"], schema)
+        accettate += 1
         lv.evento(cartella, tipo="scheda", pid=pid, famiglia=schema["famiglia"], testo=schema["motivo"][:250])
+    return accettate

@@ -7,9 +7,10 @@ chiusa a metà riprende da sola: le pagine con una lettura in archivio non si ri
 import json
 import threading
 import time
+import uuid
 from pathlib import Path
 
-from . import consumi, percorsi
+from . import configurazione, consumi, percorsi
 from .famiglie import FAMIGLIE
 
 MAX_TENTATIVI = 4
@@ -35,9 +36,16 @@ def salva_lettura(impronta: str, scheda: dict) -> None:
     f.parent.mkdir(parents=True, exist_ok=True)
     if f.exists():  # congelata: mai riscritta
         return
-    temporaneo = f.with_suffix(".tmp")
+    # Nome del temporaneo univoco: due copie della stessa pagina lette da lotti paralleli non si pestano i piedi.
+    temporaneo = f.with_name(f"{f.stem}.{uuid.uuid4().hex}.tmp")
     temporaneo.write_text(json.dumps(scheda, ensure_ascii=False, indent=1), encoding="utf-8")
-    temporaneo.replace(f)
+    if f.exists():  # l'altro lotto è arrivato prima: la sua lettura resta, questa si scarta
+        temporaneo.unlink(missing_ok=True)
+        return
+    try:
+        temporaneo.replace(f)
+    except (FileExistsError, FileNotFoundError, PermissionError):
+        temporaneo.unlink(missing_ok=True)
 
 
 def cartella_ritagli() -> Path:
@@ -70,15 +78,25 @@ def _json(f: Path, vuoto):
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else vuoto
 
 
+def _json_tollerante(f: Path, vuoto):
+    """File di contorno (info, tentativi, riepilogo): se corrotto o del tipo sbagliato vale come assente."""
+    try:
+        valore = _json(f, vuoto)
+    except (OSError, ValueError):
+        return vuoto
+    return valore if isinstance(valore, type(vuoto)) else vuoto
+
+
 def tentativi(cartella: Path) -> dict[str, int]:
-    return _json(cartella / "tentativi.json", {})
+    t = _json_tollerante(cartella / "tentativi.json", {})
+    return {k: v for k, v in t.items() if isinstance(k, str) and isinstance(v, int)}
 
 
 def segna_tentativi(cartella: Path, pids: list[str]) -> None:
     t = tentativi(cartella)
     for pid in pids:
         t[pid] = t.get(pid, 0) + 1
-    (cartella / "tentativi.json").write_text(json.dumps(t, indent=1), encoding="utf-8")
+    configurazione.scrivi_json(cartella / "tentativi.json", t)
 
 
 def pagine(cartella: Path) -> list[dict]:
@@ -114,7 +132,7 @@ def _letta(p: dict) -> bool:
 
 def stato(cartella: Path, leggero: bool = False) -> dict:
     """Stato del lavoro. Con `leggero` non apre le letture: niente famiglie, ma conteggi e fase uguali e veloci."""
-    info = _json(cartella / "info.json", {})
+    info = _json_tollerante(cartella / "info.json", {})
     elenco = pagine(cartella)
     t = tentativi(cartella)
     per_famiglia = {f: 0 for f in FAMIGLIE}
@@ -136,9 +154,12 @@ def stato(cartella: Path, leggero: bool = False) -> dict:
             voce.update(stato="da_leggere")
         dettagli.append(voce)
     preparata = (cartella / "pagine.json").exists()
-    composto = _json(cartella / "uscita" / "riepilogo.json", None)
+    composto = _json_tollerante(cartella / "uscita" / "riepilogo.json", {}) or None
+    motivo = ""
     if not preparata:
         fase = "preparazione"
+    elif not elenco:
+        fase, motivo = "errore", "Nessuna pagina leggibile nei file caricati: controlla formato e contenuto."
     elif da_leggere:
         fase = "lettura"
     elif composto and composto.get("impronta") == impronta_letture(cartella):
@@ -151,6 +172,7 @@ def stato(cartella: Path, leggero: bool = False) -> dict:
         "nome": info.get("nome", cartella.name),
         "creato": info.get("creato", ""),
         "fase": fase,
+        "motivo": motivo,
         "pagine_totali": totale,
         "file": len({p["file"] for p in elenco}),
         "lette": lette,
@@ -189,7 +211,7 @@ def prossimo_lavoro() -> dict | None:
             da = [p["pid"] for p in s["pagine"] if p["stato"] == "da_leggere"]
             segna_tentativi(cartella, da)
             lotti = [da[i : i + DIMENSIONE_LOTTO] for i in range(0, len(da), DIMENSIONE_LOTTO)]
-            evento(cartella, tipo="lettura", testo=f"Claude legge {len(da)} pagine in {len(lotti)} lotti")
+            evento(cartella, tipo="lettura", testo=f"L'agente legge {len(da)} pagine in {len(lotti)} lotti")
             return {"lavoro": cartella.name, "lotti": lotti}
         if s["fase"] == "composizione":
             return {"lavoro": cartella.name, "componi": True}

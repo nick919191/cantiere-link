@@ -17,11 +17,17 @@ def directory():
 
 
 def elenco():
-    return [
-        json.loads((p / "voce.json").read_text(encoding="utf-8"))
-        for p in sorted(directory().iterdir(), reverse=True)
-        if p.is_dir() and (p / "contenuto").is_dir() and (p / "voce.json").is_file()
-    ]
+    voci = []
+    for p in sorted(directory().iterdir(), reverse=True):
+        if not (p.is_dir() and (p / "contenuto").is_dir() and (p / "voce.json").is_file()):
+            continue
+        try:
+            voce = json.loads((p / "voce.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue  # una voce corrotta non deve nascondere il resto del cestino
+        if isinstance(voce, dict) and voce.get("id") == p.name:
+            voci.append(voce)
+    return voci
 
 
 def sposta(job):

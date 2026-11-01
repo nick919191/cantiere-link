@@ -8,9 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pdf_minimo import pdf_con_testo
 
-from traccia import agente, chatgpt, consumi, demo_cantiere, server
+from traccia import agente, chatgpt, consumi, demo_cantiere, percorsi, server
 from traccia import lavoro as lv
-from traccia.preparazione import prepara
+from traccia.preparazione import file_sorgente, prepara
 
 
 def _client():
@@ -116,6 +116,38 @@ def test_ferma_resta_fermo_e_riprendi_toglie_il_fermo(radice, monkeypatch):
     assert partiti == []  # fermato dall'utente: non riparte da solo
     client.post(f"/api/lavori/{lavoro}/analizza")
     assert partiti == [lavoro] and not (cartella / "fermato").exists()
+
+
+def test_file_in_arrivo_non_visibile_alla_preparazione(radice):
+    """A3: i file si aggiungono anche durante il lavoro, ma la preparazione non deve leggerne uno a metà."""
+    client = _client()
+    r = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))])
+    lavoro = r.json()["lavoro"]
+    _attendi_preparazione(client, lavoro)
+    ingresso = percorsi.lavoro(lavoro) / "ingresso"
+    assert file_sorgente(ingresso) == [ingresso / "b.pdf"]
+    (ingresso / "a.pdf.part").write_bytes(b"%PDF-a met")
+    assert file_sorgente(ingresso) == [ingresso / "b.pdf"]
+    (ingresso / "a.pdf.part").unlink()
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("a.pdf", pdf_con_testo(["y"]), "application/pdf"))])
+    assert r.status_code == 200 and not list(ingresso.glob("*.part"))
+    assert _attendi_preparazione(client, lavoro)["pagine_totali"] == 2
+    # un upload rifiutato (nessun PDF) non lascia il cantiere occupato
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("note.txt", b"x", "text/plain"))])
+    assert r.status_code == 400 and lavoro not in server._PREPARING
+
+
+def test_upload_interrotto_non_lascia_file_a_meta(radice, monkeypatch):
+    client = _client()
+    lavoro = client.post("/api/lavori", files=[("file", ("b.pdf", pdf_con_testo(["x"]), "application/pdf"))]).json()[
+        "lavoro"
+    ]
+    _attendi_preparazione(client, lavoro)
+    monkeypatch.setattr(server, "_MAX_BYTE", 10)
+    r = client.post(f"/api/lavori/{lavoro}/file", files=[("file", ("a.pdf", pdf_con_testo(["y"]), "application/pdf"))])
+    assert r.status_code == 413
+    ingresso = percorsi.lavoro(lavoro) / "ingresso"
+    assert sorted(f.name for f in ingresso.iterdir()) == ["b.pdf"]
 
 
 def test_token_dichiarati_dal_servizio_vengono_contati(radice, monkeypatch):

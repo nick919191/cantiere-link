@@ -35,6 +35,10 @@ def selected(base=BASE, folder=None):
     target = (parent / key).resolve()
     if target.parent != parent:
         raise ValueError("Cartella della versione non valida.")
+    if not (target / ".installata.json").is_file():
+        # Cartella della versione cancellata a mano: si usa la copia originale invece di non partire.
+        print(f"Versione installata {key} non trovata: avvio della copia originale.", flush=True)
+        return base
     marker = json.loads((target / ".installata.json").read_text(encoding="utf-8"))
     trusted = json.loads((base / "release.json").read_text(encoding="utf-8"))
     if marker["repository"] != trusted["repository"]:
@@ -42,25 +46,26 @@ def selected(base=BASE, folder=None):
     return target
 
 
+def requisiti(root):
+    """Lockfile con hash (installazione riproducibile) se presente, altrimenti requirements.txt."""
+    lock = root / "requirements.lock"
+    if lock.exists():
+        return lock, ["--require-hashes", "-r", str(lock)]
+    return root / "requirements.txt", ["-r", str(root / "requirements.txt")]
+
+
 def prepare(root):
     executable = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     if not executable.exists():
         subprocess.run([sys.executable, "-m", "venv", str(root / ".venv")], check=True, **flags)
-    digest = hashlib.sha256((root / "requirements.txt").read_bytes()).hexdigest()
+    elenco, argomenti = requisiti(root)
+    digest = hashlib.sha256(elenco.read_bytes()).hexdigest()
     stamp = root / ".venv/requirements.sha256"
     if not stamp.exists() or stamp.read_text().strip() != digest:
         print("Preparazione delle dipendenze di CantiereLink…", flush=True)
         subprocess.run(
-            [
-                str(executable),
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
-                "-r",
-                str(root / "requirements.txt"),
-            ],
+            [str(executable), "-m", "pip", "install", "--disable-pip-version-check", *argomenti],
             cwd=root,
             check=True,
             **flags,
