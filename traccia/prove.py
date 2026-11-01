@@ -102,12 +102,15 @@ def _pagina_di(testo: str) -> tuple[int, int] | None:
     return (int(m.group(1)), int(m.group(2))) if m and 0 < int(m.group(1)) <= int(m.group(2)) <= 50 else None
 
 
-def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
-    """pagine: elenco del lavoro (pid, file, pagina, ...); schede: pid -> scheda letta."""
+def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str | None] | None = None) -> dict:
+    """pagine: elenco del lavoro (pid, file, pagina, ...); schede: pid -> scheda letta; mappe: pid -> famiglia data
+    dal riconoscimento delle pagine (DeepSeek), usata per dire che cosa c'è nelle pagine non lette."""
     info = {p["pid"]: p for p in pagine}
+    mappe = mappe or {}
     fonti = Fonti(info)
     packing, ddt, certificati, dop_costr, dop_prod, lettere, escluse = [], [], [], [], [], [], []
     scartate = []  # righe della packing senza materiale né certificato
+    parziali = []  # pagine lette a metà (famiglia e testata, senza righe): il motore non le dà per complete
     ultimo: dict[tuple[str, str], dict] = {}  # (file, famiglia) -> ultimo documento, per le pagine di seguito
     aziende = Aziende()
     for s in schede.values():
@@ -126,6 +129,8 @@ def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
             continue
         fam, t = s["famiglia"], s.get("testata", {})
         seguito = ultimo.get((p["file"], fam))
+        if s.get("parziale"):
+            parziali.append(pid)
         if fam in ("da_escludere", "illeggibile"):
             escluse.append(
                 {"pid": pid, "famiglia": fam, "motivo": s.get("motivo", ""), "bianca": s.get("bianca", False)}
@@ -345,11 +350,15 @@ def costruisci(pagine: list[dict], schede: dict[str, dict]) -> dict:
             d["tipo"] = "commerciante_costruttore"
         else:
             d["tipo"] = "fuori_perimetro"
+    non_lette = [p for p in pagine if p["pid"] not in schede or schede[p["pid"]].get("famiglia") == "illeggibile"]
     return {
         "formato": FORMATO,
-        "non_lette": [
-            p["pid"] for p in pagine if p["pid"] not in schede or schede[p["pid"]].get("famiglia") == "illeggibile"
+        "non_lette": [p["pid"] for p in non_lette],
+        "non_lette_dettagli": [
+            {"pid": p["pid"], "file": p["file"], "pagina": p["pagina"], "famiglia": mappe.get(p["pid"])}
+            for p in non_lette
         ],
+        "parziali": parziali,
         "costruttore": costruttore,
         "aziende": aziende.gruppi,
         "packing": packing,

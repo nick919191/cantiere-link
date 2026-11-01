@@ -138,6 +138,19 @@ def _cache(impronta: str) -> Path:
     return percorsi.archivio() / "mappa" / f"{impronta}_{versione()}.json"
 
 
+def famiglia_in_archivio(impronta: str) -> str | None:
+    """Famiglia data dal riconoscimento della pagina, da qualunque versione in archivio (l'ultima); None se la
+    pagina non è mai stata riconosciuta. Serve a dire che cosa c'è in una pagina non letta."""
+    file = sorted((percorsi.archivio() / "mappa").glob(f"{impronta}_*.json"))
+    if not file:
+        return None
+    try:
+        famiglia = json.loads(file[-1].read_text(encoding="utf-8")).get("famiglia")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return famiglia if famiglia in FAMIGLIE else None
+
+
 def _costo(uso: dict) -> float:
     hit = uso.get("prompt_cache_hit_tokens", 0)
     miss = uso.get("prompt_cache_miss_tokens", uso.get("prompt_tokens", 0) - hit)

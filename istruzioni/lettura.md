@@ -22,7 +22,7 @@ Una pagina bianca o quasi (retro di scansione) è `da_escludere` con `"bianca": 
   "trascrizione": "testo e tabelle della pagina, in ordine di lettura; tabelle in markdown",
   "testata": { "<campo>": {"v": "...", "cit": "...", "zona": [x0, y0, x1, y1]} },
   "righe": [ { "<campo>": {"v": "...", "cit": "...", "zona": [x0, y0, x1, y1]} } ],
-  "riferimenti": [ {"tipo": "ddt|certificato|ordine|dop|fpc|commessa", "v": "...", "cit": "...", "zona": [...]} ],
+  "riferimenti": [ {"tipo": "ddt|certificato|ordine|dop|fpc|commessa|altro", "v": "...", "cit": "...", "zona": [...]} ],
   "timbri": [ {"chi": "...", "testo": "...", "ddt_citato": "...", "data_ddt": "...", "destinatario": "...",
                "a_mano": false, "zona": [...]} ],
   "segni": [ {"tipo": "freccia|cerchio|evidenziatore|croce|spunta|scritta", "riga": 0, "testo": "...", "zona": [...]} ],

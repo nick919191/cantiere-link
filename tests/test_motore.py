@@ -133,3 +133,32 @@ def test_righe_packing_senza_materiale_ne_certificato_segnalate():
     prove = costruisci([{"pid": "p1", "file": "t.pdf", "pagina": 1}], {"p1": tab})
     assert len(prove["packing"]) == 1
     assert prove["packing_scartate"] == [{"pid": "p1", "indice": 1}]
+
+
+def test_pagina_non_letta_abbassa_lo_stato_solo_se_puo_riguardare_la_voce():
+    """C4: il tetto "fascicolo non letto completamente" vale solo per le pagine non lette senza riconoscimento o
+    riconosciute come DDT, certificato, packing o lettera nello stesso file dei documenti della voce."""
+    prove, _ = _risultato()
+    assert _voce(elabora(prove), "HEB 180")["stato"] == "PROVATO"
+    prove["non_lette"] = ["p0099"]
+
+    def stato(famiglia, file):
+        prove["non_lette_dettagli"] = [{"pid": "p0099", "file": file, "pagina": 9, "famiglia": famiglia}]
+        return _voce(elabora(prove), "HEB 180")["stato"]
+
+    assert stato("da_escludere", "cert777.pdf") == "PROVATO"
+    assert stato("dop_ce_prodotto", "cert777.pdf") == "PROVATO"
+    assert stato("ddt", "altro.pdf") == "PROVATO"  # DDT non letto, ma in un altro file
+    assert stato("ddt", "cert777.pdf") == "DA CONFERMARE"  # nello stesso file del certificato della voce
+    assert stato("certificato_31", "ddt200.pdf") == "DA CONFERMARE"
+    assert stato(None, "altro.pdf") == "DA CONFERMARE"  # senza riconoscimento: contenuto ignoto
+    prove.pop("non_lette_dettagli")
+    assert _voce(elabora(prove), "HEB 180")["stato"] == "DA CONFERMARE"  # prove senza dettagli: come prima
+
+
+def test_documento_letto_a_meta_rende_la_voce_da_confermare():
+    prove, _ = _risultato()
+    doc = next(d for d in prove["ddt"] if d["numero"] == "200")
+    prove["parziali"] = [doc["pagine"][0]]
+    v = _voce(elabora(prove), "HEB 180")
+    assert v["stato"] == "DA CONFERMARE" and any("letto solo in parte" in m for m in v["motivi"])

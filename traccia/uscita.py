@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 
 from . import lavoro as lv
-from . import percorsi
+from . import mappa, percorsi
 from .excel import scrivi
 from .famiglie import NOMI
 from .motore import COLONNE, elabora
@@ -48,7 +48,7 @@ def componi(cartella: Path) -> dict:
 def _componi(cartella: Path, uscita: Path) -> dict:
     lv.evento(cartella, tipo="componi", testo="Collego a ritroso: tabella -> DDT -> certificato -> colata")
     pagine, schede = _schede(cartella)
-    prove = costruisci(pagine, schede)
+    prove = costruisci(pagine, schede, {p["pid"]: mappa.famiglia_in_archivio(p["impronta"]) for p in pagine})
     indice = json.loads((cartella / "pagine.json").read_text(encoding="utf-8"))
     prove["file_non_letti"] = [p["file"] for p in indice if not p.get("pid")]
     risultato = elabora(prove)

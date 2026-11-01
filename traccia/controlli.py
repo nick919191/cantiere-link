@@ -65,6 +65,9 @@ def _zona_valida(z) -> bool:
     )
 
 
+VUOTO = {"v": "", "cit": "", "zona": []}
+
+
 def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
     if not isinstance(v, dict) or set(v) != {"v", "cit", "zona"}:
         errori.append(f"{campo}: serve un oggetto {{v, cit, zona}}")
@@ -94,83 +97,189 @@ def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
         errori.append(f"{campo}: il valore {v['v'][:40]!r} non sta nella sua citazione")
 
 
-def valida(scheda, testo_nativo: str = "") -> list[str]:
-    """Errori in italiano, da restituire all'agente per la correzione. Lista vuota = scheda valida."""
+class _Esito:
+    """Raccoglie gli errori. Con `correggi` gli errori di campo non bloccano: il valore si scarta e resta un avviso
+    sulla scheda (conoscenza 03, regola 3: la testata resta anche se una riga o un riferimento è sbagliato)."""
+
+    def __init__(self, scheda: dict, correggi: bool):
+        self.scheda, self.correggi = scheda, correggi
+        self.bloccanti: list[str] = []
+        self.avvisi: list[str] = []
+
+    def campo(self, messaggi: list[str], azzera=None) -> bool:
+        """Errori di campo: bloccanti senza `correggi`; altrimenti `azzera()` ripulisce e resta l'avviso."""
+        if not messaggi:
+            return False
+        if self.correggi:
+            self.avvisi += [f"valore scartato dal controllo: {m}"[:MAX_AVVISO] for m in messaggi]
+            if azzera:
+                azzera()
+        else:
+            self.bloccanti += messaggi
+        return True
+
+    def errori(self) -> list[str]:
+        if self.avvisi and not self.bloccanti:
+            avvisi = self.scheda.get("avvisi")
+            self.scheda["avvisi"] = [a for a in avvisi if isinstance(a, str)] if isinstance(avvisi, list) else []
+            for a in self.avvisi:
+                if a not in self.scheda["avvisi"] and len(self.scheda["avvisi"]) < MAX_AVVISI:
+                    self.scheda["avvisi"].append(a)
+        return self.bloccanti
+
+
+def _campi_valore(prefisso: str, oggetto: dict, nomi: list[str], testo: str, esito: _Esito) -> None:
+    for k in nomi:
+        messaggi: list[str] = []
+        _valore(f"{prefisso}{k}", oggetto[k], testo, messaggi)
+        esito.campo(messaggi, lambda k=k: oggetto.__setitem__(k, dict(VUOTO)))
+
+
+def valida(scheda, testo_nativo: str = "", correggi: bool = False) -> list[str]:
+    """Errori in italiano, da restituire all'agente per la correzione. Lista vuota = scheda valida.
+
+    Con `correggi=True` tornano solo gli errori bloccanti (forma della scheda, famiglia, testata, righe): un
+    riferimento, timbro o segno malformato viene tolto, un valore con citazione non trovata viene svuotato, un
+    riferimento di tipo sconosciuto diventa `altro`; ogni correzione lascia un avviso sulla scheda.
+    """
     if not isinstance(scheda, dict):
         return ["la scheda deve essere un oggetto JSON"]
     errori = [f"manca la chiave {k!r}" for k in CHIAVI if k not in scheda]
-    errori += [f"chiave non prevista {k!r}" for k in scheda if k not in CHIAVI]
+    estranee = [k for k in scheda if k not in CHIAVI]
+    if correggi:
+        for k in estranee:
+            scheda.pop(k)
+    else:
+        errori += [f"chiave non prevista {k!r}" for k in estranee]
     if errori:
         return errori
     famiglia = scheda["famiglia"]
     if famiglia not in FAMIGLIE:
         return [f"famiglia {famiglia!r} non valida: una tra {', '.join(FAMIGLIE)}"]
+    esito = _Esito(scheda, correggi)
     if scheda["orientamento"] not in (0, 90, 180, 270):
-        errori.append("orientamento: 0, 90, 180 o 270")
+        esito.campo(["orientamento: 0, 90, 180 o 270"], lambda: scheda.__setitem__("orientamento", 0))
     for k in ("utile", "bianca", "continua_pagina_prima"):
         if not isinstance(scheda[k], bool):
-            errori.append(f"{k}: true o false")
+            esito.campo([f"{k}: true o false"], lambda k=k: scheda.__setitem__(k, bool(scheda[k])))
     for k in ("trascrizione", "motivo"):
         if not isinstance(scheda[k], str):
-            errori.append(f"{k}: testo")
-    if errori:
-        return errori
+            esito.bloccanti.append(f"{k}: testo")
+    if esito.bloccanti:
+        return esito.bloccanti
     if len(scheda["trascrizione"]) > MAX_TRASCRIZIONE:
-        errori.append(f"trascrizione: oltre {MAX_TRASCRIZIONE} caratteri")
+        esito.bloccanti.append(f"trascrizione: oltre {MAX_TRASCRIZIONE} caratteri")
     if len(scheda["motivo"]) > MAX_MOTIVO:
-        errori.append(f"motivo: oltre {MAX_MOTIVO} caratteri")
+        esito.campo(
+            [f"motivo: oltre {MAX_MOTIVO} caratteri"],
+            lambda: scheda.__setitem__("motivo", scheda["motivo"][:MAX_MOTIVO]),
+        )
     testo = scheda["trascrizione"] + "\n" + (testo_nativo or "")
     c_testata, c_righe = campi()[famiglia]
     testata = scheda["testata"]
     if not isinstance(testata, dict) or set(testata) != set(c_testata):
-        errori.append(f"testata: servono esattamente i campi {', '.join(c_testata) or '(nessuno)'}")
+        esito.bloccanti.append(f"testata: servono esattamente i campi {', '.join(c_testata) or '(nessuno)'}")
     else:
-        for k in c_testata:
-            _valore(k, testata[k], testo, errori)
+        _campi_valore("", testata, c_testata, testo, esito)
     if not isinstance(scheda["righe"], list) or (scheda["righe"] and not c_righe):
-        errori.append("righe: lista" + ("" if c_righe else " vuota per questa famiglia"))
+        esito.bloccanti.append("righe: lista" + ("" if c_righe else " vuota per questa famiglia"))
     else:
         for i, riga in enumerate(scheda["righe"]):
             if not isinstance(riga, dict) or set(riga) != set(c_righe):
-                errori.append(f"righe[{i}]: servono esattamente i campi {', '.join(c_righe)}")
+                esito.bloccanti.append(f"righe[{i}]: servono esattamente i campi {', '.join(c_righe)}")
                 continue
-            for k in c_righe:
-                _valore(f"righe[{i}].{k}", riga[k], testo, errori)
-    for i, r in enumerate(scheda["riferimenti"] if isinstance(scheda["riferimenti"], list) else [None]):
-        if not isinstance(r, dict) or set(r) != {"tipo", "v", "cit", "zona"} or r["tipo"] not in TIPI_RIFERIMENTO:
-            errori.append(f"riferimenti[{i}]: {{tipo, v, cit, zona}} con tipo tra {', '.join(TIPI_RIFERIMENTO)}")
-        else:
-            _valore(f"riferimenti[{i}]", {k: r[k] for k in ("v", "cit", "zona")}, testo, errori)
-    for i, t in enumerate(scheda["timbri"] if isinstance(scheda["timbri"], list) else [None]):
+            _campi_valore(f"righe[{i}].", riga, c_righe, testo, esito)
+    _riferimenti(scheda, testo, esito)
+    _timbri(scheda, testo, esito)
+    _segni(scheda, esito)
+    avvisi = scheda["avvisi"]
+    if not isinstance(avvisi, list) or not all(isinstance(a, str) for a in avvisi):
+        esito.campo(
+            ["avvisi: lista di frasi"],
+            lambda: scheda.__setitem__(
+                "avvisi", [a for a in avvisi if isinstance(a, str)] if isinstance(avvisi, list) else []
+            ),
+        )
+    elif len(avvisi) > MAX_AVVISI or any(len(a) > MAX_AVVISO for a in avvisi):
+        esito.campo(
+            [f"avvisi: al massimo {MAX_AVVISI} frasi di {MAX_AVVISO} caratteri"],
+            lambda: scheda.__setitem__("avvisi", [a[:MAX_AVVISO] for a in avvisi[:MAX_AVVISI]]),
+        )
+    return esito.errori()
+
+
+def _riferimenti(scheda: dict, testo: str, esito: _Esito) -> None:
+    elenco = scheda["riferimenti"]
+    if not isinstance(elenco, list):
+        esito.campo(["riferimenti: lista"], lambda: scheda.__setitem__("riferimenti", []))
+        return
+    tenuti = []
+    for i, r in enumerate(elenco):
+        if not isinstance(r, dict) or set(r) != {"tipo", "v", "cit", "zona"}:
+            esito.campo([f"riferimenti[{i}]: {{tipo, v, cit, zona}} con tipo tra {', '.join(TIPI_RIFERIMENTO)}"])
+            continue
+        if r["tipo"] not in TIPI_RIFERIMENTO:
+            # tipo non in elenco (es. "cup", "cig"): non è un errore, il riferimento resta come `altro`
+            esito.avvisi.append(f"riferimento di tipo «{str(r['tipo'])[:20]}» registrato come «altro»")
+            r["tipo"] = "altro"
+        messaggi: list[str] = []
+        _valore(f"riferimenti[{i}]", {k: r[k] for k in ("v", "cit", "zona")}, testo, messaggi)
+        if esito.campo(messaggi):
+            continue
+        tenuti.append(r)
+    if esito.correggi:
+        scheda["riferimenti"] = tenuti
+
+
+def _timbri(scheda: dict, testo: str, esito: _Esito) -> None:
+    elenco = scheda["timbri"]
+    if not isinstance(elenco, list):
+        esito.campo(["timbri: lista"], lambda: scheda.__setitem__("timbri", []))
+        return
+    tenuti = []
+    for i, t in enumerate(elenco):
         if not isinstance(t, dict) or set(t) != set(CAMPI_TIMBRO) or not isinstance(t.get("a_mano"), bool):
-            errori.append(f"timbri[{i}]: servono {', '.join(CAMPI_TIMBRO)} (a_mano true/false)")
-        elif not _zona_valida(t["zona"]):
-            errori.append(f"timbri[{i}]: zona non valida")
-        else:
-            for campo in ("chi", "testo", "ddt_citato", "data_ddt", "destinatario"):
-                if not isinstance(t[campo], str):
-                    errori.append(f"timbri[{i}].{campo}: testo richiesto")
-                elif t[campo] and _compatto(t[campo]) not in _compatto(testo):
-                    errori.append(f"timbri[{i}].{campo}: non si trova nella trascrizione")
-            if not t["testo"]:
-                errori.append(f"timbri[{i}]: testo del timbro mancante")
-            elif isinstance(t["ddt_citato"], str) and isinstance(t["testo"], str):
-                if _compatto(t["ddt_citato"]) not in _compatto(t["testo"]):
-                    errori.append(f"timbri[{i}]: DDT non presente nel testo del timbro")
-    for i, s in enumerate(scheda["segni"] if isinstance(scheda["segni"], list) else [None]):
+            esito.campo([f"timbri[{i}]: servono {', '.join(CAMPI_TIMBRO)} (a_mano true/false)"])
+            continue
+        if not _zona_valida(t["zona"]):
+            if esito.campo([f"timbri[{i}]: zona non valida"]):
+                t["zona"] = []
+        messaggi = []
+        for campo in ("chi", "testo", "ddt_citato", "data_ddt", "destinatario"):
+            if not isinstance(t[campo], str):
+                messaggi.append(f"timbri[{i}].{campo}: testo richiesto")
+            elif t[campo] and _compatto(t[campo]) not in _compatto(testo):
+                messaggi.append(f"timbri[{i}].{campo}: non si trova nella trascrizione")
+        if not isinstance(t["testo"], str) or not t["testo"]:
+            messaggi.append(f"timbri[{i}]: testo del timbro mancante")
+        elif isinstance(t["ddt_citato"], str) and _compatto(t["ddt_citato"]) not in _compatto(t["testo"]):
+            messaggi.append(f"timbri[{i}]: DDT non presente nel testo del timbro")
+        if esito.campo(messaggi):
+            continue
+        tenuti.append(t)
+    if esito.correggi:
+        scheda["timbri"] = tenuti
+
+
+def _segni(scheda: dict, esito: _Esito) -> None:
+    elenco = scheda["segni"]
+    if not isinstance(elenco, list):
+        esito.campo(["segni: lista"], lambda: scheda.__setitem__("segni", []))
+        return
+    tenuti = []
+    for i, sg in enumerate(elenco):
         if (
-            not isinstance(s, dict)
-            or set(s) != {"tipo", "riga", "testo", "zona"}
-            or s["tipo"] not in TIPI_SEGNO
-            or not isinstance(s["riga"], int)
-            or not _zona_valida(s["zona"])
+            not isinstance(sg, dict)
+            or set(sg) != {"tipo", "riga", "testo", "zona"}
+            or sg["tipo"] not in TIPI_SEGNO
+            or not isinstance(sg["riga"], int)
+            or not _zona_valida(sg["zona"])
         ):
-            errori.append(f"segni[{i}]: {{tipo, riga, testo, zona}} con tipo tra {', '.join(TIPI_SEGNO)} e zona valida")
-    if not isinstance(scheda["avvisi"], list) or not all(isinstance(a, str) for a in scheda["avvisi"]):
-        errori.append("avvisi: lista di frasi")
-    elif len(scheda["avvisi"]) > MAX_AVVISI or any(len(a) > MAX_AVVISO for a in scheda["avvisi"]):
-        errori.append(f"avvisi: al massimo {MAX_AVVISI} frasi di {MAX_AVVISO} caratteri")
-    return errori
+            esito.campo([f"segni[{i}]: {{tipo, riga, testo, zona}} con tipo tra {', '.join(TIPI_SEGNO)} e zona valida"])
+            continue
+        tenuti.append(sg)
+    if esito.correggi:
+        scheda["segni"] = tenuti
 
 
 def zona_esatta(parole: list[list], valore: str, citazione: str) -> list[int] | None:

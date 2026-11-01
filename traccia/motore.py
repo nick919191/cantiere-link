@@ -184,11 +184,33 @@ def _per_colata(righe: list[dict]) -> list[dict]:
 
 
 # ---------- una voce ----------
+FAMIGLIE_DELLA_CATENA = {"ddt", "certificato_31", "packing_costruttore", "lettera_accompagnamento"}
+
+
 class Motore:
     def __init__(self, prove: dict):
         self.p = prove
         self.ddt_noti = [d for d in prove["ddt"] if d["tipo"] not in ("costruttore_cliente", "fuori_perimetro")]
         self.pid_file = {f["pid"]: f["file"] for f in prove["fonti"].values()}
+        self.parziali = set(prove.get("parziali", []))
+
+    def non_lette_vicine(self, documenti: list[dict | None], pid_righe: set[str]) -> list[str]:
+        """Pagine non lette che possono riguardare la voce: senza riconoscimento (contenuto ignoto) oppure
+        riconosciute come DDT, certificato, packing o lettera nello stesso file dei documenti della voce. Le non
+        lette riconosciute come da escludere o DoP non contano (C4)."""
+        dettagli = self.p.get("non_lette_dettagli")
+        if dettagli is None:  # prove senza riconoscimento: ogni pagina non letta conta
+            return list(self.p.get("non_lette", []))
+        file = {self.pid_file.get(pid) for d in documenti if d for pid in d.get("pagine", [])}
+        file |= {self.pid_file.get(pid) for pid in pid_righe}
+        file.discard(None)
+        vicine = []
+        for n in dettagli:
+            if n.get("famiglia") is None:
+                vicine.append(n["pid"])
+            elif n["famiglia"] in FAMIGLIE_DELLA_CATENA and (not file or n.get("file") in file):
+                vicine.append(n["pid"])
+        return vicine
 
     def ddt_di(self, voce: dict) -> dict | None:
         trovati = [d for d in self.ddt_noti if nz.stesso_numero(voce["ddt"], d["numero"]) in STESSO]
@@ -283,9 +305,20 @@ class Motore:
         if voce["ddt"] and not doc_ddt:
             richieste.append(f"DDT {voce['ddt']}")
         stato = self._stato(voce, cert, righe, doc_ddt, riga_ddt, ricavato, ambiguo, motivi, avvisi)
-        if self.p.get("non_lette") or self.p.get("file_non_letti"):
+        vicine = self.non_lette_vicine([doc_ddt, cert], {r["pid"] for r in voce["righe"]})
+        if vicine or self.p.get("file_non_letti"):
             stato = DA_CONFERMARE
-            avvisi.append("fascicolo non letto completamente: esito provvisorio, assenze non accertate")
+            avvisi.append(
+                "fascicolo non letto completamente: esito provvisorio, assenze non accertate"
+                + (f" (pagine non lette {', '.join(vicine[:6])})" if vicine else "")
+            )
+        a_meta = [d for d in (doc_ddt, cert) if d and self.parziali & set(d.get("pagine", []))]
+        if a_meta:
+            stato = DA_CONFERMARE
+            motivi.append(
+                "documento letto solo in parte (famiglia e testata, righe da rileggere): "
+                + ", ".join(d.get("numero", "") for d in a_meta)
+            )
         if not self.p.get("costruttore"):
             stato = DA_CONFERMARE
             avvisi.append("ruolo del costruttore non individuato in modo univoco")
