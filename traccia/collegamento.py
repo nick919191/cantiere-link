@@ -5,6 +5,7 @@ un messaggio JSON-RPC per riga. Non legge né decide niente da solo: chiama l'ap
 se è chiusa) con le stesse funzioni della finestra. Solo 127.0.0.1, con il token locale della sessione.
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -16,6 +17,7 @@ from pathlib import Path
 import httpx
 
 from . import VERSIONE_APP, percorsi
+from . import configurazione as impostazioni
 
 PROTOCOLLI = ("2025-06-18", "2025-03-26", "2024-11-05")
 PORTE = range(percorsi.PORTA, percorsi.PORTA + 20)
@@ -24,8 +26,17 @@ PORTE = range(percorsi.PORTA, percorsi.PORTA + 20)
 # ---------- collegamento all'app ----------
 class App:
     def __init__(self):
-        self.url, self.token = "", ""
+        self.url, self.token, self.istanza = "", "", ""
         self.http = httpx.Client(timeout=120, trust_env=False)
+
+    def _salute(self, url: str) -> dict | None:
+        """Risposta di /api/salute (con l'`istanza` che identifica il processo dell'app), None se non risponde."""
+        try:
+            r = self.http.get(url + "/api/salute", timeout=2)
+            dati = r.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+        return dati if r.is_success and isinstance(dati, dict) else None
 
     def _trova(self) -> str:
         for porta in PORTE:
@@ -57,17 +68,44 @@ class App:
                 return
         raise RuntimeError("CantiereLink non si è aperto: avvialo a mano e riprova.")
 
+    def _token(self, istanza: str) -> str:
+        """Token della sessione: da /api/sessione se risponde, altrimenti da sessione.json nella cartella dati.
+
+        Quando l'app è aperta dalla sua finestra /api/sessione è spento (404) e il token sta solo in sessione.json,
+        scritto da desktop.py e leggibile solo da questo utente. L'impronta del token deve essere l'`istanza` di
+        /api/salute: così un file di un'app chiusa o di un altro processo non passa per buono.
+        """
+        try:
+            r = self.http.get(self.url + "/api/sessione")
+            token = r.json().get("token") if r.is_success else None
+        except (httpx.HTTPError, ValueError):
+            token = None
+        if isinstance(token, str) and token:
+            return token
+        try:
+            salvata = json.loads((impostazioni.directory() / "sessione.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            salvata = {}
+        token = salvata.get("token") if isinstance(salvata, dict) else None
+        if not isinstance(token, str) or not token:
+            raise RuntimeError("Sessione di CantiereLink non trovata: apri l'app e riprova.")
+        if istanza and hashlib.sha256(token.encode()).hexdigest()[:16] != istanza:
+            raise RuntimeError("La sessione salvata non è quella dell'app aperta: riavvia CantiereLink e riprova.")
+        return token
+
     def pronta(self) -> None:
-        if self.url and self.token:
-            try:
-                if self.http.get(self.url + "/api/salute", timeout=2).is_success:
-                    return
-            except httpx.HTTPError:
-                pass
-        self.url = self._trova()
-        if not self.url:
-            self._apri()
-        self.token = self.http.get(self.url + "/api/sessione").json()["token"]
+        """Trova l'app (o la apre) e tiene il token allineato all'istanza: se l'app è stata riavviata, lo rilegge."""
+        salute = self._salute(self.url) if self.url else None
+        if salute is None:
+            self.url = self._trova()
+            if not self.url:
+                self._apri()
+            salute = self._salute(self.url) or {}
+        istanza = str(salute.get("istanza") or "")
+        if self.token and istanza == self.istanza:
+            return
+        self.token = self._token(istanza)
+        self.istanza = istanza
 
     def chiama(self, metodo: str, percorso: str, **kw):
         self.pronta()
