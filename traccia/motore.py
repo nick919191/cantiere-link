@@ -226,6 +226,22 @@ def _righe_affini(cert: dict, voce: dict, riga_ddt: dict | None) -> list[dict]:
     return [r for r in cert["righe"] if any(_affine(o, r["chiave"]) for o in obiettivo)]
 
 
+def _scegli_segnata(cert: dict, righe: list[dict]) -> tuple[list[dict], str | None]:
+    """Decisione 1: con più colate per il profilo, un segno a mano (freccia, evidenziatore, cerchio) su UNA sola di
+    loro la sceglie; la voce va avanti come se la colata fosse unica, con avviso. Segni su più colate: nessuna
+    scelta."""
+    colate = _per_colata(righe)
+    if len(colate) < 2:
+        return righe, None
+    possibili = {r["colata"] for r in colate}
+    segnate = sorted({s["colata"] for s in cert.get("segni", []) if s.get("colata") in possibili})
+    if len(segnate) != 1:
+        return righe, None
+    tipo = next(s["tipo"] for s in cert["segni"] if s["colata"] == segnate[0])
+    scelta = [r for r in righe if r["colata"] == segnate[0]]
+    return scelta, f"colata {segnate[0]} scelta dal segno a mano ({tipo}): controllare l'originale"
+
+
 def _per_colata(righe: list[dict]) -> list[dict]:
     scelte = {}
     for r in righe:
@@ -390,8 +406,16 @@ class Motore:
                     voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi
                 )
 
+        if cert:
+            righe, scelta = _scegli_segnata(cert, righe)
+            if scelta:
+                avvisi.append(scelta)
         if voce["ddt"] and not doc_ddt:
-            richieste.append(f"DDT {voce['ddt']}")
+            richieste.append(
+                f"DDT {voce['ddt']} di {voce['fornito_da']}"
+                if voce["origine"] == "dal_certificato" and voce["fornito_da"]
+                else f"DDT {voce['ddt']}"
+            )
         stato = self._stato(voce, cert, righe, doc_ddt, riga_ddt, ricavato, ambiguo, motivi, avvisi)
         vicine = self.non_lette_vicine([doc_ddt, cert], {r["pid"] for r in voce["righe"]})
         if vicine or self.p.get("file_non_letti"):
@@ -555,10 +579,10 @@ class Motore:
                 motivi.append("il profilo della voce non compare sul certificato")
             stato = DA_CONFERMARE
         elif len(colate) > 1:
-            segnate = [s for s in cert["segni"] if s["colata"] in {r["colata"] for r in colate}]
+            segnate = sorted({s["colata"] for s in cert["segni"] if s["colata"] in {r["colata"] for r in colate}})
             motivi.append(f"più colate per il profilo sul certificato ({', '.join(r['colata'] for r in colate)})")
-            if segnate:
-                avvisi.append(f"segno a mano ({segnate[0]['tipo']}) sulla colata {segnate[0]['colata']}: da confermare")
+            if len(segnate) > 1:
+                avvisi.append(f"segni a mano su più colate ({', '.join(segnate)}): nessuna scelta possibile")
             stato = DA_CONFERMARE
         elif not colate:
             motivi.append("colata non leggibile sul certificato")
@@ -592,8 +616,8 @@ class Motore:
         if ricavato:
             avvisi.append("pezzi ricavati da un profilo più largo (dedotto)")
             stato = _tetto(stato, DEDOTTO)
-        if voce["origine"] == "dai_ddt":
-            stato = _tetto(stato, DEDOTTO)
+        # Decisione 2 (0.7.0): la packing assente rende incerto il perimetro, non la prova della singola catena:
+        # nessun tetto sullo stato delle voci prese dai DDT; resta l'avviso globale e la dicitura "(dai DDT)".
         if riga_ddt and righe and colate:
             g_ddt, g_cert = nz.gradi(riga_ddt["qualita"]), nz.grado(righe[0]["qualita"])
             if g_ddt and g_cert and g_cert not in g_ddt:
@@ -663,9 +687,11 @@ def _dop_intermedia(prove: dict, commerciante: str, doc: dict | None) -> tuple[d
     return candidate[0], False
 
 
-def _dop_del_certificato(prove: dict, cert: dict) -> list[dict]:
+def _dop_del_certificato(prove: dict, cert: dict) -> list[tuple[dict, str]]:
     """DoP di prodotto collegate al certificato solo con prova (scheda 07 §5): P1 numero DoP o FPC stampato sul 3.1,
-    P2 DDT dell'acciaieria stampato su entrambi. Mai per sola compatibilità di fabbricante o qualità."""
+    P2 DDT dell'acciaieria stampato su entrambi, P3 stesso produttore e stesso organismo notificato (le 4 cifre
+    accanto al marchio CE) stampato su certificato e DoP. Mai per sola compatibilità di fabbricante o qualità.
+    (dop, regola)."""
     trovate = []
     for d in prove["dop_prodotto"]:
         p1 = any(
@@ -675,8 +701,15 @@ def _dop_del_certificato(prove: dict, cert: dict) -> list[dict]:
             bool(cert.get("ddt_produttore"))
             and nz.stesso_numero(cert["ddt_produttore"], d.get("ddt_citato", "")) in STESSO
         )
-        if (p1 or p2) and d not in trovate:
-            trovate.append(d)
+        organismo = re.search(r"\b\d{4}\b", d.get("organismo", "") or "")
+        p3 = (
+            bool(organismo)
+            and _stessa(prove, d.get("fabbricante", ""), cert["produttore"])
+            and any(nz.cita_numero(v, organismo.group()) for v, _ in cert["ce_dop"])
+        )
+        regola = "numero" if p1 else "ddt" if p2 else "fabbricante e organismo" if p3 else ""
+        if regola and d not in [x for x, _ in trovate]:
+            trovate.append((d, regola))
     return trovate
 
 
@@ -698,15 +731,16 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
             else "Certificato 3.1 collegato alla voce: ha una riga con lo stesso profilo e la stessa qualità.",
         )
         pezzi = [(v, f) for v, f in cert["ce_dop"]]
-        for d in _dop_del_certificato(prove, cert):
+        for d, regola in _dop_del_certificato(prove, cert):
             testo = "DoP" + (f" {d['numero_dop']}" if d.get("numero_dop") else f" (DDT acciaieria {d['ddt_citato']})")
             testo += f", {d['norma']}" if d.get("norma") else ""
+            testo += " (collegata per fabbricante e organismo)" if regola == "fabbricante e organismo" else ""
             pezzi.append((testo, d["fonti"].get("numero_dop") or d["fonti"].get("ddt_citato")))
         ce = _c(
             "; ".join(v for v, _ in pezzi) or NON_PRESENTE,
             *[f for _, f in pezzi],
-            perche="Marcatura CE e DoP stampate sul certificato, più le DoP collegate per numero o per DDT"
-            " dell'acciaieria."
+            perche="Marcatura CE e DoP stampate sul certificato, più le DoP collegate per numero, per DDT"
+            " dell'acciaieria o per fabbricante e organismo notificato."
             if pezzi
             else "Né il certificato né il fascicolo riportano una DoP dell'acciaieria.",
         )
@@ -831,11 +865,14 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
         "CE/DoP COSTRUTTORE": cantiere["ce"],
         "DDT COSTRUTTORE": cantiere["ddt"],
         "PARTE D'OPERA": _c(
-            f"{titolo} - {voce['etichetta']}" if titolo else voce["etichetta"],
+            (f"{titolo} - {voce['etichetta']}" if titolo else voce["etichetta"])
+            + {"dai_ddt": " (dai DDT)", "dal_certificato": " (da un certificato)"}.get(voce["origine"], ""),
             vf.get("materiale"),
-            perche="Voce presa dalla tabella del costruttore."
-            if voce["origine"] != "dai_ddt"
-            else "Manca la tabella del costruttore: voce presa dai DDT che ha ricevuto.",
+            perche={
+                "dai_ddt": "Manca la tabella del costruttore: voce presa dai DDT che ha ricevuto.",
+                "dal_certificato": "Certificato con un timbro che cita un DDT assente dal fascicolo: voce da "
+                "confermare, da chiedere il DDT.",
+            }.get(voce["origine"], "Voce presa dalla tabella del costruttore."),
         ),
     }
 
@@ -856,38 +893,78 @@ def _note(stato: str, dec: dict) -> list[str]:
     return note
 
 
+def _voce_risultato(voce: dict, dec: dict, prove: dict, cantiere: dict) -> dict:
+    pagine = sorted(
+        {r["pid"] for r in voce["righe"]}
+        | set((dec["ddt"] or {}).get("pagine", []))
+        | set((dec["cert"] or {}).get("pagine", []))
+    )
+    return {
+        "voce": voce["etichetta"],
+        "parte_opera": voce["parte_opera"],
+        "origine": voce["origine"],
+        "ddt": voce["ddt"],
+        "certificato_dichiarato": voce["certificato"],
+        "stato": dec["stato"],
+        "colonne": _colonne(prove, voce, dec, cantiere),
+        "note": _note(dec["stato"], dec),
+        "motivi": dec["motivi"],
+        "avvisi": dec["avvisi"],
+        "scartati": dec["scartati"],
+        "pagine": pagine,
+        "fornitore": dec["fornitore"],
+        "richieste": dec["richieste"],
+        "documenti": [x["id"] for x in (dec["ddt"], dec["cert"]) if x],
+        "colate_possibili": dec["colate_possibili"],
+    }
+
+
+def _voci_dai_certificati(prove: dict, usati: set[str]) -> list[dict]:
+    """C12: un certificato non usato il cui timbro cita un DDT che non è nel fascicolo diventa una voce DA
+    CONFERMARE con la richiesta del DDT al commerciante del timbro: così si vede che manca un DDT."""
+    numeri = [d["numero"] for d in prove["ddt"]]
+    voci = []
+    for c in prove["certificati"]:
+        if c["id"] in usati or not c["righe"]:
+            continue
+        citati: dict[str, dict] = {}
+        for t in c["timbri"]:
+            n = t.get("ddt_citato", "")
+            if n and not any(nz.cita_ddt(n, x) or nz.cita_ddt(x, n) for x in numeri):
+                citati.setdefault(nz.numero_normale(n), t)
+        for t in citati.values():
+            chiavi = sorted({r["chiave"] for r in c["righe"] if r["chiave"]})
+            voci.append(
+                {
+                    "origine": "dal_certificato",
+                    "righe": [],
+                    "etichetta": " / ".join(chiavi) or c["numero"],
+                    "chiavi": chiavi,
+                    "parte_opera": "",
+                    "certificato": c["numero"],
+                    "emesso_da": c["produttore"],
+                    "data_certificato": c["data"],
+                    "fornito_da": t.get("chi", ""),
+                    "ddt": t["ddt_citato"],
+                    "data_ddt": t.get("data_ddt", ""),
+                    "qualita": "",
+                    "fonti": {"ddt": t.get("fid")},
+                }
+            )
+    return voci
+
+
 def elabora(prove: dict) -> dict:
     """Prove (formato prove/2) -> risultato/2. Stesse prove, stesso risultato."""
     m = Motore(prove)
     cantiere = _cantiere(prove)
     voci = []
     for voce in (v for gruppo in voci_dal_fascicolo(prove) for v in m.dividi(gruppo)):
+        voci.append(_voce_risultato(voce, m.decidi(voce), prove, cantiere))
+    usati = {d for v in voci for d in v["documenti"]}
+    for voce in _voci_dai_certificati(prove, usati):
         dec = m.decidi(voce)
-        pagine = sorted(
-            {r["pid"] for r in voce["righe"]}
-            | set((dec["ddt"] or {}).get("pagine", []))
-            | set((dec["cert"] or {}).get("pagine", []))
-        )
-        voci.append(
-            {
-                "voce": voce["etichetta"],
-                "parte_opera": voce["parte_opera"],
-                "origine": voce["origine"],
-                "ddt": voce["ddt"],
-                "certificato_dichiarato": voce["certificato"],
-                "stato": dec["stato"],
-                "colonne": _colonne(prove, voce, dec, cantiere),
-                "note": _note(dec["stato"], dec),
-                "motivi": dec["motivi"],
-                "avvisi": dec["avvisi"],
-                "scartati": dec["scartati"],
-                "pagine": pagine,
-                "fornitore": dec["fornitore"],
-                "richieste": dec["richieste"],
-                "documenti": [x["id"] for x in (dec["ddt"], dec["cert"]) if x],
-                "colate_possibili": dec["colate_possibili"],
-            }
-        )
+        voci.append(_voce_risultato(voce, dec, prove, cantiere))
     voci.sort(key=lambda v: (v["parte_opera"], nz.data_iso(v["colonne"]["DDT COMMERCIANTE"]["v"]), v["ddt"], v["voce"]))
     for i, v in enumerate(voci, 1):
         v["n"] = i

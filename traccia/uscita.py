@@ -145,7 +145,7 @@ def _componi(cartella: Path, uscita: Path) -> dict:
     if risultato["avviso_packing"]:
         avvisi.append(
             "Packing / tabella del costruttore MANCANTE: voci prese dai DDT ricevuti dal costruttore "
-            "(stato massimo DEDOTTO)."
+            "(perimetro dell'opera non confermato dal costruttore; gli stati valgono per la singola catena)."
         )
     if stato["non_lette"]:
         avvisi.append(

@@ -27,6 +27,7 @@ from PIL import Image
 
 from . import agente, coltellino, mappa, ocr, percorsi
 from . import lavoro as lv
+from . import normalizza as nz
 from .chatgpt import AgentError
 from .controlli import CAMPI_TIMBRO, aggiungi_zone_esatte, piatto, valida
 from .famiglie import FAMIGLIE, campi
@@ -147,7 +148,9 @@ Rispondi con un solo JSON: {"correzioni": {"<pid>": {"<campo>": <nuovo valore>}}
 - <campo> come nei dubbi ("testata.numero", "righe[2].colata", "timbri", "famiglia"); metti solo ciò che cambia.
   Valore confermato: non scriverlo. Valore assente sulla pagina: "".
 - <nuovo valore>: "valore" oppure ["valore", "citazione"]; per "timbri" la lista completa dei timbri nella forma
-  {"chi","testo","ddt_citato","data_ddt","destinatario","a_mano"}.
+  {"chi","testo","ddt_citato","data_ddt","destinatario","a_mano"}; per "segni" la lista completa dei segni a mano
+  nella forma {"tipo","riga","testo"} (tipo tra freccia, cerchio, evidenziatore, croce, spunta, scritta; riga =
+  indice da 0 della riga segnata). Non decidere tu quale riga vale: registra solo il segno.
 - "aggiunte": il testo letto sull'immagine che manca nel testo (timbri, scritte a mano, numeri corretti), parola
   per parola: le citazioni nuove devono trovarsi nel testo o in queste aggiunte. Ometti se non serve.
 - Pagine con "rileggi": true (il testo ha perso parti importanti): ricevi anche il testo e la pagina intera.
@@ -155,6 +158,10 @@ Rispondi con un solo JSON: {"correzioni": {"<pid>": {"<campo>": <nuovo valore>}}
   valori che non sono nel testo.
 """
 VUOTO = {"v": "", "cit": "", "zona": []}
+DUBBIO_SEGNI = (
+    "più colate per lo stesso profilo: guarda se una riga è segnata (freccia, evidenziatore, cerchio, spunta) e "
+    "scrivi la lista completa dei segni (tipo, riga, testo)"
+)
 DUBBIO_TIMBRO = (
     "sulla pagina c'è un timbro o una scritta a mano che cita un DDT: leggi sull'immagine numero e data del DDT e "
     "scrivi la lista completa dei timbri (ddt_citato, data_ddt), copiando numero e data esattamente come sono "
@@ -292,6 +299,21 @@ def mancanti(scheda: dict, prima_del_file: bool) -> list[str]:
     return esito
 
 
+def piu_colate_per_profilo(scheda: dict) -> bool:
+    """Certificato con almeno due colate diverse per lo stesso profilo: serve guardare i segni a mano (C7)."""
+    if scheda.get("famiglia") != "certificato_31":
+        return False
+    colate: dict[str, set] = {}
+    for r in scheda.get("righe", []):
+        profilo = " ".join(
+            x for x in ((r.get("profilo") or {}).get("v", ""), (r.get("dimensioni") or {}).get("v", "")) if x
+        )
+        colata = (r.get("colata") or {}).get("v", "")
+        if colata:
+            colate.setdefault(nz.profilo(profilo), set()).add(nz.colata_normale(colata))
+    return any(len(c) > 1 for c in colate.values())
+
+
 def _leggi_campo(scheda: dict, campo: str) -> str:
     m = re.fullmatch(r"(testata|righe)(?:\[(\d+)\])?\.(\w+)", campo)
     try:
@@ -310,6 +332,8 @@ def applica(scheda: dict, correzioni: dict) -> dict:
             scheda = {**espandi({"famiglia": nuovo, "motivo": scheda["motivo"]}), "avvisi": scheda["avvisi"]}
         elif campo == "timbri" and isinstance(nuovo, list):
             scheda["timbri"] = espandi({"famiglia": scheda["famiglia"], "timbri": nuovo})["timbri"]
+        elif campo == "segni" and isinstance(nuovo, list):
+            scheda["segni"] = espandi({"famiglia": scheda["famiglia"], "segni": nuovo})["segni"]
         else:
             m = re.fullmatch(r"(testata|righe)(?:\[(\d+)\])?\.(\w+)", campo)
             if not m:
@@ -609,7 +633,13 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
             dubbi[pid].append(["scheda", "tentativo precedente rifiutato: rileggi tutta la pagina dall'immagine"])
             rileggi.add(pid)
             intera.add(pid)
+        if schede[pid] and piu_colate_per_profilo(schede[pid]) and not schede[pid]["segni"]:
+            dubbi[pid].append(["segni", DUBBIO_SEGNI])
+            intera.add(pid)
         m = mappe.get(pid)
+        if m and m.get("segno_a_mano") and schede[pid] and not schede[pid]["segni"]:
+            dubbi[pid].append(["segni", "il riconoscimento vede un segno a mano su una riga: " + DUBBIO_SEGNI])
+            intera.add(pid)
         if m:  # blocco 2: controlli in più con quello che DeepSeek sa della pagina
             motivo = controllo_packing(m, schede[pid])
             if motivo:

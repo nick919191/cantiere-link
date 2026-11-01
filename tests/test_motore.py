@@ -111,7 +111,8 @@ def test_piatti_divisi_per_profilo_di_origine():
     assert "PA/55" in per_voce["PL10*90"]["colonne"]["CE/DoP ACCIAIERIA"]["v"]  # DoP collegata con prova P2
 
 
-def test_packing_assente_al_massimo_dedotto():
+def test_packing_assente_nessun_tetto_ma_avviso_e_dicitura_dai_ddt():
+    """Decisione 2 (0.7.0): la packing mancante rende incerto il perimetro, non la prova della singola catena."""
     pagine, schede = [], {}
     for i, (file, pagina, s) in enumerate(fascicolo(), 1):
         if s["famiglia"] == "packing_costruttore":
@@ -121,8 +122,9 @@ def test_packing_assente_al_massimo_dedotto():
         schede[pid] = s
     r = elabora(costruisci(pagine, schede))
     assert r["avviso_packing"]
-    assert all(v["stato"] != "PROVATO" for v in r["voci"])
-    assert any(v["voce"] == "HEB 180" and v["stato"] == "DEDOTTO" for v in r["voci"])
+    heb = next(v for v in r["voci"] if v["voce"] == "HEB 180")
+    assert heb["stato"] == "PROVATO" and heb["colonne"]["PARTE D'OPERA"]["v"] == "HEB 180 (dai DDT)"
+    assert next(v for v in r["voci"] if v["voce"] == "PIATTO 60x10")["stato"] == "DEDOTTO"
 
 
 def test_righe_packing_senza_materiale_ne_certificato_segnalate():
@@ -293,3 +295,108 @@ def test_lista_del_commerciante_lega_ddt_certificato_e_colata():
     assert v5["colonne"]["COLATA"]["v"] == "24305236" and v5["stato"] != "DA CONFERMARE"
     assert v8["colonne"]["COLATA"]["v"] == "6965529" and v8["stato"] != "DA CONFERMARE"
     assert any("lettera del distributore" in m for m in v8["motivi"])
+
+
+def test_segno_a_mano_su_una_sola_colata_la_sceglie():
+    """Decisione 1 (C7): freccia su una delle due colate del profilo -> quella colata, stato come se fosse unica."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    # reale (anonimo): HEA 160 con due colate e una freccia; inventato: IPE 200 con segni su entrambe le colate
+    c1 = certificato(
+        "6577",
+        [("HEA 160", "S275J0+AR", "150890"), ("HEA 160", "S275J0+AR", "152590")],
+        [timbro("8027")],
+        segni=[{"tipo": "freccia", "riga": 0, "testo": "", "zona": []}],
+    )
+    c2 = certificato(
+        "6578",
+        [("IPE 200", "S275JR", "700100"), ("IPE 200", "S275JR", "700200")],
+        [timbro("8027")],
+        segni=[
+            {"tipo": "spunta", "riga": 0, "testo": "", "zona": []},
+            {"tipo": "spunta", "riga": 1, "testo": "", "zona": []},
+        ],
+    )
+    fogli = [
+        ("ddt.pdf", 1, ddt("8027", ["TRAVI HE/A 160", "TRAVI IPE 200"])),
+        ("ddt2.pdf", 1, ddt("20", ["UPN 100"], emittente="FORNITORE 002 SRL")),
+        ("c1.pdf", 1, c1),
+        ("c2.pdf", 1, c2),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "HEA 160")
+    assert v["stato"] == "PROVATO" and v["colonne"]["COLATA"]["v"] == "150890" and v["colate_possibili"] == []
+    assert any("scelta dal segno a mano" in a and "controllare l'originale" in a for a in v["avvisi"])
+    v = _voce(r, "IPE 200")
+    assert v["stato"] == "DA CONFERMARE" and v["colate_possibili"] == ["700100", "700200"]
+    assert any("segni a mano su più colate" in a for a in v["avvisi"])
+
+
+def test_dop_di_prodotto_collegata_per_fabbricante_e_organismo():
+    """C10 (P3): stesso produttore e stesso organismo notificato stampato su certificato e DoP."""
+    from fascicolo_inventato import V, certificato, ddt, scheda, timbro
+
+    cert = certificato(
+        "202478791",
+        [("IPE160 L.12.1M", "S275J0+AR", "CE256775")],
+        [timbro("8027")],
+        produttore="Compañía Española de Laminación S.L.",
+    )
+    cert["riferimenti"] = [{"tipo": "fpc", "v": "CE 0099 06 CELSA01BCN", "cit": "CE 0099 06 CELSA01BCN", "zona": []}]
+    cert["trascrizione"] += "\nCE 0099 06 CELSA01BCN"
+    dop_ok = scheda(
+        "dop_ce_prodotto",
+        {
+            "fabbricante": V("CELSA - Compañía Española de Laminación S.L."),
+            "numero_dop": V("CELSA01BCN"),
+            "organismo": V("0099"),
+            "norma": V("EN 10025-1"),
+        },
+    )
+    dop_altro_organismo = scheda(
+        "dop_ce_prodotto",
+        {
+            "fabbricante": V("Compañía Española de Laminación S.L."),
+            "numero_dop": V("CELSA02BCN"),
+            "organismo": V("0474"),
+            "norma": V("EN 10025-1"),
+        },
+    )
+    dop_altro_produttore = scheda(
+        "dop_ce_prodotto", {"fabbricante": V("ACCIAIERIE VERDI SPA"), "numero_dop": V("V-1"), "organismo": V("0099")}
+    )
+    fogli = [
+        ("ddt.pdf", 1, ddt("8027", ["TRAVI IPE 160"])),
+        ("ddt2.pdf", 1, ddt("20", ["UPN 100"], emittente="FORNITORE 002 SRL")),
+        ("c.pdf", 1, cert),
+        ("d1.pdf", 1, dop_ok),
+        ("d2.pdf", 1, dop_altro_organismo),
+        ("d3.pdf", 1, dop_altro_produttore),
+    ]
+    v = _voce(_senza_packing(fogli), "IPE 160")
+    ce = v["colonne"]["CE/DoP ACCIAIERIA"]["v"]
+    assert "DoP CELSA01BCN" in ce and "(collegata per fabbricante e organismo)" in ce
+    assert "CELSA02BCN" not in ce and "V-1" not in ce
+
+
+def test_certificato_con_timbro_che_cita_un_ddt_assente_diventa_voce_da_confermare():
+    """C12: il cliente vede che manca un DDT: voce DA CONFERMARE e richiesta 'DDT N di <commerciante>'."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    t = timbro("6559")
+    t["chi"] = "F.lli Molteni s.p.a."
+    arvedi = certificato("977915", [("TUBO ELETTROSALDATO 219,1x12,5x12000", "S355J2H", "3151783B")], [t])
+    fogli = [
+        ("ddt.pdf", 1, ddt("8027", ["TRAVI HEA 160"])),
+        ("ddt2.pdf", 1, ddt("20", ["UPN 100"], emittente="FORNITORE 002 SRL")),
+        ("c.pdf", 1, arvedi),
+        ("c2.pdf", 1, certificato("55", [("HEA 160", "S275JR", "H1001")], [timbro("8027")])),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "TUBO 219.1x12.5x12000")
+    assert v["stato"] == "DA CONFERMARE" and v["origine"] == "dal_certificato"
+    assert v["richieste"] == ["DDT 6559 di F.lli Molteni s.p.a."]
+    assert v["colonne"]["COLATA"]["v"] == "3151783B" and v["colonne"]["DDT COMMERCIANTE"]["v"].startswith("DDT n. 6559")
+    assert v["colonne"]["COMMERCIANTE / CENTRO TRASF."]["v"] == "F.lli Molteni s.p.a."
+    assert v["colonne"]["PARTE D'OPERA"]["v"].endswith("(da un certificato)")
+    assert len(r["voci"]) == 3  # il certificato usato (HEA 160) non genera un'altra voce

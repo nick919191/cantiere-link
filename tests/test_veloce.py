@@ -290,3 +290,44 @@ def test_scheda_parziale_vale_finche_non_arriva_quella_completa(radice):
     assert lv.completa(pagina) and not lv.scheda_pagina(pagina).get("parziale")
     assert lv.impronta_letture(cartella) != impronta_prima
     assert lv.stato(cartella)["lette"] == 1
+
+
+def test_piu_colate_per_profilo_chiede_i_segni_con_la_pagina_intera(radice, monkeypatch):
+    """C7: certificato con due colate dello stesso profilo -> dubbio «segni» con l'immagine intera; la risposta
+    con i segni entra nella scheda."""
+    from traccia import lavoro as lv
+
+    cartella = _lavoro_una_pagina(radice)
+    testo = (
+        "INSPECTION CERTIFICATE EN 10204 3.1\nNumero: 6577 del 2/09/25\nT.P.P. s.p.a.\n"
+        "| HEA 160 | S355J2 +AR | 150890 |\n| HEA 160 | S355J2 +AR | 152590 |"
+    )
+    monkeypatch.setattr(
+        veloce.ocr, "leggi", lambda png, impronta, client: {"testo": testo, "incerte": [], "blocchi": []}
+    )
+    scheda = {
+        "famiglia": "certificato_31",
+        "motivo": "3.1",
+        "testata": {"numero": "6577", "data": "2/09/25", "produttore": "T.P.P. s.p.a."},
+        "righe": [
+            {"profilo": "HEA 160", "qualita": "S355J2 +AR", "colata": "150890"},
+            {"profilo": "HEA 160", "qualita": "S355J2 +AR", "colata": "152590"},
+        ],
+    }
+    risposte = [
+        {"schede": {"p0001": scheda}},
+        {"correzioni": {"p0001": {"segni": [{"tipo": "freccia", "riga": 0, "testo": ""}]}}},
+    ]
+    chiamate = _servizi_finti(monkeypatch, risposte)
+    monkeypatch.setattr(
+        veloce.ocr, "leggi", lambda png, impronta, client: {"testo": testo, "incerte": [], "blocchi": []}
+    )
+    veloce.analizza(cartella, "modello", "low")
+    assert len(chiamate) == 2
+    contenuto = chiamate[1][1][0]["content"]
+    dubbi = json.loads(contenuto[0]["text"])["dubbi"]
+    assert any(c == "segni" and "più colate" in m for c, _, m in dubbi)
+    assert contenuto[1]["type"] == "input_image"
+    s = lv.scheda_pagina(lv.pagine(cartella)[0])
+    assert s["segni"] == [{"tipo": "freccia", "riga": 0, "testo": "", "zona": []}]
+    assert veloce.piu_colate_per_profilo(s) and not veloce.piu_colate_per_profilo(veloce.espandi(_SCHEDA_DDT))

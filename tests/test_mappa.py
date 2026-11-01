@@ -140,3 +140,16 @@ class _Nulla:
 
     def __exit__(self, *a):
         return False
+
+
+def test_riconoscimento_chiede_e_riporta_il_segno_a_mano(radice, tmp_path):
+    assert "segno_a_mano" in mappa.prompt_tipo()
+    png = tmp_path / "p.png"
+    Image.new("RGB", (100, 140), "white").save(png)
+    tipo = {"famiglia": "certificato_31", "sicurezza": 0.95, "verso": "dritto", "timbro": False, "segno_a_mano": True}
+    r = mappa.riconosci(png, "imp9", _Client([_risposta(json.dumps(tipo)), _risposta("| HEA 160 | 150890 |")]))
+    assert r["segno_a_mano"] is True
+    tipo["segno_a_mano"] = "forse"
+    assert (
+        mappa.riconosci(png, "imp10", _Client([_risposta(json.dumps(tipo)), _risposta("x")]))["segno_a_mano"] is False
+    )
