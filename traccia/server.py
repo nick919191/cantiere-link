@@ -3,13 +3,13 @@
 Il servizio locale collega il browser all’agente ChatGPT e conserva originali e risultati sul computer.
 """
 
-import io
 import json
 import logging
 import os
 import re
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -19,9 +19,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from PIL import Image
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from . import agente, aggiornamenti, cestino, chat, chatgpt, configurazione, consumi, demo_cantiere, percorsi, registro
 from . import lavoro as lv
@@ -548,20 +549,25 @@ def file_uscita(id_lavoro: str, relativo: str):
     return FileResponse(_dentro(_cartella(id_lavoro) / "uscita", relativo))
 
 
-def _zip(base: Path, escludi: str | None = None, solo: str | None = None) -> StreamingResponse:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for f in sorted(base.rglob("*")):
-            rel = f.relative_to(base).as_posix()
-            if (
-                f.is_file()
-                and not rel.endswith(".json")
-                and (not escludi or not rel.startswith(escludi))
-                and (not solo or rel.startswith(solo))
-            ):
-                z.write(f, rel[len(solo) + 1 :] if solo else rel)
-    buf.seek(0)
-    return StreamingResponse(buf, media_type="application/zip")
+def _zip(base: Path, escludi: str | None = None, solo: str | None = None) -> FileResponse:
+    """Zip su file temporaneo, non in RAM: FileResponse lo invia a pezzi e lo cancella a fine risposta."""
+    fd, percorso = tempfile.mkstemp(prefix="cantierelink-", suffix=".zip")
+    os.close(fd)
+    try:
+        with zipfile.ZipFile(percorso, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(base.rglob("*")):
+                rel = f.relative_to(base).as_posix()
+                if (
+                    f.is_file()
+                    and not rel.endswith(".json")
+                    and (not escludi or not rel.startswith(escludi))
+                    and (not solo or rel.startswith(solo))
+                ):
+                    z.write(f, rel[len(solo) + 1 :] if solo else rel)
+    except BaseException:
+        os.remove(percorso)
+        raise
+    return FileResponse(percorso, media_type="application/zip", background=BackgroundTask(os.remove, percorso))
 
 
 @app.get("/api/lavori/{id_lavoro}/scarica")

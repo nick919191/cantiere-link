@@ -11,11 +11,11 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const api=async(p,o)=>{const r=await fetch(p,o);const t=await r.text();let d=null;try{d=JSON.parse(t)}catch(e){}
  if(!r.ok)throw new Error(d&&typeof d.detail==="string"?d.detail:`Operazione non riuscita (HTTP ${r.status})`);
  if(d===null)throw new Error(`Risposta non valida dalla piattaforma (HTTP ${r.status})`);return d;};
-let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),timer=null,risultatoCaricato=false,inizio=true;
+let L=null,ultimoEv=0,stato=null,giaVisti=new Set(),risultatoCaricato=false,inizio=true;
 
 function vai(id){location.hash=id?"#/"+id:"";}
 window.onhashchange=route;
-function route(){clearInterval(timer);const m=location.hash.match(/^#\/([\w-]+)$/);
+function route(){const m=location.hash.match(/^#\/([\w-]+)$/);
  if(m){L=m[1];$("home").classList.add("hidden");$("lavoro").classList.remove("hidden");apriLavoro()}
  else{L=null;$("lavoro").classList.add("hidden");$("home").classList.remove("hidden");$("crumb").innerHTML="";casa()}}
 
@@ -47,7 +47,7 @@ function apriLavoro(){ultimoEv=0;giaVisti=new Set();risultatoCaricato=false;iniz
  $("feed").innerHTML="";$("crops").innerHTML="";$("res").classList.add("hidden");
  $("lookpage").innerHTML='<div class="scan"></div>';$("lookfile").textContent="In attesa delle pagine…";$("thought").textContent="Le pagine compaiono qui mentre vengono lette.";
  $("bins").innerHTML=Object.entries(FAM).map(([k,f])=>`<div class="card bin" id="bin-${k}" data-act="family" data-family="${k}"><div class="h"><div class="lab"><span class="sw" style="background:${f.c}"></span>${f.n}</div><div class="n" style="color:${f.c}">0</div></div><div class="stack"></div></div>`).join("");
- aggiorna();timer=setInterval(aggiorna,1500)}
+ aggiorna()}  // poi è il ciclo di poll in app.js a tenerlo aggiornato
 async function aggiorna(){if(!L)return;
  try{stato=await api(`/api/lavori/${L}/stato`)}catch(e){$("titolo").textContent="Lavoro non trovato";return}
  $("crumb").innerHTML=`/ <b>${esc(stato.nome)}</b>`;

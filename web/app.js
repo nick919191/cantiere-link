@@ -76,7 +76,12 @@ const INPUT={'filter-settings':el=>filterSettings(el.value),'chat-width':el=>set
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.disabled)return;const azione=AZIONI[el.dataset.act];if(azione)safe(()=>azione(el,e));});
 document.addEventListener('change',e=>{const el=e.target.closest('[data-change]');if(!el)return;const azione=CAMBI[el.dataset.change];if(azione)safe(()=>azione(el,e));});
 document.addEventListener('input',e=>{const el=e.target.closest('[data-input]');if(!el)return;const azione=INPUT[el.dataset.input];if(azione)safe(()=>azione(el,e));});
-async function init(){try{localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();if(innerWidth<=800)toggleChat(false);await poll();setInterval(poll,2000);}catch(e){notify('Avvio non riuscito: '+e.message);}}
+/* Un solo timer di poll: 2 s a lavoro in corso, 5 s a lavoro finito o in home, 15 s a scheda nascosta. */
+let pollTimer=null,pollInCorso=false;
+function intervalloPoll(){if(document.hidden)return 15000;const attivo=!!agentState.busy||!!(L&&stato&&(stato.preparing||!['pronto','errore'].includes(stato.fase)));return attivo?2000:5000;}
+async function ciclo(){if(pollInCorso)return;pollInCorso=true;clearTimeout(pollTimer);try{if(L)await aggiorna();await poll();}finally{pollInCorso=false;pollTimer=setTimeout(ciclo,intervalloPoll());}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)ciclo();});
+async function init(){try{localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();if(innerWidth<=800)toggleChat(false);await ciclo();}catch(e){notify('Avvio non riuscito: '+e.message);}}
 init();
 
 function updatesContent(){

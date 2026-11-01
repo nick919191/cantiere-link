@@ -52,3 +52,9 @@ def test_apostrofo_nel_titolo_della_prova_non_rompe_il_markup():
 def test_sintassi_javascript():
     for nome in ("app.js", "cantiere.js"):
         subprocess.run(["node", "--check", str(WEB / nome)], check=True)
+
+
+def test_un_solo_timer_di_poll_con_backoff():
+    app, cantiere = _testo("app.js"), _testo("cantiere.js")
+    assert "setInterval(" not in app and "setInterval(" not in cantiere
+    assert "visibilitychange" in app and "document.hidden" in app

@@ -1,5 +1,6 @@
 """Cartelle dell'app. Tutto sta sotto la radice della cartella del cliente (o sotto TRACCIA_RADICE nei test)."""
 
+import functools
 import hashlib
 import os
 from pathlib import Path
@@ -27,8 +28,13 @@ def lavoro(id_lavoro: str) -> Path:
     return lavori() / id_lavoro
 
 
+@functools.cache
 def versione_lettura() -> str:
-    """Versione delle istruzioni: cambia da sola se cambia anche un solo carattere di istruzioni/."""
+    """Versione delle istruzioni: cambia da sola se cambia anche un solo carattere di istruzioni/.
+
+    Calcolata una volta per processo: le istruzioni non cambiano mentre l'app gira, e lo stato di un cantiere
+    la chiedeva una volta per pagina a ogni poll.
+    """
     h = hashlib.sha256()
     for f in sorted(ISTRUZIONI.rglob("*.md")):
         h.update(f.relative_to(ISTRUZIONI).as_posix().encode())
