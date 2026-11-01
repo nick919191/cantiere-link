@@ -38,9 +38,10 @@ def test_csp_presente_e_errori_interni_in_json(radice, monkeypatch):
     def rotto(_cartella):
         raise RuntimeError("imprevisto")
 
+    lavoro = "20260101-000000-rotto"  # cartella creata a mano: nessuna preparazione in sfondo durante il test
+    (radice / "lavori" / lavoro).mkdir(parents=True)
+    (radice / "lavori" / lavoro / "info.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(server.lv, "stato", rotto)
-    client.post("/api/lavori/prova", headers={"X-Traccia-Token": client.get("/api/sessione").json()["token"]})
-    lavoro = next(c.name for c in (radice / "lavori").iterdir())
     r = client.get(f"/api/lavori/{lavoro}/stato")
     assert r.status_code == 500 and r.headers["content-type"].startswith("application/json")
     assert "detail" in r.json() and "imprevisto" not in r.text

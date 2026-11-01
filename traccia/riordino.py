@@ -126,6 +126,8 @@ def crea(cartella_lavoro: Path, pagine: list[dict], schede: dict[str, dict], des
     ws.append(["NUOVO NOME", "FILE ORIGINALE", "PAGINE ORIGINALI"])
     for r in indice:
         ws.append(r)
+        for cella in ws[ws.max_row]:
+            cella.data_type = "s"  # un nome di file che inizia con "=" non deve diventare una formula
     for col, w in zip("ABC", (70, 60, 20), strict=True):
         ws.column_dimensions[col].width = w
     wb.save(destinazione / "INDICE.xlsx")

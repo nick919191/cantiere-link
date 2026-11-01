@@ -27,6 +27,22 @@ CHIAVI = [
 ]
 CAMPI_TIMBRO = ["chi", "testo", "ddt_citato", "data_ddt", "destinatario", "a_mano", "zona"]
 CAMPI_ENUM = {"tipo_proposto", "tipo_materiale", "servizio", "componente"}  # valori scelti, non trascritti
+# Valori ammessi per i campi scelti (istruzioni/famiglie/*.md); vuoto = non determinato.
+VALORI_ENUM = {
+    "tipo_proposto": {
+        "",
+        "commerciante_costruttore",
+        "acciaieria_commerciante",
+        "costruttore_cliente",
+        "non_determinabile",
+    },
+    "tipo_materiale": {"", "profilati_lamiere_tubi", "bulloneria", "materia_prima"},
+    "servizio": {"", "si", "no"},
+}
+MAX_TRASCRIZIONE = 100_000  # caratteri: un testo ostile non deve gonfiare archivio, prove e contesto della chat
+MAX_MOTIVO = 1000
+MAX_AVVISI, MAX_AVVISO = 20, 300
+MAX_ENUM = 40
 
 
 def piatto(testo: str) -> str:
@@ -60,7 +76,15 @@ def _valore(campo: str, v, testo_pagina: str, errori: list[str]) -> None:
         errori.append(f"{campo}: zona deve essere [] oppure [x0, y0, x1, y1] interi 0-1000 con x0<x1, y0<y1")
     if not v["v"]:
         return
-    if campo.split(".")[-1] in CAMPI_ENUM:
+    nome = campo.split(".")[-1]
+    if nome in CAMPI_ENUM:
+        ammessi = VALORI_ENUM.get(nome)
+        if ammessi is not None and v["v"] not in ammessi:
+            errori.append(
+                f"{campo}: valore {v['v'][:40]!r} non ammesso (uno tra {', '.join(sorted(a for a in ammessi if a))})"
+            )
+        elif len(v["v"]) > MAX_ENUM:
+            errori.append(f"{campo}: valore troppo lungo")
         return
     if not v["cit"]:
         errori.append(f"{campo}: valore senza citazione")
@@ -91,6 +115,10 @@ def valida(scheda, testo_nativo: str = "") -> list[str]:
             errori.append(f"{k}: testo")
     if errori:
         return errori
+    if len(scheda["trascrizione"]) > MAX_TRASCRIZIONE:
+        errori.append(f"trascrizione: oltre {MAX_TRASCRIZIONE} caratteri")
+    if len(scheda["motivo"]) > MAX_MOTIVO:
+        errori.append(f"motivo: oltre {MAX_MOTIVO} caratteri")
     testo = scheda["trascrizione"] + "\n" + (testo_nativo or "")
     c_testata, c_righe = campi()[famiglia]
     testata = scheda["testata"]
@@ -135,10 +163,13 @@ def valida(scheda, testo_nativo: str = "") -> list[str]:
             or set(s) != {"tipo", "riga", "testo", "zona"}
             or s["tipo"] not in TIPI_SEGNO
             or not isinstance(s["riga"], int)
+            or not _zona_valida(s["zona"])
         ):
-            errori.append(f"segni[{i}]: {{tipo, riga, testo, zona}} con tipo tra {', '.join(TIPI_SEGNO)}")
+            errori.append(f"segni[{i}]: {{tipo, riga, testo, zona}} con tipo tra {', '.join(TIPI_SEGNO)} e zona valida")
     if not isinstance(scheda["avvisi"], list) or not all(isinstance(a, str) for a in scheda["avvisi"]):
         errori.append("avvisi: lista di frasi")
+    elif len(scheda["avvisi"]) > MAX_AVVISI or any(len(a) > MAX_AVVISO for a in scheda["avvisi"]):
+        errori.append(f"avvisi: al massimo {MAX_AVVISI} frasi di {MAX_AVVISO} caratteri")
     return errori
 
 

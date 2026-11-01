@@ -65,6 +65,7 @@ async def lifecycle(_app):
 
 app = FastAPI(title="CantiereLink", docs_url=None, redoc_url=None, lifespan=lifecycle)
 _PREPARING = set()
+HOST_CONSENTITI = {"127.0.0.1", "localhost"}  # i test aggiungono "testserver" dalla fixture, non il codice
 _ESTENSIONI = {".pdf", ".zip", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
 _MAX_BYTE = 500 * 1024 * 1024
 _TOKEN = secrets.token_urlsafe(32)
@@ -91,7 +92,7 @@ _CSP_DEMO = _CSP + "; script-src 'self' 'unsafe-inline'"
 @app.middleware("http")
 async def locale(request: Request, call_next):
     host = request.url.hostname
-    if host not in ("127.0.0.1", "localhost") and not (host == "testserver" and request.client.host == "testclient"):
+    if host not in HOST_CONSENTITI:
         return JSONResponse({"detail": "Host non autorizzato"}, status_code=403)
     origin = request.headers.get("origin")
     if origin and (urlsplit(origin).netloc != request.headers.get("host") or urlsplit(origin).scheme != "http"):
@@ -446,7 +447,7 @@ def _prepara_in_sfondo(id_lavoro: str, cartella: Path) -> None:
 
 
 @app.post("/api/lavori")
-async def carica(file: list[UploadFile], nome: str = Form("")):
+async def carica(file: list[UploadFile], nome: str = Form("", max_length=200)):
     id_lavoro = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
     cartella = percorsi.lavoro(id_lavoro)
     percorsi.lavori().mkdir(parents=True, exist_ok=True)
@@ -533,9 +534,14 @@ def miniatura(id_lavoro: str, pid: str):
     f = c / "miniature" / f"{pid}.png"
     if not f.exists():
         f.parent.mkdir(exist_ok=True)
+        temporaneo = f.with_name(f"{pid}.{uuid.uuid4().hex}.tmp")  # mai una PNG a metà servita a un'altra richiesta
         with Image.open(originale) as img:
             img.thumbnail((160, 160))
-            img.save(f, format="PNG")
+            img.save(temporaneo, format="PNG")
+        try:
+            temporaneo.replace(f)
+        except OSError:
+            temporaneo.unlink(missing_ok=True)
     return FileResponse(f)
 
 

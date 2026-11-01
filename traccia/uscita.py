@@ -60,7 +60,10 @@ def _componi(cartella: Path, uscita: Path) -> dict:
     ritagli: dict[str, list[str]] = {}
     for pid, s in schede.items():
         for r in s.get("ritagli", []):
-            src = lv.cartella_ritagli() / r["file"]
+            nome = r.get("file") if isinstance(r, dict) else None
+            if not isinstance(nome, str) or not nome or Path(nome).name != nome:
+                continue  # solo un nome di file dentro archivio/ritagli, mai un percorso
+            src = lv.cartella_ritagli() / nome
             if src.exists():
                 shutil.copyfile(src, uscita / "prove" / "ritagli" / r["file"])
                 ritagli.setdefault(pid, []).append(f"ritagli/{r['file']}")
