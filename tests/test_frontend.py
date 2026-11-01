@@ -69,3 +69,28 @@ def test_u1_a_lavoro_finito_i_risultati_salgono_e_la_lettura_si_ripiega():
     assert "Rileggi pagine mancanti" in cantiere and 'ab.classList.toggle("s",finito)' in cantiere
     assert 'querySelectorAll(".flyer").forEach(f=>f.remove())' in cantiere
     assert 'stato.fase==="pronto"||document.hidden){metti(x);return}' in cantiere
+
+
+def test_u2_tabella_e_catena_scorrono_dentro_il_contenitore_con_ombra():
+    html = _testo("index.html")
+    assert 'class="card chain scrollx" tabindex="0"' in html and 'class="card tabwrap scrollx" tabindex="0"' in html
+    regola = re.search(r"\.scrollx\{([^}]*)\}", html).group(1)
+    assert "overflow-x:auto" in regola and "background-attachment:local,local,scroll,scroll" in regola
+    assert "--scroll-shadow" in regola and "--scroll-shadow:" in _testo("app.css")  # anche nel tema scuro
+
+
+def test_u4_sezione_da_verificare_con_motivi_e_domanda_pronta():
+    html, cantiere, app = _testo("index.html"), _testo("cantiere.js"), _testo("app.js")
+    assert html.index('id="verifica-card"') < html.index("<h2>Collegamenti a ritroso</h2>")
+    assert 'v.stato==="DA CONFERMARE"||v.stato==="MANCANTE"' in cantiere
+    assert 'data-act="ask-about"' in cantiere and 'data-act="goto-row"' in cantiere and "v.note.join" in cantiere
+    assert "Nessuna voce da verificare" in cantiere
+    # la domanda viene scritta nella casella, mai inviata da sola
+    riga_ask_about = app.split("function askAbout")[1].split("\n")[0]
+    assert "$('question').value=el.dataset.text" in riga_ask_about and "ask(" not in riga_ask_about
+
+
+def test_u6_chat_chiusa_all_avvio_a_ogni_larghezza():
+    app = _testo("app.js")
+    assert "innerWidth<=800)toggleChat(false)" not in app
+    assert re.search(r"route\(\);toggleChat\(false\);", app)

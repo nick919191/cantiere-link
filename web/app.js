@@ -25,6 +25,9 @@ $('splitter').addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].inclu
 function renderContext(){$('context-chips').innerHTML=(selectedVoice?`<span class="context-chip">Voce ${selectedVoice}<button data-act="remove-voice" aria-label="Rimuovi voce">×</button></span>`:'')+selectedPages.map(pid=>`<span class="context-chip">Pagina ${esc(pid)}<button data-remove-page="${esc(pid)}" aria-label="Rimuovi pagina">×</button></span>`).join('');}
 $('context-chips').addEventListener('click',e=>{const pid=e.target.dataset.removePage;if(pid){selectedPages=selectedPages.filter(p=>p!==pid);renderContext();}});
 function selectVoice(n){selectedVoice=n;selectedPages=[];renderContext();apriChat();}
+/* U4: dalla lista «Da verificare» la domanda arriva già scritta nella chat (non viene inviata: decide l'utente) */
+function askAbout(el){selectVoice(Number(el.dataset.voice));$('question').value=el.dataset.text||'';}
+function gotoRow(n){const r=$('vrow-'+n);if(!r)return;r.scrollIntoView({behavior:'smooth',block:'center'});r.classList.remove('evidenzia');void r.offsetWidth;r.classList.add('evidenzia');}
 function pickContext(){if(!L||!stato){notify('Apri un cantiere per selezionare una pagina.');return;}$('mtitle').textContent='Scegli una fonte per la chat';$('mopen').classList.add('hidden');$('mframe').classList.add('hidden');$('mbody').classList.remove('hidden');$('mbody').innerHTML=`<div class="grid-pg">${stato.pagine.map(p=>`<button class="pg context-page" data-page="${esc(p.pid)}"><img src="${img(p.pid)}" alt=""><div>${esc(p.file)} · p${p.pagina}</div></button>`).join('')}</div>`;$('modal').classList.add('on');}
 $('mbody').addEventListener('click',e=>{const b=e.target.closest('[data-page]');if(b){if(!selectedPages.includes(b.dataset.page)&&selectedPages.length<8)selectedPages.push(b.dataset.page);renderContext();chiudi();apriChat();}});
 async function showHistory(){if(!L)return;const list=await request(`/api/lavori/${L}/conversazioni`);$('history-list').innerHTML=list.map(c=>`<button class="history-item" data-session="${esc(c.id)}">${esc(c.title)}</button>`).join('')||'<div class="unread">Nessuna conversazione salvata.</div>';$('history').classList.toggle('hidden');}
@@ -66,7 +69,7 @@ const AZIONI={
  'toggle-chat':()=>toggleChat(),'pick-files':()=>sel.click(),demo:createDemo,trash:showTrash,'close-trash':()=>$('trash-dialog').close(),
  'move-to-trash':moveToTrash,'confirm-trash':el=>confirmTrash(el.dataset.job,el),'open-job':el=>vai(el.dataset.job),
  'add-files':()=>$('add-files').click(),stop:stopAgent,analyze:analyze,history:showHistory,'new-conversation':newConversation,
- ask:el=>ask(el.dataset.text),'pick-context':pickContext,'remove-voice':()=>{selectedVoice=null;renderContext();},'select-voice':el=>selectVoice(Number(el.dataset.voice)),
+ ask:el=>ask(el.dataset.text),'pick-context':pickContext,'ask-about':askAbout,'goto-row':el=>gotoRow(el.dataset.voice),'remove-voice':()=>{selectedVoice=null;renderContext();},'select-voice':el=>selectVoice(Number(el.dataset.voice)),
  family:el=>famiglia(el.dataset.family),page:el=>pagina(el.dataset.pid),'open-proof':el=>apri(el.dataset.url,el.dataset.title),'close-modal':chiudi,
  connect:el=>connectAccount(!!el.dataset.add),disconnect:disconnectAccount,'refresh-models':refreshModels,'close-app':closeApp,
  'check-updates':checkUpdates,'install-update':installUpdate,'dismiss-update':dismissUpdate,'open-installer':openInstaller,'rollback-update':rollbackUpdate};
@@ -81,7 +84,7 @@ let pollTimer=null,pollInCorso=false;
 function intervalloPoll(){if(document.hidden)return 15000;const attivo=!!agentState.busy||!!(L&&stato&&(stato.preparing||!['pronto','errore'].includes(stato.fase)));return attivo?2000:5000;}
 async function ciclo(){if(pollInCorso)return;pollInCorso=true;clearTimeout(pollTimer);try{if(L)await aggiorna();await poll();}finally{pollInCorso=false;pollTimer=setTimeout(ciclo,intervalloPoll());}}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)ciclo();});
-async function init(){try{const consegnato=location.hash.match(/^#t=([\w-]+)$/);if(consegnato){localToken=consegnato[1];history.replaceState(null,'',location.pathname);}else localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();if(innerWidth<=800)toggleChat(false);await ciclo();}catch(e){notify('Avvio non riuscito: '+e.message);}}
+async function init(){try{const consegnato=location.hash.match(/^#t=([\w-]+)$/);if(consegnato){localToken=consegnato[1];history.replaceState(null,'',location.pathname);}else localToken=(await api('/api/sessione')).token;preferences=await request('/api/impostazioni');applyTheme();setWidth(preferences.chat_width);updatePickers();route();toggleChat(false);/* U6: la chat parte chiusa e lascia spazio ai risultati */await ciclo();}catch(e){notify('Avvio non riuscito: '+e.message);}}
 init();
 
 function updatesContent(){

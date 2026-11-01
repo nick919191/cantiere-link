@@ -127,9 +127,15 @@ async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}c
  $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<div class="stato ${c}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k}</div></div>`).join("");
  const prova=(v,c)=>v.colonne[c].fonti.length?`/api/lavori/${L}/uscita/prove/v${String(v.n).padStart(3,"0")}_c${String(COL.indexOf(c)+1).padStart(2,"0")}.html`:null;
  const manca=s=>/non nel fascicolo|Non presente/i.test(s||"");
+ // U4: le voci DA CONFERMARE / MANCANTI vengono prima, con i motivi, cosa manca e la domanda pronta per la chat
+ const dav=r.voci.filter(v=>v.stato==="DA CONFERMARE"||v.stato==="MANCANTE");
+ $("verifica-count").textContent=dav.length;$("verifica-count").className="pill "+(dav.length?"o":"g");
+ $("verifica").innerHTML=dav.length?dav.map(v=>{const C=v.colonne,m=[];if(manca(C["DDT COMMERCIANTE"].v))m.push("DDT del commerciante");if(manca(C["CERT 3.1 ACCIAIERIA"].v))m.push("certificato 3.1");if(!C["COLATA"].v)m.push(v.colate_possibili.length?"colata da scegliere tra "+v.colate_possibili.join(", "):"colata");
+  const domanda=`Voce ${v.n} (${v.voce}): perché è ${v.stato}? Cosa manca per provarla e cosa devo chiedere al fornitore?`;
+  return `<div class="vitem"><div class="vitem-main"><div><span class="pill ${STATI[v.stato]}">${v.stato}</span> <b>${esc(v.voce)}</b> <span class="muted">${esc(v.parte_opera||"")}</span></div><div class="why-full">${esc(v.note.join(" "))}</div>${m.length?`<div class="manca"><b>Manca:</b> ${esc(m.join(", "))}</div>`:""}</div><div class="vitem-acts"><button class="btn s" data-act="goto-row" data-voice="${v.n}">Vedi i collegamenti</button><button class="btn s" data-act="ask-about" data-voice="${v.n}" data-text="${esc(domanda)}">Chiedi in chat</button></div></div>`}).join(""):`<div class="note" style="margin:0">Nessuna voce da verificare: tutte le voci sono provate o dedotte.</div>`;
  const nodo=(v,c,txt,sub,cls)=>{const u=prova(v,c);return `<div class="node ${cls||""} ${u?"click":""}" ${u?`data-act="open-proof" data-url="${u}" data-title="${esc(c)} · voce ${v.n}"`:""}>${esc(txt||"—")}<small>${esc(sub||"")}</small></div>`};
  $("chain").innerHTML=r.voci.map((v,i)=>{const C=v.colonne;const cert=C["CERT 3.1 ACCIAIERIA"].v,ddt=C["DDT COMMERCIANTE"].v,col=C["COLATA"].v;
-  return `<div class="vrow" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" data-act="select-voice" data-voice="${v.n}">Chiedi in chat ↗</button></div>
+  return `<div class="vrow" id="vrow-${v.n}" style="animation-delay:${i*60}ms"><div>${nodo(v,"PARTE D'OPERA",v.voce,v.parte_opera||"")}<button class="row-ask" data-act="select-voice" data-voice="${v.n}">Chiedi in chat ↗</button></div>
   ${nodo(v,"DDT COMMERCIANTE",ddt.replace(/^DDT n\. /,"DDT "),C["COMMERCIANTE / CENTRO TRASF."].v,manca(ddt)?"miss":"")}
   ${nodo(v,"CERT 3.1 ACCIAIERIA",cert,C["PRODUTTORE"].v,manca(cert)?"miss":(v.stato==="DA CONFERMARE"?"warn":""))}
   ${nodo(v,"COLATA",col||(v.colate_possibili.length?v.colate_possibili.length+" colate":"—"),v.colate_possibili.join(" / "),v.stato==="MANCANTE"?"miss":(!col?"warn":""))}
