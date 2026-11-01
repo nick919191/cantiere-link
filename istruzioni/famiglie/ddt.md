@@ -4,7 +4,7 @@ Riconosci: "documento di trasporto", D.P.R. 472/96, causale del trasporto, vetto
 "delivery note No.", "Lieferschein-Nr.". Non è DDT: fattura; lettera "Certificate 1/1" che cita un "Delivery note
 no." (`lettera_accompagnamento`); certificato con un campo DDT (`certificato_31`).
 
-testata: emittente, destinatario, destinazione, numero, data, ordine, commessa, pagina_di, tipo_proposto
+testata: emittente, destinatario, destinazione, numero, data, ordine, commessa, pagina_di, tipo_proposto, piva_emittente, piva_destinatario
 righe: descrizione, profilo, qualita, quantita, unita, posizione, servizio
 
 - `numero` = il riquadro NUMERO / N documento / delivery note No., come stampato. Non ordine, non codice cliente.
@@ -16,3 +16,5 @@ righe: descrizione, profilo, qualita, quantita, unita, posizione, servizio
 - `servizio`: "si" per righe che non sono materiale (contributo certificazione, certificato materiale, trasporto,
   forature), altrimenti "no". "PROVINO" = materiale con avviso "provino".
 - `pagina_di`: "1/2", "PAG. 002"... se stampato.
+- `piva_emittente` = partita IVA stampata nell'intestazione di chi emette; `piva_destinatario` = partita IVA
+  stampata nel riquadro del cliente/destinatario (es. "Partita IVA 00000000000"). Solo se scritte sulla pagina.

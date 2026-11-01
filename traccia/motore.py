@@ -50,8 +50,9 @@ def _c(v: str, *fonti, perche: str = "") -> dict:
     return {"v": v, "fonti": [f for f in fonti if f], "perche": perche}
 
 
-def _stessa(a: str, b: str) -> bool:
-    return bool(nz.aziende(a) & nz.aziende(b))
+def _stessa(prove: dict, a: str, b: str) -> bool:
+    """Stessa azienda: nuclei delle ragioni sociali e alias del fascicolo (stessa partita IVA)."""
+    return nz.stessa_azienda(a, b, prove.get("aziende", []))
 
 
 # ---------- voci ----------
@@ -192,7 +193,7 @@ class Motore:
     def ddt_di(self, voce: dict) -> dict | None:
         trovati = [d for d in self.ddt_noti if nz.stesso_numero(voce["ddt"], d["numero"]) in STESSO]
         if voce["fornito_da"]:
-            stessi = [d for d in trovati if _stessa(d["emittente"], voce["fornito_da"])]
+            stessi = [d for d in trovati if _stessa(self.p, d["emittente"], voce["fornito_da"])]
             trovati = stessi
         return trovati[0] if len(trovati) == 1 else None
 
@@ -340,7 +341,7 @@ class Motore:
         if not candidati:
             motivi.append("nessun certificato nel fascicolo per questo materiale")
             return None, [], False, False
-        intestati = [x for x in candidati if doc_ddt and _stessa(x[0]["cliente"], doc_ddt["emittente"])]
+        intestati = [x for x in candidati if doc_ddt and _stessa(self.p, x[0]["cliente"], doc_ddt["emittente"])]
         scelti = intestati or candidati
         if len(scelti) > 1:
             motivi.append("più certificati possibili: " + ", ".join(sorted(x[0]["numero"] for x in scelti)))
@@ -396,7 +397,7 @@ class Motore:
         elif not voce["ddt"]:
             motivi.append("nessun DDT dichiarato per la voce")
             stato = DA_CONFERMARE
-        elif voce["certificato"] or (doc_ddt and _stessa(cert["cliente"], doc_ddt["emittente"])):
+        elif voce["certificato"] or (doc_ddt and _stessa(self.p, cert["cliente"], doc_ddt["emittente"])):
             motivi.append("certificato e DDT presenti e coerenti, senza timbro con il numero del DDT")
             stato = DEDOTTO
         else:
@@ -416,7 +417,7 @@ class Motore:
 # ---------- colonne e note ----------
 def _cantiere(prove: dict) -> dict:
     costr = prove["costruttore"]
-    dop = next((d for d in prove["dop_costruttore"] if costr and _stessa(d.get("fabbricante", ""), costr)), None)
+    dop = next((d for d in prove["dop_costruttore"] if costr and _stessa(prove, d.get("fabbricante", ""), costr)), None)
     if dop:
         pezzi = [f"DoP n. {dop.get('numero_dop', '')}" + (f" del {dop['data']}" if dop.get("data") else "")]
         pezzi += [f"CE {dop['cpr']}"] if dop.get("cpr") else []
@@ -439,7 +440,7 @@ def _cantiere(prove: dict) -> dict:
         if ddt_costr
         else _c(NON_PRESENTE, perche="Nel fascicolo non ci sono DDT del costruttore al cliente.")
     )
-    fonti_costr = [fid for fid, f in prove["fonti"].items() if costr and _stessa(f["valore"], costr)]
+    fonti_costr = [fid for fid, f in prove["fonti"].items() if costr and _stessa(prove, f["valore"], costr)]
     costruttore = _c(
         costr or "Non individuato",
         *fonti_costr,
@@ -569,7 +570,7 @@ def _colonne(prove: dict, voce: dict, dec: dict, cantiere: dict) -> dict:
         (
             d
             for d in prove["dop_prodotto"]
-            if commerciante["v"] and _stessa(d.get("fabbricante", ""), commerciante["v"])
+            if commerciante["v"] and _stessa(prove, d.get("fabbricante", ""), commerciante["v"])
         ),
         None,
     )

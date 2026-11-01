@@ -16,7 +16,36 @@ _DUE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
 _DECIMI = re.compile(r"(\d+)/10\b")
 _DECIMALE = re.compile(r"\d+\.\d+")
 
-_PAROLE_VUOTE = {"spa", "srl", "gmbh", "kg", "co", "nchfg", "sau", "sl", "ltd"}
+# Suffissi legali: tolti anche se incollati alla parola prima ('SETALS.P.A.' -> 'setalspa' -> 'setal').
+_FORME_GIURIDICHE = {
+    *"spa srl srls sas snc sapa scarl scrl coop gmbh ag kg ltd plc llc inc corp sl sa sau bv nv oy ab as sro".split(),
+    "unipersonale",
+}
+_SUFFISSO_INCOLLATO = re.compile(r"(?<=[a-z]{3})(?:spa|srl|srls|sas|snc|sapa|gmbh)$")
+# Parole che non identificano l'azienda (forma giuridica, congiunzioni).
+_PAROLE_VUOTE = _FORME_GIURIDICHE | {
+    "societa",
+    "society",
+    "soc",
+    "company",
+    "co",
+    "nchfg",
+    "e",
+    "and",
+    "di",
+    "del",
+    "della",
+    "dei",
+    "degli",
+    "in",
+    "the",
+    "it",
+}
+# Da qui in poi è indirizzo o reparto, non ragione sociale: 'via', 'viale', un CAP a 5 cifre, 'divisione'...
+_INIZIO_INDIRIZZO = re.compile(
+    r"^(?:via|viale|vialle|piazza|pzza|piazzale|corso|largo|strada|str|loc|localita|zona|zi|km|sede|tel|fax|cap|"
+    r"divisione|div|stabilimento|deposito|filiale|unit|plant|\d{5})$"
+)
 
 
 def numero(testo):
@@ -172,15 +201,70 @@ def gradi(qualita):
     return risultato
 
 
-def aziende(nome):
-    """Ragioni sociali complete senza suffisso legale, mai soltanto la prima parola."""
-    risultato = set()
+def _parole(testo):
+    t = unicodedata.normalize("NFKD", testo or "").encode("ascii", "ignore").decode().lower().replace(".", "")
+    return [p for p in re.split(r"[^a-z0-9]+", t) if p]
+
+
+def nuclei(nome):
+    """Nuclei della ragione sociale, uno per ogni parte separata da '/': i token prima dell'indirizzo (via, CAP...)
+    e prima del reparto (divisione...), senza forma giuridica, anche se incollata ('SETALS.P.A.' -> ['setal']).
+
+    'S.A.C.I.F. SRL VIA NULLO N.5 20129 MILANO' -> [['sacif']]; 'Società Ambrosiana Costruzioni In Ferro Srl' ->
+    [['ambrosiana', 'costruzioni', 'ferro']]. Ogni nucleo porta anche le sigle fatte con le iniziali delle parole
+    ('sacif', 'fvs'), usate dal confronto.
+    """
+    risultato = []
     for parte in (nome or "").split("/"):
-        parte = unicodedata.normalize("NFKD", parte).encode("ascii", "ignore").decode().lower().replace(".", "")
-        parole = [p for p in re.split(r"[^a-z0-9]+", parte) if p and p not in _PAROLE_VUOTE]
-        if parole:
-            risultato.add(" ".join(parole))
+        parole = _parole(parte)
+        prima = next((i for i, p in enumerate(parole) if i and _INIZIO_INDIRIZZO.match(p)), len(parole))
+        parole = [_SUFFISSO_INCOLLATO.sub("", p) for p in parole[:prima]]
+        parole = [p for p in parole if p]
+        tokens = [p for p in parole if p not in _PAROLE_VUOTE]
+        sigle = {"".join(p[0] for p in parole if p not in _FORME_GIURIDICHE), "".join(p[0] for p in tokens)}
+        if tokens:
+            risultato.append((tokens, {s for s in sigle if len(s) >= 3 and len(tokens) >= 2}))
     return risultato
+
+
+def aziende(nome):
+    """Nuclei della ragione sociale come testo ('sacif', 'ambrosiana costruzioni ferro'): per chiavi e confronti
+    di uguaglianza. Per sapere se due nomi sono la stessa azienda usa `stessa_azienda`."""
+    return {" ".join(tokens) for tokens, _ in nuclei(nome)}
+
+
+def _stesso_token(a, b):
+    if a == b:
+        return True
+    corto, lungo = sorted((a, b), key=len)
+    return len(corto) >= 3 and corto.isalpha() and lungo.startswith(corto)
+
+
+def _contenuto(piccolo, grande):
+    return all(any(_stesso_token(p, g) for g in grande) for p in piccolo)
+
+
+def stessa_azienda(a, b, gruppi=()):
+    """True se i nuclei si contengono ('SACIF SRL' in 'S.A.C.I.F. SRL SOCIETA' AMBROSIANA COSTRUZIONI IN FERRO'),
+    se uno è la sigla dell'altro ('FVS' = Ferramenta Villafranca Siderurgica), oppure se i due nomi stanno nello
+    stesso gruppo di `gruppi` (alias del fascicolo: stessa partita IVA). Mai per la sola prima parola."""
+    na, nb = nuclei(a), nuclei(b)
+    for ta, sa in na:
+        for tb, sb in nb:
+            if _contenuto(ta, tb) or _contenuto(tb, ta) or "".join(ta) == "".join(tb):
+                return True
+            if sa & set(tb) or sb & set(ta):
+                return True
+    for gruppo in gruppi:
+        if any(stessa_azienda(a, g) for g in gruppo) and any(stessa_azienda(b, g) for g in gruppo):
+            return True
+    return False
+
+
+def piva(testo):
+    """Partita IVA come sole cifre ('IT 00716810155' -> '00716810155'); vuoto se non ha 11 cifre."""
+    cifre = re.sub(r"\D", "", testo or "")
+    return cifre if len(cifre) == 11 else ""
 
 
 def cita_numero(testo, numero_ddt):

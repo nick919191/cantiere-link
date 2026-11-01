@@ -34,3 +34,41 @@ def test_numeri_di_documento():
     assert nz.stesso_numero("4455", "16624455") is None  # numero corto senza separatore: non basta
     assert nz.stesso_numero("12345678", "99912345678") == "prefisso"
     assert nz.stesso_numero("1777", "7777") is None
+
+
+def test_nucleo_della_ragione_sociale_senza_indirizzo_ne_forma_giuridica():
+    # reali (Codogno): sette forme della stessa azienda, con indirizzo, sigla per esteso, suffisso incollato
+    forme = [
+        "S.A.C.I.F. SRL VIA NULLO N.5 20129 MILANO",
+        "SACIF SRL",
+        "S.A.C.I.F. S.R.L.\nVIA NULLO, 5\n20129 MILANO",
+        "S.A.C.I.F. SRL SOCIETA' AMBROSIANA COSTRUZIONI IN FERRO VIA NULLO, 5 20129 MILANO",
+        "Società Ambrosiana Costruzioni In Ferro Srl",
+        "SACIF S.r.l.",
+        "S.A.C.I.F. SRL SOCIETA' AMBROSIANA COSTR",
+    ]
+    assert all(nz.stessa_azienda(forme[0], f) for f in forme)
+    assert nz.aziende("S.A.C.I.F. SRL VIA NULLO N.5 20129 MILANO") == {"sacif"}
+    assert nz.aziende("SETAL S.P.A.") == nz.aziende("SETALS.P.A.") == {"setal"}
+    assert nz.stessa_azienda("FVS S.p.A.", "FERRAMENTA VILLAFRANCA SIDERURGICA S.p.A.")  # sigla dalle iniziali
+    assert nz.stessa_azienda("Gabrielli S.p.A. - Società Unipersonale", "GABRIELLI SPA UNIPERSONALE / Divisione Coils")
+    # inventati: indirizzo, sigla, suffisso incollato, reparto
+    assert nz.stessa_azienda("Tubificio Nord Srl Via Roma 1 10100 Torino", "TUBIFICIO NORD")
+    assert nz.stessa_azienda("Acciaierie Rossi e Bianchi S.p.A.", "ARB SPA")
+    assert nz.aziende("LAMIERENORDSRL") == {"lamierenord"}
+    assert nz.stessa_azienda("Ferriera Sud S.p.A. Stabilimento di Taranto", "FERRIERA SUD")
+    # non la stessa azienda: prima parola comune, sigle diverse, nomi diversi
+    assert not nz.stessa_azienda("Costruzioni 001 SRL", "Costruzioni 002 SRL")
+    assert not nz.stessa_azienda("Acciaierie Rossi e Bianchi S.p.A.", "Acciaierie Verdi")
+    assert not nz.stessa_azienda("SACIF SRL", "FVS S.p.A.")
+    assert not nz.stessa_azienda("Marcegaglia Plates", "Marcegaglia Palini e Bertoli S.P.A.")
+    # alias del fascicolo (stessa partita IVA)
+    gruppi = [["ALFA SRL", "Officine Beta S.p.A."]]
+    assert nz.stessa_azienda("ALFA S.R.L.", "OFFICINE BETA", gruppi)
+    assert not nz.stessa_azienda("ALFA S.R.L.", "GAMMA", gruppi)
+
+
+def test_partita_iva():
+    assert nz.piva("Partita IVA 00716810155") == "00716810155"
+    assert nz.piva("IT 00362740284") == "00362740284"
+    assert nz.piva("123") == "" and nz.piva(None) == ""
