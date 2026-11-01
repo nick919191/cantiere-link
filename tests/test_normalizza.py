@@ -72,3 +72,34 @@ def test_partita_iva():
     assert nz.piva("Partita IVA 00716810155") == "00716810155"
     assert nz.piva("IT 00362740284") == "00362740284"
     assert nz.piva("123") == "" and nz.piva(None) == ""
+
+
+def test_lamiere_scritte_come_misure_non_sono_tubi():
+    # reali: scritture dei DDT e dei certificati di un fascicolo (SP.0nn, L.DA TRENO, PLATES con spazi, coil)
+    assert nz.profilo("SP.012X2450X6000") == "LAMIERA 12"
+    assert nz.profilo("LAMIERE S355 SP.010X2000X6000 Placca: C2589A Colata: C2589") == "LAMIERA 10"
+    assert (
+        nz.profilo("ORD.INT.: 2587519 DEL 11/09/25 L.DA TRENO S355J2 EN 10025-2 Pz 8 6000x2500x15,00") == "LAMIERA 15"
+    )
+    assert nz.profilo("Hot Rolled Heavy Plates 15,00 X 2450,00 X 12000,00") == "LAMIERA 15"
+    assert nz.profilo("HOT ROLLED PLATE 12x2500x6000") == "LAMIERA 12"
+    assert nz.profilo("Hot Rolled Steel Plates overrolling and second e 10.00 2000 12000") == "LAMIERA 10"
+    assert nz.profilo("Hot Rolled Mill Edge Coil 8,00x1660xC") == "LAMIERA 8"
+    assert nz.profilo("Hot Rolled Mill Edge Strip 1500.0X8.00XCOIL") == "LAMIERA 8"
+    assert nz.profilo("LAM. CALDO 5,00 x1500,00 x 6000,00") == "LAMIERA 5"
+    assert nz.profilo("LAMIERA 60-10") == "PIATTO 60x10"  # scrittura di distinta: piatto 60x10
+    assert nz.profilo("FERRO U 240X2500") == "UPN 240"
+    # inventati: tre misure con una sola piccola = lamiera; due piccole e una lunghezza = tubo
+    assert nz.profilo("8x1500x3000") == "LAMIERA 8"
+    assert nz.profilo("PLATE 20 x 2000 x 6000") == "LAMIERA 20"
+    assert nz.profilo("lamiera spess. 12 mm 1500x3000") == "LAMIERA 12"
+    assert nz.profilo("4,35x1430xC") == "LAMIERA 4.35"
+    assert nz.profilo("LAM 50-8") == "PIATTO 50x8"
+    assert nz.profilo("LAM NERE 2000x1000x80/10") == "LAMIERA 8"
+    # tubi: solo con la parola (TUBO, CRP, CHS, Ø) o nella forma diametro x spessore
+    assert nz.profilo("TUBO ELETTROSALDATO SCORDONATO 219,1x12,5x12000") == "TUBO 219.1x12.5x12000"
+    assert nz.profilo("N. 57 TUBO 76,1X5 L. 1320 mm") == "TUBO 76.1x5"
+    assert nz.profilo("40x40x3") == "TUBO 40x40x3"
+    assert nz.profilo("CHS 88,9x4") == "TUBO 88.9x4"
+    assert nz.profilo("Ø 60,3x3,6") == "TUBO 60.3x3.6"
+    assert nz.profilo("TUBO 12x2450x6000") == "TUBO 12x2450x6000"  # con la parola resta un tubo

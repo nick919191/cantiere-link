@@ -13,8 +13,22 @@ _TRAVI = re.compile(r"\b(HEA|HEB|HEM|IPE|UPN|UNP)\s*(\d+)")
 _U = re.compile(r"\bU\s+(\d+)\s*X\s*\d+")
 _TRE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
 _DUE_DIM = re.compile(r"(\d+(?:\.\d+)?)\s*X\s*(\d+(?:\.\d+)?)")
+_TRE_DIM_SPAZI = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s+(\d{3,}(?:\.\d+)?)\s+(\d{3,}(?:\.\d+)?)(?![\d.])")
 _DECIMI = re.compile(r"(\d+)/10\b")
 _DECIMALE = re.compile(r"\d+\.\d+")
+# Parole che dicono "lamiera" (anche 'SP.012X2450X6000', 'L.DA TRENO', 'PLATES') e parole che dicono "tubo".
+_PAROLA_LAMIERA = re.compile(r"\bLAM|COIL|\bSTRIPS?\b|\bPLATES?\b|\bL\.?\s*DA\s+TRENO|\bSP\.\s*\d|\bSPESS")
+_PAROLA_TUBO = re.compile(r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b")
+_PAROLA_PIATTO = re.compile(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGHI\b")
+# Una lamiera ha una sola misura piccola (spessore) e due grandi (larghezza, lunghezza).
+SPESSORE_MAX, LATO_MIN = 60, 500
+
+
+def _forma_lamiera(dims):
+    """True se, tra le misure, una sola è uno spessore (<= 60) e le altre sono lati (>= 500)."""
+    piccole = [d for d in dims if d <= SPESSORE_MAX]
+    return len(piccole) == 1 and all(d >= LATO_MIN for d in dims if d > SPESSORE_MAX) and len(dims) >= 2
+
 
 # Suffissi legali: tolti anche se incollati alla parola prima ('SETALS.P.A.' -> 'setalspa' -> 'setal').
 _FORME_GIURIDICHE = {
@@ -87,24 +101,32 @@ def profilo(descrizione):
     if m:
         return f"RONDELLA M{m.group(1)}"
 
-    # Lamiere e coils: conta solo lo spessore.
-    if re.search(r"\bLAM|\bCOIL", s):
-        m = re.search(r"\bSPESSORE\s+(\d+(?:\.\d+)?)\s*MM\b", s) or re.search(r"\bSP\s*[=.:]?\s*(\d+(?:\.\d+)?)", s)
+    # Lamiere e coils: conta solo lo spessore. 'LAMIERA 60-10' è un piatto 60x10 (scrittura di distinta).
+    if _PAROLA_LAMIERA.search(s) and not _PAROLA_TUBO.search(s) and not _PAROLA_PIATTO.search(s):
+        m = re.search(r"\b(?:LAMIER[AE]|LAM\.?|PL)\s*(\d+)\s*-\s*(\d+)\b", s)
+        if m:
+            return f"PIATTO {numero(m.group(1))}x{numero(m.group(2))}"
+        m = re.search(r"\bSPESSORE\s+(\d+(?:\.\d+)?)\s*MM\b", s) or re.search(
+            r"\bSP(?:ESS(?:ORE)?)?\s*[=.:]?\s*(\d+(?:\.\d+)?)", s
+        )
         if m:
             return f"LAMIERA {numero(m.group(1))}"
-        m = _TRE_DIM.search(s)
-        if m:
-            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
         m = _DECIMI.search(s)
         if m:
             return f"LAMIERA {numero(int(m.group(1)) / 10)}"
+        m = _TRE_DIM.search(s) or _TRE_DIM_SPAZI.search(s)
+        if m:
+            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
+        m = _DUE_DIM.search(s)
+        if m and _forma_lamiera([float(g) for g in m.groups()]):
+            return f"LAMIERA {numero(str(min(float(g) for g in m.groups())))}"
         m = _DECIMALE.search(s)
         if m:
             return f"LAMIERA {numero(m.group(0))}"
 
     # Misure scritte per campo: LT=larghezza, LA=larghezza, AL=altezza, SP=spessore ('PIATTO LT=100,0 SP=10,0').
     misure = dict(re.findall(r"\b(LT|LA|AL|SP)\s*=\s*(\d+(?:\.\d+)?)", s))
-    if re.search(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGHI\b", s):
+    if _PAROLA_PIATTO.search(s):
         larghezza = misure.get("LT") or misure.get("LA")
         if larghezza and misure.get("SP"):
             return f"PIATTO {numero(larghezza)}x{numero(misure['SP'])}"
@@ -131,12 +153,21 @@ def profilo(descrizione):
     if m:
         return f"UPN {m.group(1)}"
 
+    # Tre misure senza parola: una sola piccola e due grandi è una lamiera ('6000x2500x15'); due piccole e una
+    # lunghezza è un tubo ('30x10x1.5'). Con la parola tubo (TUBO, CRP, CHS, Ø) è sempre un tubo.
+    tubo = bool(_PAROLA_TUBO.search(s))
     m = _TRE_DIM.search(s)
     if m:
+        dims = [float(g) for g in m.groups()]
+        if not tubo and _forma_lamiera(dims):
+            return f"LAMIERA {numero(str(min(dims)))}"
         return "TUBO " + "x".join(numero(g) for g in m.groups())
-    if "TUBO" in s or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
+    if tubo or re.match(r"\s*\d+(?:\.\d+)?\s*X\s*\d", s):
         m = _DUE_DIM.search(s)
         if m:
+            dims = [float(g) for g in m.groups()]
+            if not tubo and _forma_lamiera(dims):
+                return f"LAMIERA {numero(str(min(dims)))}"
             return "TUBO " + "x".join(numero(g) for g in m.groups())
 
     return re.sub(r"\s+", " ", s).strip()
