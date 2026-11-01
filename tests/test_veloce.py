@@ -331,3 +331,15 @@ def test_piu_colate_per_profilo_chiede_i_segni_con_la_pagina_intera(radice, monk
     s = lv.scheda_pagina(lv.pagine(cartella)[0])
     assert s["segni"] == [{"tipo": "freccia", "riga": 0, "testo": "", "zona": []}]
     assert veloce.piu_colate_per_profilo(s) and not veloce.piu_colate_per_profilo(veloce.espandi(_SCHEDA_DDT))
+
+
+def test_schede_recuperate_da_json_troncato():
+    buona = '{"schede":{"p0134":{"famiglia":"dop_costruttore","motivo":"CE","testata":{"fabbricante":"X"}},'
+    troncata = buona + '"p0136":{"famiglia":"dop_costruttore","motivo":"DoP","testata":{"fabbricante":"X","nu'
+    schede = veloce.schede_dalla_risposta(troncata)
+    assert list(schede) == ["p0134"] and schede["p0134"]["famiglia"] == "dop_costruttore"
+    assert veloce.schede_dalla_risposta(buona + '"p0136":{"famiglia":"ddt"}}}') == {
+        "p0134": {"famiglia": "dop_costruttore", "motivo": "CE", "testata": {"fabbricante": "X"}},
+        "p0136": {"famiglia": "ddt"},
+    }
+    assert veloce.schede_dalla_risposta("testo senza JSON") == {}

@@ -950,7 +950,7 @@ def _voce_risultato(voce: dict, dec: dict, prove: dict, cantiere: dict) -> dict:
 def _voci_dai_certificati(prove: dict, usati: set[str]) -> list[dict]:
     """C12: un certificato non usato il cui timbro cita un DDT che non è nel fascicolo diventa una voce DA
     CONFERMARE con la richiesta del DDT al commerciante del timbro: così si vede che manca un DDT."""
-    numeri = [d["numero"] for d in prove["ddt"]]
+    numeri = [d["numero"] for d in prove["ddt"] if not d.get("incoerente")]  # un DDT letto male non "c'è"
     voci = []
     for c in prove["certificati"]:
         if c["id"] in usati or not c["righe"]:

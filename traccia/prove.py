@@ -553,7 +553,8 @@ def _tipi(ddt: list[dict], costruttore: str, stessa) -> None:
     for d in ddt:
         d["tipo"] = "fuori_perimetro"
         d["tramite"] = ""
-        if d["emittente"] and d["destinatario"] and stessa(d["emittente"], d["destinatario"]):
+        d["incoerente"] = bool(d["emittente"] and d["destinatario"] and stessa(d["emittente"], d["destinatario"]))
+        if d["incoerente"]:
             d["avvisi"].append("emittente e destinatario letti come la stessa azienda: ruolo del DDT da controllare")
     emessi = [d for d in emessi if not (d["destinatario"] and stessa(d["emittente"], d["destinatario"]))]
     ricevuti = [d for d in ricevuti if not (d["emittente"] and stessa(d["emittente"], d["destinatario"]))]

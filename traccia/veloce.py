@@ -609,10 +609,7 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
         cartella, istruzioni_per(famiglia), [{"role": "user", "content": contenuto}], model, effort
     )
     agente._check()
-    try:
-        compatte = agente._json(risposta).get("schede") or {}
-    except ValueError:
-        compatte = {}
+    compatte = schede_dalla_risposta(risposta)
     for p in lotto:
         if not isinstance(compatte.get(p["pid"]), dict):
             lv.evento(
@@ -746,6 +743,27 @@ def _lotto(cartella, famiglia, lotto, testi, tagli, model, effort, mappe=None) -
         lv.salva_lettura(info["impronta"], s)
         lv.evento(cartella, tipo="scheda", pid=pid, famiglia=s["famiglia"], testo=s["motivo"][:250])
     return len(lotto)
+
+
+def schede_dalla_risposta(risposta: str) -> dict:
+    """Le schede compatte dalla risposta del modello. Se il JSON non è valido (troncato, virgola di troppo), si
+    recuperano una per una le schede intere che si trovano dopo le chiavi "<pid>": così una pagina non si perde
+    per un difetto del JSON dopo di lei."""
+    try:
+        schede = agente._json(risposta).get("schede") or {}
+        return schede if isinstance(schede, dict) else {}
+    except ValueError:
+        pass
+    decoder = json.JSONDecoder()
+    schede = {}
+    for m in re.finditer(r'"(p\d{4})"\s*:\s*(?=\{)', risposta):
+        try:
+            valore, _ = decoder.raw_decode(risposta, m.end())
+        except ValueError:
+            continue
+        if isinstance(valore, dict) and "famiglia" in valore:
+            schede.setdefault(m.group(1), valore)
+    return schede
 
 
 def _valida(scheda, testo: str, correggi: bool = False) -> list[str]:

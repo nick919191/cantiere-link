@@ -501,3 +501,26 @@ def test_lista_del_commerciante_divide_la_voce_per_colata_e_il_preciso_vince_sul
     assert voci["LAMIERA 15 · colata SU35302"]["colonne"]["CERT 3.1 ACCIAIERIA"]["v"].startswith("P2")
     assert "24064054" not in voci  # la riga generica (coil) non fa voce: c'è la riga precisa
     assert voci["LAMIERA 5 · colata 24305236"]["stato"] == "PROVATO"
+
+
+def test_ddt_letto_male_non_toglie_la_richiesta_del_ddt_citato_dal_timbro():
+    """Un DDT con emittente = destinatario è una lettura sbagliata: il certificato che cita quel numero resta una
+    voce da confermare con la richiesta del DDT al commerciante del timbro."""
+    from fascicolo_inventato import V, certificato, ddt, timbro
+
+    t = timbro("6559")
+    t["chi"] = "F.lli Molteni s.p.a."
+    sbagliato = ddt("6559", ["T NERO SALDATO 219,1 X 12,5"], emittente="COSTRUTTORE 001 SRL", destinatario="ALTRO SRL")
+    sbagliato["testata"]["piva_destinatario"] = V("01234567890")
+    buono = ddt("30", ["UPN 100"], emittente="COSTRUTTORE 001 SRL", destinatario="CLIENTE SRL")
+    buono["testata"]["piva_emittente"] = V("01234567890")
+    fogli = [
+        ("ddt.pdf", 1, ddt("8027", ["TRAVI HEA 160"])),
+        ("ddt2.pdf", 1, ddt("20", ["UPN 100"], emittente="FORNITORE 002 SRL")),
+        ("x.pdf", 1, sbagliato),
+        ("y.pdf", 1, buono),
+        ("c.pdf", 1, certificato("977915", [("TUBO ELETTROSALDATO 219,1x12,5x12000", "S355J2H", "3151783B")], [t])),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "TUBO 219.1x12.5x12000")
+    assert v["stato"] == "DA CONFERMARE" and v["richieste"] == ["DDT 6559 di F.lli Molteni s.p.a."]
