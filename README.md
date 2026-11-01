@@ -157,7 +157,7 @@ Da questa copia puoi aprire le impostazioni e selezionare la versione precedente
 8. Allega anche gli installer `CantiereLink-Setup-VERSIONE.exe` e `CantiereLink-VERSIONE-macos-ARCH.dmg` con i loro checksum.
 9. Verifica che GitHub riporti il campo `digest` SHA256 per l’asset. L’updater rifiuta asset senza questa verifica. Il file di checksum allegato serve anche al controllo manuale.
 
-Su Mac Intel, se `cryptography` viene compilata dai sorgenti, installa le dipendenze con `OPENSSL_STATIC=1 python -m pip install -r requirements.txt pyinstaller`, come previsto nel workflow. Il collegamento statico evita conflitti fra la libreria OpenSSL inclusa da Python e quella usata da `cryptography` nel pacchetto. Vedi le [istruzioni ufficiali di compilazione](https://cryptography.io/en/latest/installation/#building-cryptography-on-macos). Il controllo di avvio del pacchetto deve riuscire prima di distribuirlo.
+Su Mac Intel, se `cryptography` viene compilata dai sorgenti, installa le dipendenze con `OPENSSL_STATIC=1 python -m pip install --require-hashes -r requirements.lock` e poi `pyinstaller`, come previsto nel workflow. Il collegamento statico evita conflitti fra la libreria OpenSSL inclusa da Python e quella usata da `cryptography` nel pacchetto. Vedi le [istruzioni ufficiali di compilazione](https://cryptography.io/en/latest/installation/#building-cryptography-on-macos). Il controllo di avvio del pacchetto deve riuscire prima di distribuirlo.
 
 L’app usa l’API [GitHub Releases](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) e non installa direttamente il contenuto di un branch. La verifica SHA256 controlla l’integrità del pacchetto ricevuto dal repository configurato; non è una firma indipendente del produttore.
 
@@ -179,7 +179,7 @@ Originali, risultati e conversazioni restano sul computer. Testo e immagini pert
 | macOS | `~/Library/Application Support/TracciabilitaMateriali/dati` |
 | Linux | `~/.local/share/tracciabilita-materiali/dati` |
 
-Il nome tecnico della cartella resta invariato per conservare la compatibilità con le versioni precedenti. La posizione effettiva compare in Impostazioni → Documenti e dati. Le nuove versioni installate dall’updater risiedono nella cartella `aggiornamenti/installazioni`, accanto alle preferenze.
+Il nome tecnico della cartella resta invariato per conservare la compatibilità con le versioni precedenti. La posizione effettiva compare in Impostazioni → Documenti e dati. Le nuove versioni installate dall’updater risiedono nella cartella `aggiornamenti/installazioni`, accanto alle preferenze. Gli errori inattesi finiscono in `log/app.log` nella stessa cartella (percorso in Impostazioni → Diagnostica): il file non contiene credenziali né il testo dei documenti.
 
 Le credenziali usano Gestione credenziali Windows o Portachiavi macOS; su Linux serve Secret Service. Non sono incluse nei report o nello ZIP. La disconnessione tenta la revoca remota e cancella i token locali, segnalando eventuali problemi di revoca.
 
@@ -213,13 +213,16 @@ Se l’obiettivo cambia, le alternative da valutare sono:
 ```text
 python -m venv .venv
 # Attiva l’ambiente con il comando previsto dal tuo sistema.
-python -m pip install -r requirements.txt pytest ruff
+python -m pip install --require-hashes -r requirements.lock
+python -m pip install pytest ruff
 python -m pytest -q
 ruff check traccia tests tools avvia.py
 ruff format --check traccia tests tools avvia.py
 ```
 
 `traccia/` contiene il servizio e il motore, `web/` l’interfaccia, `docs/` la guida, `istruzioni/` le regole di lettura e `conoscenza/` il metodo. `avvia.py` è l’avvio stabile che seleziona la versione installata. La CI è configurata per Windows, macOS e Linux.
+
+`requirements.lock` è il lockfile con hash (generato con `uv pip compile requirements.txt --universal --generate-hashes -o requirements.lock`): lo usano `avvia.py`, l’updater e la CI con `--require-hashes`. Dopo aver cambiato `requirements.txt` rigeneralo. Il piano per la firma delle release è in `docs/FIRMA-RELEASE.md`.
 
 I test automatici usano risposte simulate. L’accesso con un account reale, il ciclo completo con una release GitHub pubblicata e il collaudo nativo su macOS restano da verificare. La configurazione della CI non dimostra che quei collaudi siano già riusciti.
 
