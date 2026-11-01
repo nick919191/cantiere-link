@@ -1,4 +1,4 @@
-"""Motore di regole 0.7.1: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.2: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
@@ -17,6 +17,8 @@ Regole (conoscenza/05_regole_di_stato.md):
   0.7.1 (da Viollier) O e 0 nei numeri; piatto scritto '70X10' sul certificato; DDT a penna letto male ripreso per
         data; certificato dichiarato assente sostituito da quello timbrato per lo stesso DDT (max DEDOTTO); una
         voce per file di packing anche se il titolo cambia da pagina a pagina.
+  0.7.2 (da Valentino) 'FERRO U 200' è l'UPN 200; le righe di riferimento del DDT ('RIF. COMM', 'CERTIFICATI:') non
+        sono voci; il nome del file o della cartella del certificato che cita il DDT è un ponte (DEDOTTO).
 """
 
 import hashlib
@@ -25,7 +27,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.7.1"
+VERSIONE = "0.7.2"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 
@@ -338,8 +340,26 @@ class Motore:
         return trovati[0] if len(trovati) == 1 else None
 
     def ponti(self, cert: dict, numero_ddt: str) -> list[dict]:
+        """Prove che legano il certificato al DDT, dalla più forte: timbro del commerciante con il numero del DDT,
+        lettera del distributore, nome del file o della cartella che cita il DDT ('certificato ddt 5681.pdf')."""
         timbri = [t for t in cert["timbri"] if nz.cita_ddt(t["ddt_citato"], numero_ddt)]
         file_cert = {self.pid_file.get(pid) for pid in cert["pagine"]}
+        dal_nome = []
+        for pid in cert["pagine"]:
+            file = self.pid_file.get(pid) or ""
+            for n in nz.ddt_nel_nome(file):
+                if nz.cita_ddt(n, numero_ddt) and not any(x["ddt_citato"] == n for x in dal_nome):
+                    dal_nome.append(
+                        {
+                            "chi": "nome del file",
+                            "ddt_citato": n,
+                            "testo": file.replace("\\", "/").rsplit("/", 1)[-1],
+                            "a_mano": False,
+                            "dal_nome": True,
+                            "pid": pid,
+                            "fid": None,
+                        }
+                    )
         lettere = [
             {
                 "chi": "lettera del distributore",
@@ -362,7 +382,7 @@ class Motore:
                 )
             )
         ]
-        return timbri + lettere
+        return timbri + lettere + dal_nome
 
     def colate_dichiarate(self, voce: dict, riga_ddt: dict | None) -> list[str]:
         """Colate che il DDT (riga) o la lista del commerciante (lettera che cita il DDT) dichiarano per la voce."""
@@ -569,6 +589,24 @@ class Motore:
         if not affini:
             return None, [], False, False
         if len(affini) > 1:
+            # Un file con più certificati dà a tutti il ponte "dal nome": vince chi ha un timbro o una lettera; a
+            # parità, chi ha il profilo esatto (non ricavato, non scritto diversamente).
+            forti = [x for x in affini if any(not p.get("dal_nome") for p in self.ponti(x[0], voce["ddt"]))]
+            if len(forti) == 1:
+                affini = forti
+            else:
+                esatti = [x for x in (forti or affini) if not x[2] and not x[3]]
+                if len(esatti) == 1:
+                    affini = esatti
+                elif len(esatti) > 1:  # piatto con la larghezza scritta batte la lamiera da cui si potrebbe tagliare
+                    precisi = [
+                        x
+                        for x in esatti
+                        if any((d := nz.dimensioni_piatto(r["chiave"])) and d[0] is not None for r in x[1])
+                    ]
+                    if len(precisi) == 1:
+                        affini = precisi
+        if len(affini) > 1:
             motivi.append(
                 "più certificati timbrati per questo DDT: " + ", ".join(sorted(x[0]["numero"] for x in affini))
             )
@@ -652,6 +690,11 @@ class Motore:
             if altrove:
                 motivi.append(f"il certificato è timbrato per il DDT {', '.join(altrove)}")
             stato = DA_CONFERMARE
+        elif ponti and ponti[0].get("dal_nome"):
+            p = ponti[0]
+            motivi.append(f"il nome del file del certificato cita il DDT {p['ddt_citato']} ({p['testo']})")
+            avvisi.append("collegamento dal nome del file, non da un timbro: da controllare sull'originale")
+            stato = DEDOTTO
         elif ponti:
             p = ponti[0]
             motivi.append(

@@ -19,7 +19,7 @@ _DECIMALE = re.compile(r"\d+\.\d+")
 # Parole che dicono "lamiera" (anche 'SP.012X2450X6000', 'L.DA TRENO', 'PLATES') e parole che dicono "tubo".
 _PAROLA_LAMIERA = re.compile(r"\bLAM|COIL|\bSTRIPS?\b|\bPLATES?\b|\bL\.?\s*DA\s+TRENO|\bSP\.\s*\d|\bSPESS")
 _PAROLA_TUBO = re.compile(r"\bTUB[OI]|\bCRP\b|\bCHS\b|\bRHS\b|\bSHS\b|Ø|\bDIAM|\bD\.?\s*EST\b")
-_PAROLA_PIATTO = re.compile(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGHI\b")
+_PAROLA_PIATTO = re.compile(r"\bRC-|\bPIATT[OI]\b|\bFLAT\b|\bLARGH?[IO]\b")
 # Una lamiera ha una sola misura piccola (spessore) e due grandi (larghezza, lunghezza).
 SPESSORE_MAX, LATO_MIN = 60, 500
 
@@ -75,6 +75,7 @@ def profilo(descrizione):
     'LAM NERE 2000x1000x80/10' -> 'LAMIERA 8'; 'Coil 1250x5,00' -> 'LAMIERA 5'.
     """
     s = (descrizione or "").upper().replace(",", ".")
+    s = re.sub(r"(?<=\d)\s*\*\s*(?=\d)", "X", s)  # '200,00*10,00' come '200X10'
     s = re.sub(r"POS\.\s*\d+\s*-\s*", "", s)
     s = re.sub(r"HE\s*/\s*([ABM])", r"HE\1", s)
 
@@ -156,6 +157,9 @@ def profilo(descrizione):
     m = _U.search(s)
     if m:
         return f"UPN {m.group(1)}"
+    m = re.search(r"(?<![A-Z0-9])U\s*(\d{2,3})(?![\dX.])", s)  # 'FERRO U 200', 'U200': il profilo a U è l'UPN
+    if m:
+        return f"UPN {m.group(1)}"
 
     # Tre misure senza parola: una sola piccola e due grandi è una lamiera ('6000x2500x15'); due piccole e una
     # lunghezza è un tubo ('30x10x1.5'). Con la parola tubo (TUBO, CRP, CHS, Ø) è sempre un tubo.
@@ -181,6 +185,17 @@ def profilo(descrizione):
 
 
 _FAMIGLIE_CHIAVE = re.compile(r"^(?:HEA|HEB|HEM|IPE|UPN|PIATTO|LAMIERA|TUBO|ANGOLARE|TONDO|VITE|DADO|RONDELLA) ")
+
+
+_RIFERIMENTO = re.compile(
+    r"^\s*(?:RIF\.?|RIFERIMENTO|NS\.?\s*RIF|VS\.?\s*(?:ORD|RIF)|ORDINE|COMMESSA|CERTIFICAT[IO]\b|CERT\.)", re.I
+)
+
+
+def e_riferimento(descrizione):
+    """Riga di un DDT che non è materiale: riferimento a commessa o ordine ('RIF. COMM NC 2501'), riga di addebito
+    dei certificati ('CERTIFICATI: U 200')."""
+    return bool(_RIFERIMENTO.match(descrizione or ""))
 
 
 def riconosciuta(chiave):
@@ -417,6 +432,15 @@ def stesso_numero(dichiarato, letto):
     if len(a2) >= 3 and re.search(rf"[^a-z0-9]{re.escape(a2)}$", (letto or "").lower().strip()):
         return "prefisso"
     return None
+
+
+_DDT_NEL_NOME = re.compile(r"(?i)(?<![a-z])d\.?d\.?t\.?\s*(?:n\.?|nr\.?|num\.?)?\s*[:._-]?\s*(\d[\d./-]*\d|\d)")
+
+
+def ddt_nel_nome(percorso):
+    """Numeri di DDT citati nel nome del file o delle cartelle ('certificato ddt 5681 280325.pdf' -> ['5681'],
+    'CERTIFICATI COPERTURA/DDT1062/[Untitled].pdf' -> ['1062']). Solo numeri preceduti da 'DDT'."""
+    return [m.group(1) for m in _DDT_NEL_NOME.finditer(percorso or "")]
 
 
 def cita_ddt(citato, numero_ddt):

@@ -163,3 +163,23 @@ def test_data_scritta_a_penna_e_angolare_con_misure_per_campo():
     assert nz.profilo("ANGOLARE A LATI UGUALI LT=50.0 LT=50.0 SP=5.0 LU=L.C.") == "ANGOLARE 50 50 5"
     assert nz.profilo("ANGOLARE LT=100 LA=50 SP=6") == "ANGOLARE 100 50 6"
     assert nz.riconosciuta("PIATTO 70x10") and not nz.riconosciuta("LT=50.0 LT=50.0 SP=5.0 LU=L.C.")
+
+
+def test_profilo_a_u_righe_di_riferimento_e_ddt_nel_nome_del_file():
+    """0.7.2 (Valentino): il commerciante scrive 'FERRO U 200' per l'UPN 200; 'RIF. COMM NC 2501' e 'CERTIFICATI:
+    U 200' sono righe del DDT che non portano materiale; il nome del file dei certificati cita il DDT."""
+    assert nz.profilo("FERRO U 200") == "UPN 200" and nz.profilo("U200 S275JR") == "UPN 200"
+    assert nz.profilo("TUBO 50X50X3 S235 JR") == "TUBO 50x50x3"  # la U dentro TUBO non c'entra
+    assert nz.e_riferimento("RIF. COMM NC 2501") and nz.e_riferimento("CERTIFICATI: U 200")
+    assert not nz.e_riferimento("FERRO U 200") and not nz.e_riferimento("PIATTO 100X10")
+    assert nz.ddt_nel_nome("INTERVENTO 1/certificato ddt 5681 280325.pdf") == ["5681"]
+    assert nz.ddt_nel_nome("CERTIFICATI COPERTURA/DDT1062/[Untitled].pdf") == ["1062"]
+    assert nz.ddt_nel_nome("UPN 200/CERT COMM 2501 E DDT 4078.pdf") == ["4078"]
+    assert nz.ddt_nel_nome("LAMINATI PIATTI/certificati piatti.pdf") == []
+
+
+def test_largo_piatto():
+    assert nz.profilo("LARGO PIATTO SPIGOLO VIVO 200X10") == "PIATTO 200x10"
+    assert nz.profilo("LARGHI PIATTI 160x10") == "PIATTO 160x10"
+    assert nz.profilo("Largo Piatto spigolo vivo 200,00*10,00") == "PIATTO 200x10"  # asterisco come 'x'
+    assert nz.profilo("PL10*80") == "PIATTO 80x10" and nz.profilo("L60*6") == "ANGOLARE 60 60 6"

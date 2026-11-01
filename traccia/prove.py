@@ -239,7 +239,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                     doc["riferimenti"].append((r.get("tipo", ""), r["v"]))
             ultimo[(p["file"], fam)] = doc
             for i, r in enumerate(s.get("righe", [])):
-                if _v(r.get("servizio")).lower() == "si":
+                if _v(r.get("servizio")).lower() == "si" or nz.e_riferimento(_v(r.get("descrizione"))):
                     doc.setdefault("servizi", []).append(_v(r.get("descrizione")))
                     continue
                 colate = _colate_riga(r)
@@ -289,8 +289,15 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                         for c in certificati
                         if numero
                         and nz.numero_normale(numero) == nz.numero_normale(c["numero"])
-                        and data == c["data_iso"]
-                        and (not produttore or not c["produttore"] or stessa(produttore, c["produttore"]))
+                        and (
+                            (
+                                data == c["data_iso"]
+                                and (not produttore or not c["produttore"] or stessa(produttore, c["produttore"]))
+                            )
+                            # stesso numero nello stesso file: stesso certificato anche se produttore o data sono
+                            # letti con un refuso su una delle pagine ('AFV Accisierie' / 'AFV Acclaierie')
+                            or info[c["pagine"][0]]["file"] == p["file"]
+                        )
                     ),
                     None,
                 )

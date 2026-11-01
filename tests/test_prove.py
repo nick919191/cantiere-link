@@ -345,3 +345,22 @@ def test_chiave_riga_preferisce_la_forma_riconosciuta():
     assert _chiave_riga("LT=50.0 LT=50.0 SP=5.0 LU=L.C.", "ANGOLARE A LATI UGUALI") == "ANGOLARE 50 50 5"
     assert _chiave_riga("SP=3.00 LA=1000 LU=2000", "LAMIERE A CALDO") == "LAMIERA 3"
     assert _chiave_riga("SP.012X2450X6000", "LAMIERA") == "LAMIERA 12"  # il campo profilo con la misura vince ancora
+
+
+def test_certificato_spezzato_su_due_pagine_con_refuso_nel_produttore_resta_uno():
+    """0.7.2 (Valentino): pagine 1 e 3 dello stesso certificato nello stesso PDF, produttore letto 'AFV Accisierie'
+    e 'AFV Acclaierie': un certificato solo, non due con lo stesso numero."""
+    from fascicolo_inventato import V, certificato
+
+    c1 = certificato("47189", [("FLAT 100X10", "S275JR", "BE 1001")], produttore="AFV Accisierie Beltrame")
+    c2 = certificato("47189", [("FLAT 20X10", "S275JR", "BE 1002")], produttore="AFV Acclaierie Beltrame")
+    c2["testata"]["data"] = V("11/01/2026")  # anche la data letta diversa
+    pagine = [
+        {"pid": "p1", "file": "certificati.pdf", "pagina": 1},
+        {"pid": "p2", "file": "certificati.pdf", "pagina": 3},
+    ]
+    prove = costruisci(pagine, {"p1": c1, "p2": c2})
+    assert len(prove["certificati"]) == 1 and prove["certificati"][0]["pagine"] == ["p1", "p2"]
+    # in due file diversi restano due certificati
+    pagine2 = [{"pid": "p1", "file": "a.pdf", "pagina": 1}, {"pid": "p2", "file": "b.pdf", "pagina": 1}]
+    assert len(costruisci(pagine2, {"p1": c1, "p2": c2})["certificati"]) == 2

@@ -612,3 +612,50 @@ def test_titolo_diverso_da_pagina_a_pagina_non_divide_la_voce():
     parti = sorted(v["parte_opera"] for v in r["voci"])
     assert parti == ["Portali", "RINTRACCIABITA' MATERIALI / VIA VIOLLIER MILANO"]  # un altro file resta un'altra voce
     assert all(v["stato"] == "PROVATO" for v in r["voci"])
+
+
+def test_nome_del_file_del_certificato_che_cita_il_ddt_fa_da_ponte_dedotto():
+    """0.7.2 (Valentino): due certificati con lo stesso piatto, timbri a penna illeggibili; il file del primo si
+    chiama 'certificato ddt 300.pdf': è lui, DEDOTTO con avviso. Senza il nome resterebbe 'più certificati'."""
+    from fascicolo_inventato import certificato, ddt
+
+    fogli = [
+        ("ddt300.pdf", 1, ddt("300", ["FERRO U 200", "RIF. COMM NC 2501", "PIATTO 60x10"])),
+        (
+            "certificato ddt 300.pdf",
+            1,
+            certificato("A1", [("FLAT 60X10", "S275JR", "K1001"), ("UPN 200", "S275JR", "K2002")]),
+        ),
+        ("altri/certificato ddt 999.pdf", 1, certificato("B2", [("FLAT 60X10", "S275JR", "K3003")])),
+    ]
+    r = _senza_packing(fogli)
+    per_voce = {v["voce"]: v for v in r["voci"]}
+    assert set(per_voce) == {"UPN 200", "PIATTO 60x10"}  # la riga 'RIF. COMM' non è una voce
+    piatto = per_voce["PIATTO 60x10"]
+    assert piatto["stato"] == "DEDOTTO" and piatto["colonne"]["COLATA"]["v"] == "K1001"
+    assert any("nome del file" in m for m in per_voce["PIATTO 60x10"]["motivi"])
+    assert any("nome del file" in a for a in per_voce["PIATTO 60x10"]["avvisi"])
+    assert per_voce["UPN 200"]["stato"] == "DEDOTTO" and per_voce["UPN 200"]["colonne"]["COLATA"]["v"] == "K2002"
+
+
+def test_tra_piu_certificati_con_il_ponte_dal_nome_vince_il_timbro_poi_il_profilo_esatto():
+    """0.7.2 (Valentino): un PDF 'certificati piatti DDT 300.pdf' con tre certificati: tutti hanno il ponte dal
+    nome; per il piatto 110x8 vince il certificato con il timbro, per il 150x10 quello con il profilo esatto."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    f = "LAMINATI PIATTI/certificati piatti DDT 300.pdf"
+    fogli = [
+        ("ddt300.pdf", 1, ddt("300", ["PIATTO 110x8", "PIATTO 150x10"])),
+        (f, 1, certificato("A1", [("FLAT 110X8", "S275JR", "K1001")], [timbro("300", a_mano=True)])),
+        (f, 2, certificato("B2", [("FLAT 200X8", "S275JR", "K2002"), ("FLAT 150X10", "S275JR", "K2003")])),
+        (f, 3, certificato("C3", [("LAMIERA 10x2000x6000", "S275JR", "K3003")])),
+    ]
+    r = _senza_packing(fogli)
+    per_voce = {v["voce"]: v for v in r["voci"]}
+    assert (
+        per_voce["PIATTO 110x8"]["stato"] == "DEDOTTO" and per_voce["PIATTO 110x8"]["colonne"]["COLATA"]["v"] == "K1001"
+    )
+    assert (
+        per_voce["PIATTO 150x10"]["stato"] == "DEDOTTO"
+        and per_voce["PIATTO 150x10"]["colonne"]["COLATA"]["v"] == "K2003"
+    )

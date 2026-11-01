@@ -104,6 +104,38 @@ Non sistemato: il timbro a penna sul certificato Tecnosider (`SP21-0580`, letto 
 resta DEDOTTO invece di PROVATO; il DDT 10871 di FTL Rossi con il certificato CELSA 202032266 non è nel ciclo e resta
 fuori, come nell'atteso.
 
+## Valentino con la 0.7.1 e correzioni 0.7.2 (01/11/2026, analisi fatta dall'utente nell'app, 139 chiamate)
+
+Fascicolo senza packing: 15 DDT del commerciante (POLETTI) al costruttore (NOSSA), 11 DDT del costruttore al
+cliente, 61 pagine di certificati con timbri a penna del commerciante. L'atteso SCL (`Tracciabilita_SCL_Valentino.xlsx`)
+qui non aiuta: 1 riga vera e 11 righe "materiali da DDT", stato HUMAN_REVIEW. Verifica fatta sui documenti.
+
+Letture: giuste nel contenuto, ma i numeri di DDT scritti a penna sui timbri sono letti male quasi sempre (`0843` per
+6843, `1204` per 7104, `283` per 2983, `581` per 5681...), e con loro spesso anche la data. In compenso il
+costruttore ha salvato ogni certificato con il DDT nel nome del file (`certificato ddt 6843 140425.pdf`,
+`CERTIFICATO DDT 6600 DEL 100425.pdf`, cartella `DDT1062` in Viollier). Correzioni (motore 0.7.2):
+
+| Caso | Prima | Causa | Correzione | Dopo |
+|---|---|---|---|---|
+| U 100/140/180/200/240 dai DDT Poletti | 5 MANCANTE "nessun certificato" | `FERRO U 200` non normalizzato: chiave `U 200`, certificato `UPN 200` | `profilo`: `U nnn` da solo è `UPN nnn` | PROVATO (UPN 200, timbro stampato), DEDOTTO (180, 240) |
+| 17 voci "più certificati possibili" / DDT a penna illeggibile | DA CONFERMARE o certificato sbagliato | nessun ponte leggibile | **ponte dal nome del file**: file o cartella del certificato che cita il DDT (`ddt_nel_nome`), vale DEDOTTO con avviso; tra più certificati con ponte vince il timbro, poi il profilo esatto, poi il piatto con la larghezza scritta rispetto alla lamiera | 7 voci DEDOTTO in più |
+| `RIF. COMM NC 2501`, `CERTIFICATI: U 200` | voci MANCANTE | righe del DDT che non sono materiale | `e_riferimento`: trattate come servizio | nessuna voce |
+| Certificato 47189 su 2 pagine | 2 certificati con lo stesso numero, "identificazione non univoca" | produttore letto `AFV Accisierie` e `AFV Acclaierie` | stesso numero nello stesso file = stesso certificato | 1 certificato |
+| `Largo Piatto spigolo vivo 200,00*10,00` (O.R.I. Martin) | chiave grezza, voce fantasma "DDT 353" | parola LARGO e asterisco come separatore | `_PAROLA_PIATTO` con LARGO/LARGHI; `*` tra cifre = `X` | PIATTO 200x10, nessuna voce fantasma |
+
+Valentino: da 73 voci (0 PROVATO, 7 DEDOTTO, 36 DA CONFERMARE, 30 MANCANTE) a 62 (1, 13, 25, 23). Viollier e Codogno
+ricomposti con la 0.7.2: invariati. Test: 225 (da 220).
+
+Che cosa resta DA CONFERMARE, e perché è giusto così:
+- 17 voci "più colate per il profilo sul certificato": i DDT Poletti non stampano la colata e i certificati Duferco
+  elencano 2-5 colate per lo stesso profilo; il timbro a penna dice al massimo il profilo. Serve il costruttore.
+- 6 voci "più certificati possibili" senza alcun ponte (piatti dei DDT 4078, 1778, 9609): il file dei certificati cita
+  un altro DDT o nessuno. La cartella `PIASTRE RINFORZO ASCENSORE` ha `CERTIFICATO DDT 9606` per il DDT 9.609:
+  probabile refuso del costruttore, non assunto.
+- DDT 3066 (travi intervento 3) non è nel fascicolo pur avendo la cartella dei certificati; DDT 4475 è una scansione
+  bianca: le voci "dal certificato" chiedono quei DDT.
+- 23 MANCANTE: tubi, tondi, lamiere e altri materiali dei DDT senza alcun certificato nel fascicolo.
+
 # Correzioni della review 2026-10
 
 > **Integrazione con la 0.5 (versione 0.5.1).** Le correzioni qui sotto sono nate sul branch `fix/review-2026-10`, su base
