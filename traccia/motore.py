@@ -15,11 +15,13 @@ Regole (conoscenza/05_regole_di_stato.md):
 
 import hashlib
 import json
+import re
 
 from . import normalizza as nz
 
 VERSIONE = "0.6.1"
 PENNA_VALE_COME_PROVA = False
+VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 
 STESSO = ("uguale", "serie")  # '5678' e '5678/1' sono lo stesso DDT (suffisso di serie), con avviso
 PROVATO, DEDOTTO, DA_CONFERMARE, MANCANTE = "PROVATO", "DEDOTTO", "DA CONFERMARE", "MANCANTE"
@@ -110,23 +112,51 @@ def voci_dal_fascicolo(prove: dict) -> list[dict]:
             for r in d["righe"]:
                 per_chiave.setdefault(r["chiave"], []).append(r)
             for chiave, righe in per_chiave.items():
-                voci.append(
-                    {
-                        "origine": "dai_ddt",
-                        "righe": [],
-                        "etichetta": chiave,
-                        "chiavi": [chiave],
-                        "parte_opera": "",
-                        "certificato": "",
-                        "emesso_da": "",
-                        "data_certificato": "",
-                        "fornito_da": d["emittente"],
-                        "ddt": d["numero"],
-                        "data_ddt": d["data"],
-                        "qualita": righe[0]["qualita"],
-                        "fonti": {},
-                    }
-                )
+                base = {
+                    "origine": "dai_ddt",
+                    "righe": [],
+                    "etichetta": chiave,
+                    "chiavi": [chiave],
+                    "parte_opera": "",
+                    "certificato": next((r.get("certificato", "") for r in righe if r.get("certificato")), ""),
+                    "emesso_da": "",
+                    "data_certificato": "",
+                    "fornito_da": d["emittente"],
+                    "ddt": d["numero"],
+                    "data_ddt": d["data"],
+                    "qualita": next((r["qualita"] for r in righe if r["qualita"]), ""),
+                    "fonti": {},
+                    "colate_dichiarate": [],
+                    "placche": [],
+                }
+                colate: dict[str, list[str]] = {}
+                for r in righe:
+                    for c in r.get("colate", []):
+                        colate.setdefault(c, [])
+                        colate[c] += [p for p in r.get("placche", {}).get(c, []) if p not in colate[c]]
+                if colate and VOCE_PER_COLATA:
+                    for c, placche in colate.items():
+                        voci.append(
+                            {
+                                **base,
+                                "etichetta": f"{chiave} · colata {c}",
+                                "colate_dichiarate": [c],
+                                "placche": placche,
+                                "fonti": {
+                                    "colata": next(
+                                        (r["fonti"].get("colata") for r in righe if c in r.get("colate", [])), None
+                                    )
+                                },
+                            }
+                        )
+                else:
+                    voci.append(
+                        {
+                            **base,
+                            "colate_dichiarate": list(colate),
+                            "placche": [p for ps in colate.values() for p in ps],
+                        }
+                    )
     return voci
 
 
@@ -175,6 +205,27 @@ def _righe_cert(cert: dict, voce: dict, riga_ddt: dict | None) -> tuple[list[dic
     return [r for r in cert["righe"] if nz.chiave_larga(r["chiave"]) in larghe], False
 
 
+def _affine(a: str, b: str) -> bool:
+    """Profili scritti diversamente ma compatibili: stesso spessore per piatti e lamiere ('LAMIERA 10' e
+    'PIATTO 200x10'); altrimenti stessa parola e stessa prima misura ('TUBO 219.1x12.5' e 'TUBO 219.1x12.5x12000')."""
+    da, db = nz.dimensioni_piatto(a), nz.dimensioni_piatto(b)
+    if da and db:
+        return da[1] == db[1]
+    if da or db:
+        return False
+    pa, pb = a.split(" ", 1), b.split(" ", 1)
+    ma, mb = (
+        re.search(r"\d+(?:\.\d+)?", pa[1] if len(pa) > 1 else ""),
+        re.search(r"\d+(?:\.\d+)?", pb[1] if len(pb) > 1 else ""),
+    )
+    return pa[0] == pb[0] and bool(ma and mb) and float(ma.group()) == float(mb.group())
+
+
+def _righe_affini(cert: dict, voce: dict, riga_ddt: dict | None) -> list[dict]:
+    obiettivo = [riga_ddt["chiave"]] if riga_ddt else voce["chiavi"]
+    return [r for r in cert["righe"] if any(_affine(o, r["chiave"]) for o in obiettivo)]
+
+
 def _per_colata(righe: list[dict]) -> list[dict]:
     scelte = {}
     for r in righe:
@@ -220,7 +271,7 @@ class Motore:
         return trovati[0] if len(trovati) == 1 else None
 
     def ponti(self, cert: dict, numero_ddt: str) -> list[dict]:
-        timbri = [t for t in cert["timbri"] if nz.stesso_numero(t["ddt_citato"], numero_ddt) in STESSO]
+        timbri = [t for t in cert["timbri"] if nz.cita_ddt(t["ddt_citato"], numero_ddt)]
         file_cert = {self.pid_file.get(pid) for pid in cert["pagine"]}
         lettere = [
             {
@@ -232,17 +283,47 @@ class Motore:
                 "fid": lt.get("fid"),
             }
             for lt in self.p["lettere"]
-            if nz.stesso_numero(lt["ddt_citato"], numero_ddt) in STESSO
+            if nz.cita_ddt(lt["ddt_citato"], numero_ddt)
             and self.pid_file.get(lt["pid"]) in file_cert
-            and any(nz.stesso_numero(n, cert["numero"]) in STESSO for n in lt.get("certificati", []))
+            and (
+                any(nz.stesso_numero(n, cert["numero"]) in STESSO for n in lt.get("certificati", []))
+                or any(
+                    nz.stessa_colata(r["colata"], c["colata"])
+                    for r in lt.get("righe", [])
+                    if r.get("colata")
+                    for c in cert["righe"]
+                )
+            )
         ]
         return timbri + lettere
+
+    def colate_dichiarate(self, voce: dict, riga_ddt: dict | None) -> list[str]:
+        """Colate che il DDT (riga) o la lista del commerciante (lettera che cita il DDT) dichiarano per la voce."""
+        if voce.get("colate_dichiarate"):
+            return list(voce["colate_dichiarate"])
+        if riga_ddt and riga_ddt.get("colate"):
+            return list(riga_ddt["colate"])
+        if not voce["ddt"]:
+            return []
+        colate = []
+        for lt in self.p["lettere"]:
+            if not nz.cita_ddt(lt["ddt_citato"], voce["ddt"]):
+                continue
+            for r in lt.get("righe", []):
+                if not r.get("colata"):
+                    continue
+                articolo = nz.profilo(r.get("articolo", "")) if r.get("articolo") else ""
+                if (not articolo or any(_affine(articolo, k) or articolo == k for k in voce["chiavi"])) and (
+                    r["colata"] not in colate
+                ):
+                    colate.append(r["colata"])
+        return colate
 
     def timbrato_altrove(self, cert: dict, numero_ddt: str) -> list[str]:
         altri = set()
         for t in cert["timbri"]:
-            if t["ddt_citato"] and not nz.stesso_numero(t["ddt_citato"], numero_ddt):
-                if any(nz.stesso_numero(t["ddt_citato"], d["numero"]) in STESSO for d in self.ddt_noti):
+            if t["ddt_citato"] and not nz.cita_ddt(t["ddt_citato"], numero_ddt):
+                if any(nz.cita_ddt(t["ddt_citato"], d["numero"]) for d in self.ddt_noti):
                     altri.add(t["ddt_citato"])
         return sorted(altri)
 
@@ -298,9 +379,16 @@ class Motore:
                     avvisi.append(f"il costruttore scrive {voce['certificato']}, il certificato porta {cert['numero']}")
                 righe, ricavato = _righe_cert(cert, voce, riga_ddt)
         else:
-            cert, righe, ricavato, ambiguo = self._cerca_per_profilo(
-                voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi
-            )
+            dichiarate = self.colate_dichiarate(voce, riga_ddt)
+            cert, righe, ricavato, ambiguo = self._cerca_per_colata(voce, dichiarate, riga_ddt, motivi, avvisi)
+            if not cert and not ambiguo:
+                cert, righe, ricavato, ambiguo = self._cerca_per_ponte(
+                    voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi, avvisi
+                )
+            if not cert and not ambiguo:
+                cert, righe, ricavato, ambiguo = self._cerca_per_profilo(
+                    voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi
+                )
 
         if voce["ddt"] and not doc_ddt:
             richieste.append(f"DDT {voce['ddt']}")
@@ -342,7 +430,73 @@ class Motore:
             "scartati": scartati,
             "fornitore": fornitore,
             "richieste": richieste,
+            "placche": voce.get("placche", []),
         }
+
+    def _cerca_per_colata(self, voce, dichiarate, riga_ddt, motivi, avvisi):
+        """C5/C13: la colata dichiarata sul DDT (o dalla lista del commerciante) si cerca sui certificati prima del
+        profilo: una colata per riga del DDT, nessuna ambiguità tra più colate dello stesso profilo."""
+        if not dichiarate:
+            return None, [], False, False
+        trovati = []
+        for c in self.p["certificati"]:
+            righe = [r for r in c["righe"] if r["colata"] and any(nz.stessa_colata(r["colata"], d) for d in dichiarate)]
+            if righe:
+                trovati.append((c, righe))
+        if not trovati:
+            avvisi.append(
+                f"colata {', '.join(dichiarate)} dichiarata sul DDT ma non trovata sui certificati del fascicolo"
+            )
+            return None, [], False, False
+        if voce["ddt"]:
+            con_ponte = [x for x in trovati if self.ponti(x[0], voce["ddt"])]
+            trovati = con_ponte or trovati
+        cert, righe = trovati[0]
+        motivi.append(f"colata {', '.join(dichiarate)} dichiarata sul DDT e trovata sul certificato")
+        if len(trovati) > 1:
+            avvisi.append(
+                "la stessa colata compare anche sui certificati " + ", ".join(x[0]["numero"] for x in trovati[1:])
+            )
+        obiettivo = [riga_ddt["chiave"]] if riga_ddt else voce["chiavi"]
+        if not any(r["chiave"] in obiettivo or _affine(o, r["chiave"]) for r in righe for o in obiettivo):
+            avvisi.append(
+                f"profilo scritto diversamente: {' / '.join(obiettivo)} sul DDT, "
+                f"{', '.join(sorted({r['chiave'] for r in righe}))} sul certificato"
+            )
+        return cert, righe, False, False
+
+    def _cerca_per_ponte(self, voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi, avvisi):
+        """C6: prima i certificati con il ponte (timbro o lettera con il numero del DDT); tra loro vale quello con
+        righe dello stesso profilo o affini (stesso spessore o stessa famiglia e misura, scritte diversamente)."""
+        if not voce["ddt"]:
+            return None, [], False, False
+        con_ponte = [c for c in self.p["certificati"] if self.ponti(c, voce["ddt"])]
+        affini = []
+        for c in con_ponte:
+            righe, ricavato = _righe_cert(c, voce, riga_ddt)
+            diverso = False
+            if not righe:
+                righe, ricavato, diverso = _righe_affini(c, voce, riga_ddt), False, True
+            compatibili = [r for r in righe if not (classe_ddt and nz.classe(r["qualita"]) not in (None, classe_ddt))]
+            if righe and not compatibili:
+                scartati.append(f"certificato {c['numero']}: classe diversa dal DDT")
+            if compatibili:
+                affini.append((c, compatibili, ricavato, diverso))
+        if not affini:
+            return None, [], False, False
+        if len(affini) > 1:
+            motivi.append(
+                "più certificati timbrati per questo DDT: " + ", ".join(sorted(x[0]["numero"] for x in affini))
+            )
+            return None, [r for x in affini for r in x[1]], False, True
+        cert, righe, ricavato, diverso = affini[0]
+        if diverso:
+            obiettivo = [riga_ddt["chiave"]] if riga_ddt else voce["chiavi"]
+            avvisi.append(
+                f"profilo scritto diversamente: {' / '.join(obiettivo)} sul DDT, "
+                f"{', '.join(sorted({r['chiave'] for r in righe}))} sul certificato"
+            )
+        return cert, righe, ricavato, False
 
     def _cerca_per_profilo(self, voce, doc_ddt, riga_ddt, classe_ddt, scartati, motivi):
         """(certificato, righe, ricavato, ambiguo): ambiguo=True quando più certificati restano possibili."""
@@ -655,6 +809,8 @@ def _note(stato: str, dec: dict) -> list[str]:
         note.append("Da chiedere: " + "; ".join(dec["richieste"]) + ".")
     if dec["colate_possibili"]:
         note.append("Colate possibili: " + ", ".join(dec["colate_possibili"]) + ".")
+    if dec.get("placche"):
+        note.append("Placche dichiarate sul DDT: " + ", ".join(dec["placche"]) + ".")
     if stato != MANCANTE:
         note += [m[0].upper() + m[1:] + "." for m in dec["motivi"][:2]]
     note += [a[0].upper() + a[1:] + "." for a in dec["avvisi"]]

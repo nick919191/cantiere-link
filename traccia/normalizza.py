@@ -298,6 +298,52 @@ def piva(testo):
     return cifre if len(cifre) == 11 else ""
 
 
+_PREFISSO_COLATA = re.compile(r"^[a-z]{1,2}(?=\d{3})")
+_SUFFISSO_COLATA = re.compile(r"(?<=\d{4})[a-z]{1,2}\d?$")
+_ETICHETTA_COLATA = re.compile(
+    r"\b(?:COLAT[AE]|HEAT|CAST|CHARGE|SCHMELZE|COL\.)\s*(?:N[.°º]?|NO\.?|NR\.?)?\s*[:.]?\s*([A-Z0-9][A-Z0-9/-]{2,})"
+)
+_ETICHETTA_PLACCA = re.compile(
+    r"\b(?:PLACC[AH]E?|PLATE\s*(?:ID|N[.°º]?)|PIASTRA|LOTTO)\s*[:.]?\s*([A-Z0-9][A-Z0-9()/.-]*)"
+)
+
+
+def colata_normale(testo):
+    """Forma di confronto di una colata: minuscole, solo lettere e cifre, senza il prefisso di 1-2 lettere incollato
+    ('DU123329' -> '123329', 'CE256775' -> '256775') e senza il suffisso corto dopo le cifre ('123329BJ0' ->
+    '123329', '3151783B' -> '3151783'). Solo per confrontare: il valore mostrato resta quello letto."""
+    s = re.sub(r"[^a-z0-9]", "", (testo or "").lower())
+    s = _PREFISSO_COLATA.sub("", s)
+    return _SUFFISSO_COLATA.sub("", s)
+
+
+def stessa_colata(a, b):
+    """True se le due colate coincidono nella forma di confronto (almeno tre cifre)."""
+    na, nb = colata_normale(a), colata_normale(b)
+    return bool(na) and na == nb and len(re.sub(r"\D", "", na)) >= 3
+
+
+def colate_dichiarate(testo):
+    """Colate (e placche) scritte su una riga di DDT: 'Placca: 24G6302(A) Colata: 2458653 Placca: 24G6302(B)
+    Colata: 2458653' -> [('2458653', ['24G6302(A)', '24G6302(B)'])]; 'CERT.COL. DU123329BJ0' -> [('DU123329BJ0', [])].
+    Una riga con la parola colata/heat/cast/charge e un codice con almeno tre cifre dichiara una colata."""
+    s = (testo or "").upper()
+    eventi = [(m.start(), "colata", m.group(1)) for m in _ETICHETTA_COLATA.finditer(s)]
+    eventi += [(m.start(), "placca", m.group(1)) for m in _ETICHETTA_PLACCA.finditer(s)]
+    risultato: dict[str, list[str]] = {}
+    placca = ""
+    for _, tipo, valore in sorted(eventi):
+        valore = valore.strip(".,;:")
+        if tipo == "placca":
+            placca = valore
+        elif len(re.sub(r"\D", "", valore)) >= 3:
+            risultato.setdefault(valore, [])
+            if placca and placca not in risultato[valore]:
+                risultato[valore].append(placca)
+            placca = ""
+    return list(risultato.items())
+
+
 def cita_numero(testo, numero_ddt):
     """True se il testo contiene il numero come numero intero ('DDT4321' si', '43210' no)."""
     return re.search(rf"(?<!\d){re.escape(numero_ddt)}(?!\d)", testo or "") is not None
@@ -347,6 +393,20 @@ def stesso_numero(dichiarato, letto):
     if len(a2) >= 3 and re.search(rf"[^a-z0-9]{re.escape(a2)}$", (letto or "").lower().strip()):
         return "prefisso"
     return None
+
+
+def cita_ddt(citato, numero_ddt):
+    """True se il numero citato (timbro, lettera, tabella) è il DDT: uguale, con suffisso di serie, oppure la coda
+    del numero del DDT dopo un separatore ('51159' per 'G02 / 51159'; non '1159')."""
+    esito = stesso_numero(citato, numero_ddt)
+    if esito in ("uguale", "serie"):
+        return True
+    coda = numero_normale(citato).replace("/", "")
+    return (
+        esito == "prefisso"
+        and len(coda) >= 3
+        and re.search(rf"[^a-z0-9]{re.escape(coda)}$", (numero_ddt or "").lower().strip()) is not None
+    )
 
 
 def dimensioni_piatto(chiave):

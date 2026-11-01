@@ -103,3 +103,30 @@ def test_lamiere_scritte_come_misure_non_sono_tubi():
     assert nz.profilo("CHS 88,9x4") == "TUBO 88.9x4"
     assert nz.profilo("Ø 60,3x3,6") == "TUBO 60.3x3.6"
     assert nz.profilo("TUBO 12x2450x6000") == "TUBO 12x2450x6000"  # con la parola resta un tubo
+
+
+def test_colata_per_il_confronto_e_colate_dichiarate_sulla_riga():
+    # reali: prefisso di due lettere, suffisso corto, placca = colata + lettera
+    assert nz.colata_normale("DU123329BJ0") == "123329" and nz.stessa_colata("DU123329BJ0", "123329")
+    assert nz.stessa_colata("CE256775", "256775") and nz.stessa_colata("3151783B", "3151783")
+    assert nz.stessa_colata("C2589A", "C2589") and not nz.stessa_colata("C2589", "C2590")
+    assert not nz.stessa_colata("150890", "1508901") and not nz.stessa_colata("", "")
+    # inventati
+    assert nz.stessa_colata("PA 77 88 99", "778899") and not nz.stessa_colata("AB12", "12")
+    reale = (
+        "SP.015X2450X6000 Placca: 24E6061124(A) Colata: 143343 Placca: 24E6061124(B) Colata: 143343 "
+        "Placca: 24E6061126(A) Colata: 442770"
+    )
+    assert nz.colate_dichiarate(reale) == [
+        ("143343", ["24E6061124(A)", "24E6061124(B)"]),
+        ("442770", ["24E6061126(A)"]),
+    ]
+    assert nz.colate_dichiarate("LAMIERE S355 SP.010X2000X6000 Placca: C2589A (01-01A) Colata: C2589") == [
+        ("C2589", ["C2589A"])
+    ]
+    assert nz.colate_dichiarate("TUBO 88,9x4 CERT.COL. DU123329BJ0 L=6000") == [("DU123329BJ0", [])]
+    assert nz.colate_dichiarate("HEA 200 S275JR heat no. 55123 plate id P7") == [("55123", [])]
+    assert nz.colate_dichiarate("TRAVI HE/A 160 S355J2 L= 500") == []  # nessuna parola colata: niente
+    assert nz.colate_dichiarate("contributo certificazione colata N. 12") == []  # meno di tre cifre
+    assert nz.cita_ddt("51159", "G02 / 51159") and nz.cita_ddt("8027", "8027") and nz.cita_ddt("5678", "5678/1")
+    assert not nz.cita_ddt("1159", "G02 / 51159") and not nz.cita_ddt("777", "1777")

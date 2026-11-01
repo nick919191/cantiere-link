@@ -97,3 +97,44 @@ def test_seconda_pagina_con_numero_letto_diverso_resta_nello_stesso_ddt():
     ]
     assert prove["ddt"][0]["avvisi"] == ["numero letto 2027 sulla pagina 3, 8027 sulle altre"]
     assert {r["chiave"] for r in prove["ddt"][0]["righe"]} == {"HEA 160", "UPN 160"}
+
+
+def test_righe_del_ddt_con_colate_e_placche():
+    # reale: colate scritte nella descrizione; inventato: campi colata e placca compilati dal lettore
+    d = ddt("2902", ["SP.015X2450X6000 Placca: 24E6061124(A) Colata: 143343 Placca: 24E6061126(A) Colata: 442770"])
+    d2 = ddt("77", ["LAMIERA 8x1500x3000"])
+    d2["righe"][0]["colata"] = V("K100; K200")
+    d2["righe"][0]["placca"] = V("P1; P2")
+    d2["righe"][0]["certificato"] = V("5503")
+    prove = _prove([("a.pdf", 1, d), ("b.pdf", 1, d2)])
+    r = prove["ddt"][0]["righe"][0]
+    assert r["chiave"] == "LAMIERA 15" and r["colate"] == ["143343", "442770"]
+    assert r["placche"] == {"143343": ["24E6061124(A)"], "442770": ["24E6061126(A)"]}
+    r = prove["ddt"][1]["righe"][0]
+    assert r["colate"] == ["K100", "K200"] and r["placche"] == {"K100": ["P1"], "K200": ["P2"]}
+    assert r["certificato"] == "5503" and r["fonti"]["colata"]
+
+
+def test_lettera_con_righe_placca_colata_certificato():
+    lettera = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("FORNITORE 001 SRL"), "ddt_citato": V("300"), "data_ddt": V("01/02/2026")},
+        [
+            {
+                "articolo": V("LAM. CALDO 8x1500x6000"),
+                "placca": V("P1"),
+                "colata": V("H3003"),
+                "certificato": V("5503"),
+            },
+            {
+                "articolo": V("LAM. CALDO 8x1500x6000"),
+                "placca": V("P2"),
+                "colata": V("H3004"),
+                "certificato": V("5503"),
+            },
+        ],
+    )
+    prove = _prove([("l.pdf", 1, lettera)])
+    lt = prove["lettere"][0]
+    assert lt["ddt_citato"] == "300" and lt["certificati"] == ["5503", "5503"]
+    assert [(r["placca"], r["colata"]) for r in lt["righe"]] == [("P1", "H3003"), ("P2", "H3004")]

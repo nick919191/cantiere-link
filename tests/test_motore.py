@@ -162,3 +162,134 @@ def test_documento_letto_a_meta_rende_la_voce_da_confermare():
     prove["parziali"] = [doc["pagine"][0]]
     v = _voce(elabora(prove), "HEB 180")
     assert v["stato"] == "DA CONFERMARE" and any("letto solo in parte" in m for m in v["motivi"])
+
+
+def _senza_packing(fogli):
+    pagine = [{"pid": f"p{i:04d}", "file": f, "pagina": n} for i, (f, n, _) in enumerate(fogli, 1)]
+    return elabora(costruisci(pagine, {p["pid"]: s for p, (_, _, s) in zip(pagine, fogli, strict=True)}))
+
+
+def test_colata_dichiarata_sul_ddt_sceglie_tra_piu_colate_del_certificato():
+    """C5: il DDT stampa la colata; il certificato ha due colate dello stesso profilo: nessuna ambiguità."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    fogli = [
+        ("ddt.pdf", 1, ddt("2902", ["LAMIERE S355J2+N SP.012X2450X6000 Placca: 24G6302(A) Colata: 2458653"])),
+        ("ddt2.pdf", 1, ddt("77", ["HEA 200 S275JR"], emittente="FORNITORE 002 SRL")),
+        (
+            "cert.pdf",
+            1,
+            certificato(
+                "16524497809",
+                [
+                    ("Hot Rolled Heavy Plates 12,00 X 2450,00 X 12000,00", "S355J2+N", "2458630"),
+                    ("Hot Rolled Heavy Plates 12,00 X 2450,00 X 12000,00", "S355J2+N", "2458653"),
+                ],
+                [timbro("2902")],
+            ),
+        ),
+        (
+            "cert2.pdf",
+            1,
+            certificato("9", [("HEA 200", "S275JR", "K100"), ("HEA 200", "S275JR", "K200")], [timbro("77")]),
+        ),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "LAMIERA 12")
+    assert v["stato"] != "DA CONFERMARE" and v["colonne"]["COLATA"]["v"] == "2458653"
+    assert v["colonne"]["CERT 3.1 ACCIAIERIA"]["v"].startswith("16524497809")
+    assert any("Placche dichiarate sul DDT: 24G6302(A)" in n for n in v["note"])
+    v = _voce(r, "HEA 200")  # senza colata sul DDT resta l'ambiguità di prima
+    assert v["stato"] == "DA CONFERMARE" and v["colate_possibili"] == ["K100", "K200"]
+
+
+def test_ddt_con_piu_colate_per_lo_stesso_spessore_una_voce_per_colata():
+    """Decisione 3: placca per placca sul DDT -> una voce per colata, placche in nota."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    riga = (
+        "SP.015X2450X6000 Placca: 24E6061124(A) Colata: 143343 Placca: 24E6061124(B) Colata: 143343 "
+        "Placca: 24EQ001796(A) Colata: 339044"
+    )
+    cert = certificato(
+        "16024488927",
+        [("Hot Rolled Heavy Plates 15,00 X 2450,00 X 12000,00", "S355J2+N", c) for c in ("442571", "143343", "339044")],
+        [timbro("2902")],
+    )
+    r = _senza_packing([("ddt.pdf", 1, ddt("2902", [riga])), ("cert.pdf", 1, cert)])
+    voci = {v["voce"]: v for v in r["voci"]}
+    assert set(voci) == {"LAMIERA 15 · colata 143343", "LAMIERA 15 · colata 339044"}
+    assert voci["LAMIERA 15 · colata 143343"]["colonne"]["COLATA"]["v"] == "143343"
+    assert any("24E6061124(A), 24E6061124(B)" in n for n in voci["LAMIERA 15 · colata 143343"]["note"])
+    assert all(v["stato"] != "DA CONFERMARE" for v in voci.values())
+
+
+def test_ponte_prima_del_profilo_anche_se_scritto_diversamente():
+    """C6: il certificato timbrato per il DDT vale anche se il profilo è scritto in un altro modo."""
+    from fascicolo_inventato import certificato, ddt, timbro
+
+    fogli = [
+        ("ddt.pdf", 1, ddt("6559", ["TUBO 219,1x12,5"])),
+        ("ddt2.pdf", 1, ddt("88", ["LAMIERA SP.10"], emittente="FORNITORE 002 SRL")),
+        (
+            "c1.pdf",
+            1,
+            certificato("977915", [("TUBO ELETTROSALDATO 219,1x12,5x12000", "S275JR", "3151783B")], [timbro("6559")]),
+        ),
+        ("c2.pdf", 1, certificato("977916", [("TUBO ELETTROSALDATO 219,1x12,5x12000", "S275JR", "3151784B")])),
+        (
+            "c3.pdf",
+            1,
+            certificato("55", [("HOT ROLLED STEEL PLATES 10.00 2000 12000", "S275JR", "C2589")], [timbro("88")]),
+        ),
+        (
+            "c4.pdf",
+            1,
+            certificato("56", [("HOT ROLLED STEEL PLATES 10.00 2000 12000", "S275JR", "C2590")], [timbro("89")]),
+        ),
+    ]
+    r = _senza_packing(fogli)
+    v = _voce(r, "TUBO 219.1x12.5")
+    assert v["colonne"]["CERT 3.1 ACCIAIERIA"]["v"].startswith("977915") and v["colonne"]["COLATA"]["v"] == "3151783B"
+    assert any("profilo scritto diversamente" in a for a in v["avvisi"]) and v["stato"] != "DA CONFERMARE"
+    v = _voce(r, "LAMIERA 10")
+    assert v["colonne"]["COLATA"]["v"] == "C2589" and v["stato"] != "DA CONFERMARE"
+
+
+def test_lista_del_commerciante_lega_ddt_certificato_e_colata():
+    """C13: la lista di rintracciabilità (lettera con placca, colata, certificato) è un ponte con le colate."""
+    from fascicolo_inventato import V, certificato, ddt, scheda
+
+    lista = scheda(
+        "lettera_accompagnamento",
+        {"emittente": V("FORNITORE 001 SRL"), "ddt_citato": V("3332"), "data_ddt": V("14/02/2025")},
+        [
+            {
+                "articolo": V("LAM. CALDO 5x1500x6000"),
+                "placca": V("24064054"),
+                "colata": V("24305236"),
+                "certificato": V("15.329"),
+            },
+            {
+                "articolo": V("LAM. CALDO 8x1500x6000"),
+                "placca": V("1H4F6789"),
+                "colata": V("6965529"),
+                "certificato": V("L26627"),
+            },
+        ],
+    )
+    cert5 = certificato(
+        "15.329", [("Hot Rolled Mill Edge Coil 5,00x1500xC", "S355J2+N", c) for c in ("24305235", "24305236")]
+    )
+    cert8 = certificato("L26627", [("Hot Rolled Mill Edge Strip 1500.0X8.00XCOIL", "S355J2+AR", "6965529")])
+    fogli = [
+        ("f.pdf", 1, ddt("G01 / 3332", ["LAM. CALDO 5x1500x6000", "LAM. CALDO 8x1500x6000"])),
+        ("f.pdf", 2, lista),
+        ("f.pdf", 3, cert5),
+        ("f.pdf", 4, cert8),
+    ]
+    r = _senza_packing(fogli)
+    v5, v8 = _voce(r, "LAMIERA 5"), _voce(r, "LAMIERA 8")
+    assert v5["colonne"]["COLATA"]["v"] == "24305236" and v5["stato"] != "DA CONFERMARE"
+    assert v8["colonne"]["COLATA"]["v"] == "6965529" and v8["stato"] != "DA CONFERMARE"
+    assert any("lettera del distributore" in m for m in v8["motivi"])

@@ -97,6 +97,16 @@ class Fonti:
         return fid
 
 
+def _colate_riga(r: dict) -> list[tuple[str, list[str]]]:
+    """Colate dichiarate su una riga di DDT: dal campo `colata` (più colate separate da ';'), con la placca del
+    campo `placca`, oppure lette nel testo della riga ('Placca: ... Colata: ...')."""
+    campo = [c.strip() for c in re.split(r"[;|]", _v(r.get("colata"))) if c.strip()]
+    if campo:
+        placche = [p.strip() for p in re.split(r"[;|]", _v(r.get("placca"))) if p.strip()]
+        return [(c, placche if len(campo) == 1 else placche[i : i + 1]) for i, c in enumerate(campo)]
+    return nz.colate_dichiarate(" ".join(_v(r.get(k)) for k in ("descrizione", "profilo")))
+
+
 def _pagina_di(testo: str) -> tuple[int, int] | None:
     m = re.search(r"(\d+)\s*(?:/|di|of|von)\s*(\d+)", testo or "", re.I)
     return (int(m.group(1)), int(m.group(2))) if m and 0 < int(m.group(1)) <= int(m.group(2)) <= 50 else None
@@ -212,6 +222,7 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 if _v(r.get("servizio")).lower() == "si":
                     continue
                 descr = _v(r.get("profilo")) or _v(r.get("descrizione"))
+                colate = _colate_riga(r)
                 doc["righe"].append(
                     {
                         "pid": pid,
@@ -219,8 +230,12 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                         "chiave": nz.profilo(descr),
                         "qualita": _v(r.get("qualita")),
                         "quantita": f"{_v(r.get('quantita'))} {_v(r.get('unita'))}".strip(),
+                        "colate": [c for c, _ in colate],
+                        "placche": {c: p for c, p in colate},
+                        "certificato": _v(r.get("certificato")),
                         "fonti": {
-                            k: fonti.aggiungi(pid, f"r{i}.{k}", r.get(k)) for k in ("descrizione", "profilo", "qualita")
+                            k: fonti.aggiungi(pid, f"r{i}.{k}", r.get(k))
+                            for k in ("descrizione", "profilo", "qualita", "colata", "placca", "certificato")
                         },
                     }
                 )
@@ -326,12 +341,25 @@ def costruisci(pagine: list[dict], schede: dict[str, dict], mappe: dict[str, str
                 }
             )
         elif fam == "lettera_accompagnamento":
+            righe = [
+                {
+                    "posizione": _v(r.get("posizione")),
+                    "articolo": _v(r.get("articolo")),
+                    "placca": _v(r.get("placca")),
+                    "colata": _v(r.get("colata")),
+                    "certificato": _v(r.get("certificato")),
+                    "fonti": {k: fonti.aggiungi(pid, f"r{i}.{k}", r.get(k)) for k in ("colata", "certificato")},
+                }
+                for i, r in enumerate(s.get("righe", []))
+            ]
             lettere.append(
                 {
                     "pid": pid,
+                    "emittente": _v(t.get("emittente")),
                     "ddt_citato": _v(t.get("ddt_citato")),
-                    "posizioni": [_v(r.get("posizione")) for r in s.get("righe", [])],
-                    "certificati": [_v(r.get("certificato")) for r in s.get("righe", [])],
+                    "posizioni": [r["posizione"] for r in righe],
+                    "certificati": [r["certificato"] for r in righe],
+                    "righe": righe,
                     "fid": fonti.aggiungi(pid, "ddt_citato", t.get("ddt_citato")),
                 }
             )

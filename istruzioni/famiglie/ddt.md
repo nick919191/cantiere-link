@@ -5,7 +5,7 @@ Riconosci: "documento di trasporto", D.P.R. 472/96, causale del trasporto, vetto
 no." (`lettera_accompagnamento`); certificato con un campo DDT (`certificato_31`).
 
 testata: emittente, destinatario, destinazione, numero, data, ordine, commessa, pagina_di, tipo_proposto, piva_emittente, piva_destinatario
-righe: descrizione, profilo, qualita, quantita, unita, posizione, servizio
+righe: descrizione, profilo, qualita, quantita, unita, posizione, servizio, colata, placca, certificato
 
 - `numero` = il riquadro NUMERO / N documento / delivery note No., come stampato. Non ordine, non codice cliente.
 - `tipo_proposto`: `commerciante_costruttore` (venditore -> carpenteria), `acciaieria_commerciante` (intestazione di
@@ -16,5 +16,8 @@ righe: descrizione, profilo, qualita, quantita, unita, posizione, servizio
 - `servizio`: "si" per righe che non sono materiale (contributo certificazione, certificato materiale, trasporto,
   forature), altrimenti "no". "PROVINO" = materiale con avviso "provino".
 - `pagina_di`: "1/2", "PAG. 002"... se stampato.
+- `colata`, `placca`, `certificato`: se la riga del DDT stampa la colata ("Colata:", "Heat", "Cast",
+  "CERT.COL."), la placca o il numero del certificato, copiali come scritti; più colate sulla stessa riga
+  separate da ";" (es. "143343; 442770"), con le placche nello stesso ordine. Altrimenti vuoti.
 - `piva_emittente` = partita IVA stampata nell'intestazione di chi emette; `piva_destinatario` = partita IVA
   stampata nel riquadro del cliente/destinatario (es. "Partita IVA 00000000000"). Solo se scritte sulla pagina.
