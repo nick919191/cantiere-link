@@ -243,3 +243,13 @@ def test_ddt_dichiarato_come_coda_del_numero_e_colata_con_la_sigla_del_produttor
     assert nz.stessa_colata("SICL2103435A", "CL21/03435A") and nz.stessa_colata("OL142191", "142191")
     assert nz.stessa_colata("DU123329BJ0", "123329B")
     assert not nz.stessa_colata("1234", "51234")  # troppo corta per essere una coda
+
+
+def test_tubi_con_il_diametro_letto_come_zero():
+    """0.7.5 (Codogno): sul DDT la Ø è letta '0'; 'T' sta per tubo; il tondo con lo spessore è un tubo tondo."""
+    assert nz.profilo("T NERO SALDATO S355J2 0 219,1 X 12,5") == "TUBO 219.1x12.5"
+    assert nz.profilo("T TONDO 0 60 X 5 S355") == "TUBO 60x5"
+    assert nz.profilo("T TONDO 0 88.9 X 6.3 S355 SALD. SCORD.") == "TUBO 88.9x6.3"
+    assert nz.profilo("TUBO TONDO O 48,3 X 3") == "TUBO 48.3x3"
+    assert nz.profilo("TONDO 20") == "TONDO 20"  # il tondo pieno resta un tondo
+    assert nz.profilo("ROUND BAR 0 30") == "TONDO 0"  # senza 'X spessore' non si tocca

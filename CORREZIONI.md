@@ -303,3 +303,17 @@ Base: `main` (`0e2f2f0`, v0.3.0). Riferimenti agli id di `REPORT.md`. Ogni riga:
 - **Non toccati**: `istruzioni/`, `conoscenza/`, `cli.py`, `.claude/`, `CLAUDE.md`, `demo/` (che conserva gli script
   inline, coperti da una CSP dedicata). Il warning Pillow `getdata` in `preparazione._inchiostro` è preesistente.
 - Nessun punto del report è risultato sbagliato leggendo il codice.
+
+## Codogno dopo la Verifica finale 0.8.0 e correzione 0.7.5 (02/11/2026)
+
+La Verifica finale (3 pagine, 34k token) ha corretto il DDT 6559 letto a rovescio (emittente F.lli Molteni, destinatario
+SACIF): con il DDT riconosciuto le sue righe sono diventate voci e il conteggio è sceso da 25/0/1/0 a 25/0/0/2.
+
+| Caso | Prima | Causa | Correzione | Dopo |
+|---|---|---|---|---|
+| `T NERO SALDATO S355J2 0 219,1 X 12,5` sul DDT 6559; certificato Arvedi 977915 `TUBO ELETTROSALDATO SCORDONATO 219,1x12,5x12000` timbrato Molteni per il DDT 6559 | MANCANTE | la Ø letta `0`: `profilo` non riconosce il tubo, nessuna chiave da abbinare | una cifra sola davanti a `diametro X spessore`, con parola da tubo o la `T` del commerciante, è la Ø → `TUBO 219.1x12.5`, affine a `TUBO 219.1x12.5x12000` | PROVATO (timbro con il DDT) |
+| `T TONDO 0 60 X 5`, `T TONDO 0 88.9 X 6.3` | una voce `TONDO 0` MANCANTE | letti come tondo pieno | con la Ø e lo spessore il tondo è un tubo tondo | due voci `TUBO 60x5`, `TUBO 88.9x6.3` MANCANTE (nel fascicolo non c'è il 3.1: richiesta giusta a F.lli Molteni) |
+
+Codogno: **26 PROVATO, 0, 0, 2 MANCANTE** (28 voci). Gstaad, Viollier, Valentino e progresso ricomposti con la 0.7.5:
+invariati. Test: 254 (da 251).
+

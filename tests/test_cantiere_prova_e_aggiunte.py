@@ -111,7 +111,7 @@ def test_ferma_resta_fermo_e_riprendi_toglie_il_fermo(radice, monkeypatch):
     partiti = []
     monkeypatch.setattr(server.agente, "stato", lambda: {"busy": False, "job": None})
     monkeypatch.setattr(server.chatgpt, "status", lambda: {"plan_enabled": True})
-    monkeypatch.setattr(server.agente, "avvia", lambda c, poi=None: partiti.append(c.name))
+    monkeypatch.setattr(server.agente, "avvia", lambda c, poi=None, verifica=False: partiti.append(c.name))
     server._avvia_se_serve(lavoro)
     assert partiti == []  # fermato dall'utente: non riparte da solo
     client.post(f"/api/lavori/{lavoro}/analizza")

@@ -235,3 +235,16 @@ def test_endpoint_e_stato(radice, modello):
     assert r["stato"] == "fatta" and r["pagine"] == 3 and "campi" in r and "conteggio_dopo" in r
     s = client.get("/api/lavori/prova/stato").json()["verifica"]
     assert s["stato"] == "fatta" and s["da_fare"] is False and s["pagine"] == 3
+
+
+def test_la_verifica_parte_dopo_una_lettura_o_su_richiesta_non_a_una_ricomposizione(radice, monkeypatch):
+    """Un cantiere già pronto ricomposto (motore nuovo) non spende: la verifica parte solo con il pulsante."""
+    cartella, _ = _pronto(radice)
+    chiamate = []
+    monkeypatch.setattr(verifica, "esegui", lambda c, m, e: chiamate.append(c.name))
+    monkeypatch.setattr(chatgpt, "response", Finto())
+    agente._cancel.clear()
+    agente.analizza(cartella, "modello-test", "")  # niente da leggere, nessuna richiesta esplicita
+    assert chiamate == []
+    agente.analizza(cartella, "modello-test", "", verifica=True)  # pulsante «Verifica finale»
+    assert chiamate == ["prova"]

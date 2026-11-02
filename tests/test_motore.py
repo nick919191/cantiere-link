@@ -817,3 +817,52 @@ def test_ddt_dichiarato_come_coda_e_colata_con_la_sigla_del_commerciante():
     barra = per_voce["BARRA FILETTATA Zn 8.8 M12x1000"]
     assert barra["stato"] == "DEDOTTO" and barra["colonne"]["COLATA"]["v"] == "G191227813"
     assert barra["colonne"]["DDT COMMERCIANTE"]["v"].startswith("DDT n. 2021-S_DVE-0008603")
+
+
+def test_tubi_del_ddt_con_la_diametro_letta_zero_si_abbinano_al_certificato_timbrato():
+    """0.7.5 (Codogno, dopo la Verifica finale): il DDT Molteni 6559 porta 'T NERO SALDATO S355J2 0 219,1 X 12,5' e due
+    'T TONDO 0 ...'; il certificato Arvedi 977915 (TUBO ELETTROSALDATO 219,1x12,5x12000) è timbrato per il DDT 6559.
+    Il tubo 219.1x12.5 è PROVATO; i due tubi tondi sono due voci MANCANTE (non una voce 'TONDO 0')."""
+    from fascicolo_inventato import V, certificato, scheda, timbro
+
+    def riga(descrizione, profilo, qualita):
+        return {
+            "descrizione": V(descrizione),
+            "profilo": V(profilo),
+            "qualita": V(qualita),
+            "quantita": V("1"),
+            "servizio": V("no"),
+        }
+
+    d1 = scheda(
+        "ddt",
+        {
+            "emittente": V("F.lli Molteni spa"),
+            "destinatario": V("SACIF SRL"),
+            "numero": V("6559"),
+            "data": V("25/09/2025"),
+        },
+        [
+            riga("T NERO SALDATO S355J2 0 219,1 X 12,5", "T NERO SALDATO S355J2 0 219,1 X 12,5", "S355J2"),
+            riga("T TONDO 0 60 X 5 S355", "T TONDO 0 60 X 5", "S355"),
+            riga("T TONDO 0 88.9 X 6.3 S355 SALD. SCORD.", "T TONDO 0 88.9 X 6.3", "S355"),
+        ],
+    )
+    d2 = scheda(
+        "ddt",
+        {"emittente": V("ALTRO FERRO SRL"), "destinatario": V("SACIF SRL"), "numero": V("77"), "data": V("20/09/2025")},
+        [riga("TRAVE HEA 160", "HEA 160", "S275JR")],
+    )
+    c1 = certificato(
+        "977915",
+        [("TUBO ELETTROSALDATO SCORDONATO 219,1x12,5x12000", "S355J2H", "3151783B")],
+        [dict(timbro("6559"), chi="F.lli Molteni s.p.a.", testo="F.lli Molteni s.p.a. DDT 6559 del 25/09/2025")],
+        produttore="Arvedi Tubi Acciaio S.p.A.",
+    )
+    c1["testata"]["cliente"] = V("MOLTENI")
+    r = _senza_packing([("ddt6559.pdf", 1, d1), ("ddt77.pdf", 1, d2), ("cert977915.pdf", 1, c1)])
+    per_voce = {v["voce"]: v for v in r["voci"]}
+    assert "TUBO 219.1x12.5" in per_voce and per_voce["TUBO 219.1x12.5"]["stato"] == "PROVATO"
+    assert per_voce["TUBO 219.1x12.5"]["colonne"]["COLATA"]["v"] == "3151783B"
+    assert per_voce["TUBO 60x5"]["stato"] == "MANCANTE" and per_voce["TUBO 88.9x6.3"]["stato"] == "MANCANTE"
+    assert not any(k.startswith("TONDO") or k.startswith("T NERO") for k in per_voce)

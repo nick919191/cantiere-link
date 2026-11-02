@@ -76,3 +76,8 @@ costruttore ('FINITURA GREZZO', 'PRESTAZIONE SERVIZIO') non sono voci; quando la
 profilo ('Lamiera in S275JR') il motivo lo dice, invece di "la riga del profilo non c'è". Restano da decidere:
 materiale "da magazzino" del costruttore (fornitore = costruttore, DDT vuoto), prodotti con DoP/ETA senza 3.1
 (ancoranti, tasselli), lista del fornitore intermedio come ponte tra il suo DDT e i certificati.
+
+Motore 0.7.5 (02/11/2026, Codogno dopo la Verifica finale): sui DDT dei tubi la Ø è letta '0' o 'O' ('T NERO SALDATO
+S355J2 0 219,1 X 12,5', 'T TONDO 0 60 X 5'): una cifra sola davanti a 'diametro X spessore', con una parola da tubo o la
+'T' del commerciante, è la Ø; il tubo 219.1x12.5 si abbina al certificato 'TUBO 219,1x12,5x12000' (stesse prime misure)
+e un tondo con lo spessore è un tubo tondo, non un tondo pieno.

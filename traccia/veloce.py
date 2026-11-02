@@ -420,7 +420,7 @@ def _messaggio(testo: str) -> None:
     agente._state.update(message=testo)
 
 
-def analizza(cartella: Path, model: str, effort: str) -> None:
+def analizza(cartella: Path, model: str, effort: str, verifica: bool = False) -> None:
     if not (cartella / "pagine.json").exists():
         prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
     pagine = lv.pagine(cartella)
@@ -434,7 +434,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     agente.avanzamento("excel")
     agente.componi(cartella)
     _impara(cartella, pagine)
-    agente.dopo_componi(cartella, model, effort, pagine)
+    agente.dopo_componi(cartella, model, effort, pagine, bool(da_leggere) or verifica)
     rimaste = [p for p in pagine if not lv.scheda_pagina(p)]
     if rimaste:
         file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})

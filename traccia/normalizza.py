@@ -93,6 +93,10 @@ def profilo(descrizione):
     s = re.sub(r"(?<=\d)\s*\*\s*(?=\d)", "X", s)  # '200,00*10,00' come '200X10'
     s = re.sub(r"POS\.\s*\d+\s*-\s*", "", s)
     s = re.sub(r"HE\s*/\s*([ABM])", r"HE\1", s)
+    # 0.7.5 (Codogno): sui DDT dei tubi la Ø è letta '0' o 'O' ('T NERO SALDATO S355J2 0 219,1 X 12,5', 'T TONDO 0 60 X
+    # 5'): una cifra sola davanti a 'diametro X spessore', con una parola da tubo o la 'T' del commerciante, è la Ø.
+    if re.search(r"^\s*T\b|\bTONDO\b|\bSALDAT|\bTUB|\bNERO\b", s):
+        s = re.sub(r"(?<![\w.])[0O]\s+(?=\d+(?:\.\d+)?\s*X\s*\d)", "Ø ", s)
 
     # Scritture di distinta del costruttore: PL<spessore>*<larghezza>, L<lato>*<spessore>.
     m = re.match(r"\s*PL\s*(\d+(?:\.\d+)?)\s*[*X]\s*(\d+(?:\.\d+)?)\s*$", s)
@@ -194,7 +198,7 @@ def profilo(descrizione):
         m = _DUE_DIM.search(s)
         if m:
             return f"ANGOLARE {numero(m.group(1))} {numero(m.group(1))} {numero(m.group(2))}"
-    if re.search(r"\bROUND\b|\bTONDO\b", s):
+    if re.search(r"\bROUND\b|\bTONDO\b", s) and not _PAROLA_TUBO.search(s):  # con la Ø e lo spessore è un tubo tondo
         return "TONDO " + " ".join(re.findall(r"\d+", s)[:1])
 
     m = _TRAVI.search(s)

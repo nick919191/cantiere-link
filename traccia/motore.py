@@ -1,4 +1,4 @@
-"""Motore di regole 0.7.4: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
+"""Motore di regole 0.7.5: dalle prove del fascicolo alle voci con stato. Nessuna AI, nessun caso, nessun orologio.
 
 Regole (conoscenza/05_regole_di_stato.md):
 - voce = certificato dichiarato dal costruttore + DDT + profilo/spessore; senza dichiarazione DDT + profilo, e una
@@ -28,6 +28,8 @@ Regole (conoscenza/05_regole_di_stato.md):
         ('SICL2103435A' per 'CL21/03435A'); 'IPE MM. 400', 'LAMINATO ELLE 60x40x6', 'DADO MA16', barre filettate
         e tubi scritti per colonne; righe di finitura e servizio non sono voci; motivo esplicito quando la
         tabella del costruttore non dà la misura del profilo.
+  0.7.5 (da Codogno, dopo la Verifica finale) sui DDT dei tubi la Ø letta '0' ('T NERO SALDATO S355J2 0 219,1 X 12,5'
+        è il TUBO 219.1x12.5; 'T TONDO 0 60 X 5' un tubo tondo 60x5, non un tondo pieno).
 """
 
 import hashlib
@@ -36,7 +38,7 @@ import re
 
 from . import normalizza as nz
 
-VERSIONE = "0.7.4"
+VERSIONE = "0.7.5"
 PENNA_VALE_COME_PROVA = False
 VOCE_PER_COLATA = True  # DDT con più colate per lo stesso profilo (placca per placca): una voce per colata
 

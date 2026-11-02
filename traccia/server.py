@@ -282,7 +282,9 @@ def analizza(id_lavoro: str):
     _segna_fermato(cartella, False)
     if id_lavoro in _PREPARING:
         return {"started": False, "attesa": "preparazione"}  # partirà da solo a preparazione finita
-    agente.avvia(cartella, poi=lambda riuscita: _ancora_da_fare(id_lavoro, riuscita))
+    # cantiere già pronto: il pulsante è «Verifica finale» e la verifica parte anche senza pagine da leggere
+    esplicita = lv.stato(cartella, leggero=True)["fase"] == "pronto"
+    agente.avvia(cartella, poi=lambda riuscita: _ancora_da_fare(id_lavoro, riuscita), verifica=esplicita)
     return {"started": True}
 
 

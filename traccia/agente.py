@@ -99,9 +99,10 @@ def _options() -> tuple[str, str]:
     return model["slug"], effort
 
 
-def avvia(cartella: Path, poi=None) -> None:
+def avvia(cartella: Path, poi=None, verifica: bool = False) -> None:
     """Analisi in un thread. `poi(riuscita)` si chiama alla fine: la piattaforma la usa per ripartire da sola
-    quando nel frattempo sono arrivate pagine nuove."""
+    quando nel frattempo sono arrivate pagine nuove. Con `verifica` la Verifica finale parte anche se non c'è
+    niente da leggere (pulsante «Verifica finale» su un cantiere già pronto)."""
     with _lock:
         if _state["busy"]:
             raise chatgpt.AgentError("L’agente sta lavorando. Attendi o interrompi l’operazione in corso.")
@@ -123,7 +124,7 @@ def avvia(cartella: Path, poi=None) -> None:
         riuscita = False
         try:
             model, effort = _options()
-            analizza(cartella, model, effort)
+            analizza(cartella, model, effort, verifica)
             _state.update(message="Operazione completata.")
             riuscita = True
         except Exception as exc:
@@ -149,11 +150,11 @@ def _check():
         raise chatgpt.AgentError("Analisi interrotta. Premi «Riprendi» per continuare dalle pagine rimaste.")
 
 
-def analizza(cartella: Path, model: str, effort: str) -> None:
+def analizza(cartella: Path, model: str, effort: str, verifica: bool = False) -> None:
     from . import ocr, veloce  # veloce usa questo modulo: import qui per evitare il ciclo
 
     if ocr.configurato():  # con la chiave Mistral: lettura veloce (OCR + testo ridotto + immagine solo sui dubbi)
-        return veloce.analizza(cartella, model, effort)
+        return veloce.analizza(cartella, model, effort, verifica)
     if not (cartella / "pagine.json").exists():
         prepara(cartella, avviso=lambda **d: lv.evento(cartella, **d))
     pages = lv.pagine(cartella)
@@ -165,10 +166,12 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         "Restituisci soltanto il JSON della scheda. Nessuna azione esterna. "
         "Trascrivi anche il testo completo dei timbri e i relativi riferimenti."
     )
+    letto = False
     for giro in range(1, GIRI_AUTOMATICI + 1):
         da_leggere = _senza_doppioni(p for p in pages if not lv.scheda_pagina(p) and not _esaurita(cartella, p))
         if not da_leggere:
             break
+        letto = True
         if giro > 1:
             lv.evento(cartella, tipo="lettura", testo=f"Secondo tentativo su {len(da_leggere)} pagine non accettate")
         _leggi_tutte(cartella, da_leggere, instructions, model, effort, giro)
@@ -176,7 +179,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     _state.update(message="Composizione delle prove e dell’Excel…")
     avanzamento("excel")
     componi(cartella)
-    dopo_componi(cartella, model, effort, pages)
+    dopo_componi(cartella, model, effort, pages, letto or verifica)
     rimaste = [p for p in pages if not lv.scheda_pagina(p)]
     if rimaste:
         file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})
@@ -189,12 +192,14 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
         )
 
 
-def dopo_componi(cartella: Path, model: str, effort: str, pages: list[dict]) -> None:
+def dopo_componi(cartella: Path, model: str, effort: str, pages: list[dict], richiesta: bool = True) -> None:
     """Passo «Verifica finale» dopo componi(): il modello ripassa le pagine delle voci DA CONFERMARE e MANCANTE e
-    il motore ricompone. Solo quando nessuna pagina è ancora da leggere: prima si legge tutto, poi si verifica."""
+    il motore ricompone. Solo quando nessuna pagina è ancora da leggere (prima si legge tutto, poi si verifica) e
+    solo se `richiesta`: dopo una lettura, o per il pulsante «Verifica finale»; una semplice ricomposizione (motore
+    nuovo) non spende niente."""
     from . import verifica  # import qui: verifica usa questo modulo
 
-    if any(not lv.scheda_pagina(p) and not _esaurita(cartella, p) for p in pages):
+    if not richiesta or any(not lv.scheda_pagina(p) and not _esaurita(cartella, p) for p in pages):
         return
     _check()
     verifica.esegui(cartella, model, effort)
