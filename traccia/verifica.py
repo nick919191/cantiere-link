@@ -474,6 +474,9 @@ def applica(lettura: dict | None, risposta: dict, testo_nativo: str, parole: lis
         campo, esito = c["campo"], c.get("esito")
         if esito not in ESITI or campo == "famiglia":
             continue
+        posto = _campo(s, campo)
+        if posto is None and esito != "confermato":
+            continue  # campo che la scheda non ha (es. un timbro in più): conta solo la lista rifatta per intero
         prima = _leggi_valore(s, campo)
         voce = {
             "campo": campo,
@@ -484,7 +487,6 @@ def applica(lettura: dict | None, risposta: dict, testo_nativo: str, parole: lis
             "zona": c.get("zona") if _zona(c.get("zona")) else [],
             "motivo": str(c.get("motivo") or "")[:200],
         }
-        posto = _campo(s, campo)
         if posto and esito in ("corretto", "assente"):
             contenitore, chiave = posto
             if esito == "assente":
