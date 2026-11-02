@@ -131,12 +131,12 @@ function vola(x){if(!$("lookpage").offsetParent||stato.fase==="pronto"||document
  const a=el.animate([{left:src.left+src.width/2+"px",top:src.top+src.height/3+"px",transform:"scale(3)",opacity:.95},{left:dst.left+dst.width/2+"px",top:dst.top+40+"px",transform:"scale(1)",opacity:1}],{duration:700,easing:"cubic-bezier(.3,.7,.2,1)",fill:"forwards"});
  a.onfinish=()=>{el.remove();metti(x);bin.classList.remove("flash");void bin.offsetWidth;bin.classList.add("flash")}}
 const TIPI={ricevuti:["Ricevuti","n"],preparate:["Preparazione","g"],fermata:["Fermata","o"],ripresa:["Ripresa","b"],
- errore:["Errore","r"],avviso:["Avviso","o"],mappa:["Riconoscimento","g"],componi:["Collegamento","b"],pronto:["Pronto","g"]};
+ errore:["Errore","r"],avviso:["Avviso","o"],mappa:["Riconoscimento","g"],componi:["Collegamento","b"],pronto:["Pronto","g"],verifica:["Verifica finale","b"]};
 // eventi di avanzamento: aggiornano sempre la stessa riga invece di aggiungerne una per file o per pagina
-const VIVI={file:"Preparazione",pagina:"Preparazione",mappa_pagina:"Riconoscimento",lettura:"Lettura",testo_pagina:"Lettura del testo",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura"};
+const VIVI={file:"Preparazione",pagina:"Preparazione",mappa_pagina:"Riconoscimento",lettura:"Lettura",testo_pagina:"Lettura del testo",lettura_pagina:"Lettura",scheda:"Lettura",correzione:"Lettura",ritaglio:"Lettura",nota:"Lettura",verifica_pagina:"Verifica finale",verificata:"Verifica finale"};
 function rigaViva(e){let testo=e.testo||"";
  if(e.tipo==="file")testo=`File ${e.n} di ${e.totale}: ${testo}`;
- if(e.tipo==="scheda"&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
+ if((e.tipo==="scheda"||e.tipo==="verificata")&&FAM[e.famiglia])testo=`${FAM[e.famiglia].n} · ${testo}`;
  $("feed-live").innerHTML=`<time>${esc(e.ora)}</time><span class="pill b">${VIVI[e.tipo]}</span><span>${esc(testo)}</span>`;
  $("feed-live").classList.remove("hidden")}
 function evento(e){
@@ -145,7 +145,7 @@ function evento(e){
  if(VIVI[e.tipo]){rigaViva(e);return}
  const t=TIPI[e.tipo];if(!t)return;
  const testo=e.testo||"";
- if(["preparate","mappa","componi","pronto","errore","fermata"].includes(e.tipo))$("feed-live").classList.add("hidden");
+ if(["preparate","mappa","componi","pronto","errore","fermata","verifica"].includes(e.tipo))$("feed-live").classList.add("hidden");
  $("feed").insertAdjacentHTML("afterbegin",`<div class="ev"><time>${esc(e.ora)}</time><span class="pill ${t[1]}">${t[0]}</span><span>${esc(testo)}</span></div>`);
  while($("feed").children.length>8)$("feed").lastChild.remove()}
 let pagMostrata=null;
@@ -153,10 +153,11 @@ let pagMostrata=null;
 const FASE_PAGINA={pagina:["Preparazione","Divido il file in pagine e controllo il verso…"],
  mappa_pagina:["Riconoscimento","DeepSeek guarda la pagina: che documento è, se c'è un timbro…"],
  testo_pagina:["Lettura del testo","Riconosco parole e tabelle della scansione…"],
- lettura_pagina:["Lettura","Capisco che documento è e cerco i dati: DDT, certificato, colata…"],scheda:null};
+ lettura_pagina:["Lettura","Capisco che documento è e cerco i dati: DDT, certificato, colata…"],scheda:null,
+ verifica_pagina:["Verifica finale","Confronto le estrazioni con il documento, campo per campo: testata, righe, timbri, riferimenti…"],verificata:null};
 function nomePagina(pid,testo){const p=stato&&stato.pagine.find(x=>x.pid===pid);return p?`${p.file} · pagina ${p.pagina}`:String(testo||pid).replace(/^(Lettura|Testo|Riconosco): /,"")}
-function inEsame(e){$("lookfile").textContent=(e.tipo==="scheda"?"Letta: ":"")+nomePagina(e.pid,e.testo);
- if(e.tipo==="scheda"){const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${esc(f?f.n:e.famiglia)}.</b> ${esc(e.testo)}`;mostraPagina(e.pid,true);return}
+function inEsame(e){$("lookfile").textContent=(e.tipo==="scheda"?"Letta: ":e.tipo==="verificata"?"Verificata: ":"")+nomePagina(e.pid,e.testo);
+ if(e.tipo==="scheda"||e.tipo==="verificata"){const f=FAM[e.famiglia];$("thought").innerHTML=`<b>${esc(f?f.n:e.famiglia)}.</b> ${esc(e.testo)}`;mostraPagina(e.pid,true);return}
  const [t,d]=FASE_PAGINA[e.tipo];$("thought").innerHTML=`<b>${t}.</b> ${d}`;mostraPagina(e.pid,false)}
 const SCANSIONE_MS=2400; // un passaggio della linea di scansione (come l'animazione CSS "scan")
 async function mostraPagina(pid,conZone){const box=$("lookpage");
@@ -178,7 +179,7 @@ async function mostraPagina(pid,conZone){const box=$("lookpage");
 function fasi(){if(!stato)return;
  const g=(typeof agentState!=="undefined"&&agentState.busy&&agentState.job===L)?agentState:null,a=g&&g.avanzamento;
  const tot=stato.pagine_totali,fatte=stato.lette+stato.non_lette.length,pronto=stato.fase==="pronto",fermo=stato.fermato&&!g;
- const riga=(n,st,quanto,testo)=>`<div class="fase ${st}"><span class="fi">${st==="fatto"?"✓":st==="ferma"?"⏸":n}</span><span class="fn">${["","Ricevuti","Preparazione","Lettura e smistamento","Collegamento dei documenti","Excel e prove"][n]}</span><span class="fb"><i style="width:${quanto}%"></i></span><span class="fm">${esc(testo)}</span></div>`;
+ const riga=(n,st,quanto,testo)=>`<div class="fase ${st}"><span class="fi">${st==="fatto"?"✓":st==="ferma"?"⏸":n}</span><span class="fn">${["","Ricevuti","Preparazione","Lettura e smistamento","Collegamento dei documenti","Verifica finale","Excel e prove"][n]}</span><span class="fb"><i style="width:${quanto}%"></i></span><span class="fm">${esc(testo)}</span></div>`;
  const pr=stato.preparazione,perc=(x,y)=>y?Math.round(100*x/y):0;
  const r=[riga(1,stato.file?"fatto":"ora",stato.file?100:30,stato.file?`${stato.file} file`:"Arrivano i file…")];
  r.push(stato.preparing?riga(2,"ora",pr&&pr.totale?perc(pr.n,pr.totale):8,pr&&pr.totale?`File ${pr.n} di ${pr.totale}`:"Preparo le pagine…")
@@ -190,9 +191,15 @@ function fasi(){if(!stato)return;
  else if(tot&&fatte>=tot){lst="fatto";lq=100;lt=`${fatte} di ${tot} pagine`}
  else{lst=fermo&&tot?"ferma":g&&tot?"ora":"";lq=perc(fatte,tot);lt=tot?`${fatte} di ${tot} pagine`+(fermo?" · ferma":""):"In attesa"}
  r.push(riga(3,lst,lq,lt));
- const ex=a&&a.passo==="excel";
- r.push(riga(4,pronto?"fatto":ex?"ora":"",pronto?100:ex?60:0,pronto?"Fatto":ex?"In corso…":"In attesa"));
- r.push(riga(5,pronto?"fatto":ex?"ora":"",pronto?100:ex?40:0,pronto?"Pronti da scaricare":ex?"In corso…":"In attesa"));
+ const ex=a&&a.passo==="excel",vf=a&&a.passo==="verifica",ver=stato.verifica||{};
+ r.push(riga(4,pronto||vf?"fatto":ex?"ora":"",pronto||vf?100:ex?60:0,pronto||vf?"Fatto":ex?"In corso…":"In attesa"));
+ const vt=ver.token?tok((ver.token.ingresso||0)+(ver.token.uscita||0))+" token":"";
+ r.push(vf?riga(5,"ora",perc(a.n,a.totale),`${a.n} di ${a.totale} pagine delle voci DA CONFERMARE e MANCANTE`)
+  :ver.stato==="fatta"?riga(5,"fatto",100,`${ver.pagine} pagine ripassate · ${ver.corretti||0} campi corretti${vt?" · "+vt:""}`)
+  :ver.stato==="niente"?riga(5,"fatto",100,"Niente da ripassare")
+  :ver.stato==="interrotta"?riga(5,"ferma",ver.pagine?50:0,`Interrotta a ${ver.pagine||0} pagine: premi «Riprendi»`)
+  :riga(5,"",0,pronto&&ver.da_fare?"Da fare: premi «Verifica finale»":pronto?"Non necessaria":"In attesa"));
+ r.push(riga(6,pronto?"fatto":ex?"ora":"",pronto?100:ex?40:0,pronto?"Pronti da scaricare":ex?"In corso…":"In attesa"));
  $("fasi").innerHTML=r.join("");
  if(pronto&&!g)$("feed-live").classList.add("hidden")}
 
@@ -319,7 +326,21 @@ async function risultato(){let r;try{r=await api(`/api/lavori/${L}/risultato`)}c
  ris=r;esito(r);fornitori(r);if(stato)passi();
  $("stati").innerHTML=Object.entries(STATI).map(([k,c])=>`<button type="button" class="stato ${c}${statoAperto===k?" on":""}" data-act="stato" data-stato="${k}" aria-expanded="${statoAperto===k}"><div class="v">${r.conteggio[k]||0}</div><div class="l">${k} <i>${statoAperto===k?"▾":"▸"}</i></div></button>`).join("");
  if(statoAperto)pannelloStato(statoAperto,schedaAperta);
+ safe(verificaFinale);
  safe(()=>mostraTabella(true))}
+
+/* ---------- verifica finale: prima / dopo per campo ---------- */
+const ESITO_V={corretto:["Corretto","g"],confermato:["Confermato","n"],non_leggibile:["Non leggibile","o"],assente:["Tolto","o"],"scartata dal controllo":["Scartata dal controllo","r"]};
+async function verificaFinale(){const box=$("verifica");let v=null;try{v=await api(`/api/lavori/${L}/verifica`)}catch(e){box.classList.add("hidden");return}
+ box.classList.remove("hidden");
+ const cp=v.conteggio_prima||{},cd=v.conteggio_dopo||cp,tk=v.token||{};
+ const conti=Object.keys(STATI).map(k=>`<span class="pill ${STATI[k]}">${k} ${cp[k]||0}${(cd[k]||0)!==(cp[k]||0)?` → ${cd[k]||0}`:""}</span>`).join(" ");
+ const cambi=(v.campi||[]).filter(c=>c.esito!=="confermato"),conf=(v.campi||[]).filter(c=>c.esito==="confermato").length;
+ const pagina=c=>{const p=pagInfo(c.pid);return `<a href="#" data-act="open-page" data-pid="${esc(c.pid)}" data-pagina="${Number(c.pagina)||1}" data-nome="${esc(corto(c.file))}">📄 ${esc(corto(c.file))} · p. ${c.pagina}</a>${p&&FAM[p.famiglia]?`<small>${esc(FAM[p.famiglia].n)}</small>`:""}`};
+ const righe=cambi.map(c=>{const e=ESITO_V[c.esito]||[c.esito,"n"];return `<tr><td>${c.voce?`<button type="button" class="btn s sm" data-act="vai-voce" data-n="${c.voce}">${c.voce}</button>`:"—"}</td><td>${pagina(c)}</td><td><code>${esc(c.campo)}</code></td><td>${esc(c.prima||"—")}</td><td><b>${esc(c.dopo||"—")}</b></td><td><span class="pill ${e[1]}">${e[0]}</span></td><td class="cit">${esc(c.cit||"")}${c.motivo?`<small>${esc(c.motivo)}</small>`:""}</td></tr>`}).join("");
+ const testa=v.stato==="niente"?"Niente da ripassare: nessuna voce DA CONFERMARE o MANCANTE":v.stato==="in_corso"?"In corso…":v.stato==="interrotta"?"Interrotta: premi «Riprendi» per completarla":`${v.pagine} pagine ripassate${v.pagine_gia_verificate?` (${v.pagine_gia_verificate} già verificate)`:""} · ${cambi.filter(c=>c.esito==="corretto").length} campi corretti, ${conf} confermati${v.pagine_non_accettate?` · ${v.pagine_non_accettate} risposte non accettate`:""}`;
+ box.innerHTML=`<div class="vtesta"><div><h3>Verifica finale</h3><p class="sub" style="margin:0">${esc(testa)}. Il modello ha riguardato solo le pagine delle voci DA CONFERMARE e MANCANTE; gli stati li ha rifatti il motore.</p></div><div class="vconti">${conti}${tk.ingresso||tk.uscita?`<span class="pill n" title="Token della verifica finale">${tok(tk.ingresso)} in · ${tok(tk.uscita)} out</span>`:""}</div></div>
+  ${righe?`<div class="scrollx"><table class="lista vcampi"><thead><tr><th>Voce</th><th>Pagina</th><th>Campo</th><th>Prima</th><th>Dopo</th><th>Esito</th><th>Testo letto · motivo</th></tr></thead><tbody>${righe}</tbody></table></div>`:v.stato==="fatta"&&v.pagine?`<div class="note" style="margin:10px 0 0">Tutte le estrazioni confermate: nessun campo da cambiare.</div>`:""}`}
 
 /* ---------- pannello degli stati: perché una voce è PROVATO / DEDOTTO / DA CONFERMARE / MANCANTE ---------- */
 let statoAperto=null,schedaAperta=0,voceScelta=null;

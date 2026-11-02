@@ -71,7 +71,10 @@ def test_u2_tabella_scorre_dentro_il_contenitore_con_ombra():
 def test_u7_nome_del_file_e_scheda_si_riferiscono_alla_stessa_pagina():
     cantiere = _testo("cantiere.js")
     assert "function nomePagina(pid,testo)" in cantiere
-    assert '$("lookfile").textContent=(e.tipo==="scheda"?"Letta: ":"")+nomePagina(e.pid,e.testo)' in cantiere
+    assert (
+        '$("lookfile").textContent=(e.tipo==="scheda"?"Letta: ":e.tipo==="verificata"?"Verificata: ":"")'
+        "+nomePagina(e.pid,e.testo)" in cantiere
+    )
 
 
 def test_u8_etichette_agente():

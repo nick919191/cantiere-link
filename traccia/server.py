@@ -38,6 +38,7 @@ from . import (
     ocr,
     percorsi,
     registro,
+    verifica,
 )
 from . import cerca as ricerca
 from . import lavoro as lv
@@ -684,11 +685,22 @@ def _impronta_file(f: Path) -> str:
 @app.get("/api/lavori/{id_lavoro}/stato")
 def stato(id_lavoro: str):
     cartella = _cartella(id_lavoro)
-    return lv.stato(cartella) | {
+    s = lv.stato(cartella)
+    return s | {
         "preparing": id_lavoro in _PREPARING,
         "preparazione": _PREPARAZIONE.get(id_lavoro),
         "fermato": _fermato(cartella),
+        "verifica": verifica.riassunto(cartella, s),
     }
+
+
+@app.get("/api/lavori/{id_lavoro}/verifica")
+def esito_verifica(id_lavoro: str):
+    """Esito della Verifica finale: pagine ripassate, token, campi prima/dopo, conteggio degli stati prima e dopo."""
+    f = _cartella(id_lavoro) / "verifica.json"
+    if not f.exists():
+        raise HTTPException(404, "verifica finale non ancora fatta")
+    return json.loads(f.read_text(encoding="utf-8"))
 
 
 @app.get("/api/lavori/{id_lavoro}/eventi")

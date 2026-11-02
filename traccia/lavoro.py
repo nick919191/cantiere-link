@@ -57,6 +57,34 @@ def cartella_ritagli() -> Path:
     return percorsi.archivio() / "ritagli"
 
 
+# ---------- verifiche (Verifica finale) ----------
+def file_verifica(impronta: str) -> Path:
+    """La scheda verificata della pagina: lettura ripassata sul documento dal modello come ultimo controllo. Chiave
+    distinta dalla lettura (versione delle istruzioni di verifica in coda): la lettura originale resta intatta."""
+    from .verifica import versione  # import qui: verifica usa questo modulo
+
+    return percorsi.archivio() / "verifiche" / f"{chiave_lettura(impronta)}_{versione()}.json"
+
+
+def leggi_verifica(impronta: str) -> dict | None:
+    f = file_verifica(impronta)
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
+
+
+def salva_verifica(impronta: str, scheda: dict) -> None:
+    """Congelata come la lettura: stessa impronta e stesse istruzioni = pagina giÃ  verificata, non si rifÃ ."""
+    f = file_verifica(impronta)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    if f.exists():
+        return
+    temporaneo = f.with_name(f"{f.stem}.{uuid.uuid4().hex}.tmp")
+    temporaneo.write_text(json.dumps(scheda, ensure_ascii=False, indent=1), encoding="utf-8")
+    try:
+        temporaneo.replace(f)
+    except (FileExistsError, FileNotFoundError, PermissionError):
+        temporaneo.unlink(missing_ok=True)
+
+
 # ---------- eventi ----------
 _SCRITTURA = threading.Lock()
 
@@ -109,7 +137,8 @@ def pagine(cartella: Path) -> list[dict]:
 
 
 def scheda_pagina(p: dict) -> dict | None:
-    """Lettura della pagina: dall'archivio, oppure automatica per le pagine bianche (nessuna chiamata)."""
+    """Lettura della pagina: la verifica finale se c'Ã¨, altrimenti la lettura dall'archivio, oppure automatica per le
+    pagine bianche (nessuna chiamata)."""
     if p.get("bianca"):
         return {
             "famiglia": "da_escludere",
@@ -127,7 +156,7 @@ def scheda_pagina(p: dict) -> dict | None:
             "orientamento": 0,
             "continua_pagina_prima": False,
         }
-    return leggi_lettura(p["impronta"])
+    return leggi_verifica(p["impronta"]) or leggi_lettura(p["impronta"])
 
 
 def _letta(p: dict) -> bool:
@@ -138,7 +167,7 @@ def _letta(p: dict) -> bool:
 def completa(p: dict) -> bool:
     """Lettura completa in archivio: la pagina non si legge più. Una lettura parziale si ritenta finché ci sono
     tentativi."""
-    return bool(p.get("bianca")) or file_lettura(p["impronta"]).exists()
+    return bool(p.get("bianca")) or file_lettura(p["impronta"]).exists() or file_verifica(p["impronta"]).exists()
 
 
 def stato(cartella: Path, leggero: bool = False) -> dict:
@@ -201,7 +230,7 @@ def stato(cartella: Path, leggero: bool = False) -> dict:
 
 
 def impronta_letture(cartella: Path) -> str:
-    """Cambia se cambia una lettura, la versione delle istruzioni o le pagine non lette."""
+    """Cambia se cambia una lettura o una verifica, la versione delle istruzioni o le pagine non lette."""
     import hashlib
 
     from .motore import VERSIONE
@@ -209,7 +238,7 @@ def impronta_letture(cartella: Path) -> str:
     h = hashlib.sha256((percorsi.versione_lettura() + VERSIONE).encode())
     t = tentativi(cartella)
     for p in pagine(cartella):
-        letta = f"{completa(p)}/{_letta(p)}"
+        letta = f"{completa(p)}/{_letta(p)}/{file_verifica(p['impronta']).exists()}"
         h.update(f"{p['pid']}:{p['impronta']}:{letta}:{t.get(p['pid'], 0) >= MAX_TENTATIVI}".encode())
     return h.hexdigest()[:16]
 

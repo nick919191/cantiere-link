@@ -7,7 +7,7 @@ import threading
 from fascicolo_inventato import fascicolo
 from pdf_minimo import pdf_con_testo
 
-from traccia import agente, chatgpt
+from traccia import agente, chatgpt, verifica
 from traccia import lavoro as lv
 from traccia.preparazione import prepara
 
@@ -57,6 +57,7 @@ def test_pagine_identiche_una_sola_chiamata(radice, monkeypatch):
         return json.dumps({"schede": schede})
 
     monkeypatch.setattr(chatgpt, "response", respond)
+    monkeypatch.setattr(verifica, "esegui", lambda *_a: None)  # qui si prova la lettura, non la verifica finale
     agente._cancel.clear()
     agente._stop_richiesto.clear()
     agente.analizza(cartella, "test-model", "")

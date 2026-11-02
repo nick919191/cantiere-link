@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pdf_minimo import pdf_con_testo
 from test_flusso import _crea_lavoro
 
-from traccia import agente, chatgpt, normalizza, server
+from traccia import agente, chatgpt, normalizza, server, verifica
 from traccia import lavoro as lv
 from traccia.controlli import valida
 from traccia.motore import elabora
@@ -106,6 +106,7 @@ def test_agente_pipeline_senza_chiamate_reali(radice, monkeypatch):
         return json.dumps({"schede": schede})
 
     monkeypatch.setattr(chatgpt, "response", respond)
+    monkeypatch.setattr(verifica, "esegui", lambda *_a: None)  # qui si prova la lettura, non la verifica finale
     agente._cancel.clear()
     agente.analizza(directory, "test-model", "")
     assert sorted(calls) == sorted(records)
@@ -160,6 +161,7 @@ def test_secondo_tentativo_recupera_la_pagina(radice, monkeypatch):
         return json.dumps({"schede": schede})
 
     monkeypatch.setattr(chatgpt, "response", respond)
+    monkeypatch.setattr(verifica, "esegui", lambda *_a: None)
     agente._cancel.clear()
     agente.analizza(directory, "test-model", "")
     assert lv.stato(directory)["fase"] == "pronto" and visti["ddt300.pdf"] == 2
@@ -189,6 +191,7 @@ def test_agente_legge_le_pagine_in_parallelo(radice, monkeypatch):
 
     monkeypatch.setattr(agente, "PAGINE_PER_LOTTO", 2)
     monkeypatch.setattr(chatgpt, "response", respond)
+    monkeypatch.setattr(verifica, "esegui", lambda *_a: None)
     agente._cancel.clear()
     agente.analizza(directory, "test-model", "")
     assert picco[0] == min(agente.PAGINE_IN_PARALLELO, -(-len(records) // 2))

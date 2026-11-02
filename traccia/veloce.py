@@ -434,6 +434,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     agente.avanzamento("excel")
     agente.componi(cartella)
     _impara(cartella, pagine)
+    agente.dopo_componi(cartella, model, effort, pagine)
     rimaste = [p for p in pagine if not lv.scheda_pagina(p)]
     if rimaste:
         file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})

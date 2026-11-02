@@ -176,6 +176,7 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
     _state.update(message="Composizione delle prove e dell’Excel…")
     avanzamento("excel")
     componi(cartella)
+    dopo_componi(cartella, model, effort, pages)
     rimaste = [p for p in pages if not lv.scheda_pagina(p)]
     if rimaste:
         file = sorted({p["file"].rsplit("/", 1)[-1] for p in rimaste})
@@ -186,6 +187,17 @@ def analizza(cartella: Path, model: str, effort: str) -> None:
             "che non corrispondono al testo della pagina, quindi la scheda non è stata accettata. Premi "
             "«Riprendi» per ritentare solo quelle; dopo 4 tentativi vengono segnalate come non lette."
         )
+
+
+def dopo_componi(cartella: Path, model: str, effort: str, pages: list[dict]) -> None:
+    """Passo «Verifica finale» dopo componi(): il modello ripassa le pagine delle voci DA CONFERMARE e MANCANTE e
+    il motore ricompone. Solo quando nessuna pagina è ancora da leggere: prima si legge tutto, poi si verifica."""
+    from . import verifica  # import qui: verifica usa questo modulo
+
+    if any(not lv.scheda_pagina(p) and not _esaurita(cartella, p) for p in pages):
+        return
+    _check()
+    verifica.esegui(cartella, model, effort)
 
 
 def _senza_doppioni(pages) -> list[dict]:
