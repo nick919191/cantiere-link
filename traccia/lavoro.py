@@ -238,7 +238,8 @@ def impronta_letture(cartella: Path) -> str:
     h = hashlib.sha256((percorsi.versione_lettura() + VERSIONE).encode())
     t = tentativi(cartella)
     for p in pagine(cartella):
-        letta = f"{completa(p)}/{_letta(p)}/{file_verifica(p['impronta']).exists()}"
+        # la verifica entra nell'impronta solo quando c'è: i cantieri composti prima della 0.8.0 restano «pronti»
+        letta = f"{completa(p)}/{_letta(p)}" + ("/verificata" if file_verifica(p["impronta"]).exists() else "")
         h.update(f"{p['pid']}:{p['impronta']}:{letta}:{t.get(p['pid'], 0) >= MAX_TENTATIVI}".encode())
     return h.hexdigest()[:16]
 
